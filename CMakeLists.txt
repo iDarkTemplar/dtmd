@@ -46,11 +46,11 @@ endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 
-set ( SOURCES main.c )
-set ( HEADERS )
+set ( DAEMON_SOURCES daemon-main.c )
+set ( DAEMON_HEADERS dtmd.h )
 
-add_executable( dtmd ${SOURCES} ${HEADERS})
-target_link_libraries( dtmd udev )
+add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
+target_link_libraries( dtmd-daemon udev )
 
 # installation config
-install(TARGETS dtmd RUNTIME DESTINATION ./bin)
+install(TARGETS dtmd-daemon RUNTIME DESTINATION ./sbin)
