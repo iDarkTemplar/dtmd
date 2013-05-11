@@ -32,222 +32,34 @@
 #include <errno.h>
 
 #include "dtmd.h"
+#include "lists.h"
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
+/* TODO:
+	partitions = enumerate partitions + parent
+
+	listen to partitions and check if they have removable parent?
+
+	removable media = removable parent + partitions
+*/
+
+/* TODO: global
+daemon:
+	1) Daemonize
+	2a) enable monitoring
+	2) enum all devices
+	3) wait for events or commands
+	4) on exit try to unmount everything mounted?
+
+	client: make library
+*/
+
 int continue_working = 1;
 
-struct removable_media
+int send_notification(const char *media, const char *action)
 {
-	char *path;
-};
-
-struct removable_media **media = NULL;
-unsigned int media_count = 0;
-
-int *clients = NULL;
-unsigned int clients_count = 0;
-
-int add_media(const char *path)
-{
-	unsigned int i;
-	struct removable_media *cur_media;
-	struct removable_media **tmp;
-
-	for (i = 0; i < media_count; ++i)
-	{
-		if (strcmp(media[i]->path, path) == 0)
-		{
-			return 1;
-		}
-	}
-
-	cur_media = (struct removable_media*) malloc(sizeof(struct removable_media));
-	if (cur_media == NULL)
-	{
-		return 0;
-	}
-
-	cur_media->path = strdup(path);
-	if (cur_media->path == NULL)
-	{
-		free(cur_media);
-		return 0;
-	}
-
-	tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*)*(media_count+1));
-	if (tmp == NULL)
-	{
-		free(cur_media->path);
-		free(cur_media);
-		return 0;
-	}
-
-	++media_count;
-	media = tmp;
-	media[media_count-1] = cur_media;
-
-	return 1;
-}
-
-int remove_media(const char *path)
-{
-	unsigned int i;
-	unsigned int j;
-	struct removable_media **tmp;
-
-	for (i = 0; i < media_count; ++i)
-	{
-		if (strcmp(media[i]->path, path) == 0)
-		{
-			free(media[i]->path);
-			free(media[i]);
-			--media_count;
-
-			if (media_count > 0)
-			{
-				for (j = i+1; j < media_count+1; ++j)
-				{
-					media[j-1] = media[j];
-				}
-
-				media[media_count] = NULL;
-
-				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*)*media_count);
-				if (tmp == NULL)
-				{
-					return 0;
-				}
-
-				media = tmp;
-			}
-			else
-			{
-				free(media);
-				media = NULL;
-			}
-
-			return 1;
-		}
-	}
-
-	return 1;
-}
-
-void remove_all_media(void)
-{
-	unsigned int i;
-
-	if (media != NULL)
-	{
-		for (i = 0; i < media_count; ++i)
-		{
-			if (media[i] != NULL)
-			{
-				free(media[i]->path);
-				free(media[i]);
-			}
-		}
-
-		free(media);
-
-		media_count = 0;
-		media = NULL;
-	}
-}
-
-int add_client(int client)
-{
-	unsigned int i;
-	int *tmp;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		if (clients[i] == client)
-		{
-			return 1;
-		}
-	}
-
-	tmp = (int*) realloc(clients, sizeof(int)*(clients_count+1));
-	if (tmp == NULL)
-	{
-		shutdown(client, SHUT_RDWR);
-		close(client);
-		return 0;
-	}
-
-	++clients_count;
-	clients = tmp;
-	clients[clients_count-1] = client;
-
-	return 1;
-}
-
-int remove_client(int client)
-{
-	unsigned int i;
-	unsigned int j;
-	int *tmp;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		if (clients[i] == client)
-		{
-			shutdown(clients[i], SHUT_RDWR);
-			close(clients[i]);
-			--clients_count;
-
-			if (clients_count > 0)
-			{
-				for (j = i+1; j < clients_count+1; ++j)
-				{
-					clients[j-1] = clients[j];
-				}
-
-				clients[clients_count] = -1;
-
-				tmp = (int*) realloc(clients, sizeof(int)*media_count);
-				if (tmp == NULL)
-				{
-					return 0;
-				}
-
-				clients = tmp;
-			}
-			else
-			{
-				free(clients);
-				clients = NULL;
-			}
-
-			return 1;
-		}
-	}
-
-	return 1;
-}
-
-void remove_all_clients(void)
-{
-	unsigned int i;
-
-	if (clients != NULL)
-	{
-		for (i = 0; i < media_count; ++i)
-		{
-			if (clients[i] != -1)
-			{
-				shutdown(clients[i], SHUT_RDWR);
-				close(clients[i]);
-			}
-		}
-
-		free(clients);
-
-		clients_count = 0;
-		clients = NULL;
-	}
+	return 0;
 }
 
 void signal_handler(int signum)
@@ -423,7 +235,9 @@ int main(int argc, char **argv)
 	else if (child != 0)
 	{
 		// parent - exit
-		goto exit_4;
+		close(socketfd);
+		close(lockfd);
+		goto exit_1;
 	}
 
 	// child - daemon
@@ -481,14 +295,52 @@ int main(int argc, char **argv)
 		goto exit_5;
 	}
 
-	udev_monitor_filter_add_match_subsystem_devtype(mon, "block", "disk");
-	udev_monitor_enable_receiving(mon);
+	if (udev_monitor_filter_add_match_subsystem_devtype(mon, "block", "disk") < 0)
+	{
+		result = -1;
+		goto exit_6;
+	}
+
+	if (udev_monitor_enable_receiving(mon) < 0)
+	{
+		result = -1;
+		goto exit_6;
+	}
+
 	monfd = udev_monitor_get_fd(mon);
 
 	enumerate = udev_enumerate_new(udev);
-	udev_enumerate_add_match_subsystem(enumerate, "block");
-	udev_enumerate_add_match_sysattr(enumerate, "removable", "1");
-	udev_enumerate_scan_devices(enumerate);
+
+	if (udev_enumerate_add_match_subsystem(enumerate, "block") < 0)
+	{
+		udev_enumerate_unref(enumerate);
+		result = -1;
+		goto exit_6;
+	}
+
+#if 1
+	if (udev_enumerate_add_match_sysattr(enumerate, "removable", "1") < 0)
+	{
+		udev_enumerate_unref(enumerate);
+		result = -1;
+		goto exit_6;
+	}
+#else
+	if (udev_enumerate_add_match_property(enumerate, "DEVTYPE", "partition") < 0)
+	{
+		udev_enumerate_unref(enumerate);
+		result = -1;
+		goto exit_6;
+	}
+#endif
+
+	if (udev_enumerate_scan_devices(enumerate) < 0)
+	{
+		udev_enumerate_unref(enumerate);
+		result = -1;
+		goto exit_6;
+	}
+
 	devices = udev_enumerate_get_list_entry(enumerate);
 
 	udev_list_entry_foreach(dev_list_entry, devices)
@@ -497,23 +349,26 @@ int main(int argc, char **argv)
 		dev = udev_device_new_from_syspath(udev, path);
 		if (dev == NULL)
 		{
+			udev_enumerate_unref(enumerate);
 			result = -1;
-			goto exit_6;
+			goto exit_7;
 		}
 
 		path = udev_device_get_devnode(dev);
 		if (path == NULL)
 		{
 			udev_device_unref(dev);
+			udev_enumerate_unref(enumerate);
 			result = -1;
-			goto exit_6;
+			goto exit_7;
 		}
 
-		if (!add_media(path))
+		if (add_media_block(path) < 0)
 		{
 			udev_device_unref(dev);
+			udev_enumerate_unref(enumerate);
 			result = -1;
-			goto exit_6;
+			goto exit_7;
 		}
 
 		udev_device_unref(dev);
@@ -525,7 +380,7 @@ int main(int argc, char **argv)
 	if (pollfds == NULL)
 	{
 		result = -1;
-		goto exit_6;
+		goto exit_7;
 	}
 
 	while (continue_working)
@@ -547,14 +402,14 @@ int main(int argc, char **argv)
 			if (errno != EINTR)
 			{
 				result = -1;
-				goto exit_7;
+				goto exit_8;
 			}
 		}
 
 		if ((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR))
 		{
 			result = -1;
-			goto exit_7;
+			goto exit_8;
 		}
 
 		if (pollfds[0].revents & POLLIN)
@@ -567,25 +422,34 @@ int main(int argc, char **argv)
 
 				if ((action != NULL) && (path != NULL))
 				{
-					if (strcmp(action, "add") == 0)
+					if ((strcmp(action, "add") == 0) || (strcmp(action, "online") == 0))
 					{
-
+						rc = add_media_block(path);
+						if (rc < 0)
+						{
+							udev_device_unref(dev);
+							result = -1;
+							goto exit_8;
+						}
+						else if (rc > 0)
+						{
+						}
 					}
-					else if (strcmp(action, "remove") == 0)
+					else if ((strcmp(action, "remove") == 0) || (strcmp(action, "offline") == 0))
 					{
-
+						rc = remove_media_block(path);
+						if (rc < 0)
+						{
+							udev_device_unref(dev);
+							result = -1;
+							goto exit_8;
+						}
+						else if (rc > 0)
+						{
+						}
 					}
 					else if (strcmp(action, "change") == 0)
 					{
-
-					}
-					else if (strcmp(action, "online") == 0)
-					{
-
-					}
-					else if (strcmp(action, "offline") == 0)
-					{
-
 					}
 				}
 
@@ -594,7 +458,7 @@ int main(int argc, char **argv)
 			else
 			{
 				result = -1;
-				goto exit_7;
+				goto exit_8;
 			}
 		}
 
@@ -612,11 +476,13 @@ int main(int argc, char **argv)
 		}
 	}
 
-exit_7:
+exit_8:
 	free(pollfds);
 
-exit_6:
+exit_7:
 	remove_all_media();
+
+exit_6:
 	udev_monitor_unref(mon);
 
 exit_5:
