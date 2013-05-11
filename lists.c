@@ -31,7 +31,7 @@ unsigned int media_count = 0;
 int *clients = NULL;
 unsigned int clients_count = 0;
 
-int add_media_block(const char *path)
+int add_media_block(const char *path, unsigned char media_type)
 {
 	unsigned int i;
 	struct removable_media *cur_media;
@@ -60,6 +60,7 @@ int add_media_block(const char *path)
 
 	cur_media->partition = NULL;
 	cur_media->partitions_count = 0;
+	cur_media->type = media_type;
 
 	tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*)*(media_count+1));
 	if (tmp == NULL)
@@ -99,7 +100,7 @@ int remove_media_block(const char *path)
 
 				media[media_count] = del;
 
-				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*)*media_count);
+				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*) * media_count);
 				if (tmp == NULL)
 				{
 					return -1;
@@ -117,6 +118,13 @@ int remove_media_block(const char *path)
 			{
 				for (j = 0; j < del->partitions_count; ++j)
 				{
+					if (del->partition[j]->label != NULL)
+					{
+						free(del->partition[j]->label);
+					}
+
+					free(del->partition[j]->path);
+					free(del->partition[j]->type);
 					free(del->partition[j]);
 				}
 
@@ -133,15 +141,15 @@ int remove_media_block(const char *path)
 	return 0;
 }
 
-int add_media_partition(const char *block, const char *partition)
+int add_media_partition(const char *block, unsigned char media_type, const char *partition, const char *type, const char *label)
 {
 	int rc;
 	unsigned int i;
 	unsigned int j;
-	char *cur_partition;
-	char **tmp;
+	struct removable_partition *cur_partition;
+	struct removable_partition **tmp;
 
-	rc = add_media_block(block);
+	rc = add_media_block(block, media_type);
 	if (rc < 0)
 	{
 		return rc;
@@ -153,21 +161,59 @@ int add_media_partition(const char *block, const char *partition)
 		{
 			for (j = 0; j < media[i]->partitions_count; ++j)
 			{
-				if (strcmp(media[i]->partition[j], partition) == 0)
+				if (strcmp(media[i]->partition[j]->path, partition) == 0)
 				{
 					return 0;
 				}
 			}
 
-			cur_partition = strdup(partition);
+			cur_partition = (struct removable_partition*) malloc(sizeof(struct removable_partition));
 			if (cur_partition == NULL)
 			{
 				return -1;
 			}
 
-			tmp = (char**) realloc(media[i]->partition, sizeof(char*)*(media[i]->partitions_count + 1));
+			cur_partition->path = strdup(partition);
+			if (cur_partition->path == NULL)
+			{
+				free(cur_partition);
+				return -1;
+			}
+
+			cur_partition->type = strdup(type);
+			if (cur_partition->type == NULL)
+			{
+				free(cur_partition->path);
+				free(cur_partition);
+				return -1;
+			}
+
+			if (label != NULL)
+			{
+				cur_partition->label = strdup(label);
+				if (cur_partition->label == NULL)
+				{
+					free(cur_partition->type);
+					free(cur_partition->path);
+					free(cur_partition);
+					return -1;
+				}
+			}
+			else
+			{
+				cur_partition->label = NULL;
+			}
+
+			tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * (media[i]->partitions_count + 1));
 			if (tmp == NULL)
 			{
+				if (cur_partition->label != NULL)
+				{
+					free(cur_partition->label);
+				}
+
+				free(cur_partition->type);
+				free(cur_partition->path);
 				free(cur_partition);
 				return -1;
 			}
@@ -188,8 +234,8 @@ int remove_media_partition(const char *block, const char *partition)
 	unsigned int i;
 	unsigned int j;
 	unsigned int k;
-	char **tmp;
-	char *del;
+	struct removable_partition **tmp;
+	struct removable_partition *del;
 
 	for (i = 0; i < media_count; ++i)
 	{
@@ -197,7 +243,7 @@ int remove_media_partition(const char *block, const char *partition)
 		{
 			for (j = 0; j < media[i]->partitions_count; ++j)
 			{
-				if (strcmp(partition, media[i]->partition[j]) == 0)
+				if (strcmp(partition, media[i]->partition[j]->path) == 0)
 				{
 					del = media[i]->partition[j];
 					--(media[i]->partitions_count);
@@ -211,7 +257,7 @@ int remove_media_partition(const char *block, const char *partition)
 
 						media[i]->partition[media[i]->partitions_count] = del;
 
-						tmp = (char**) realloc(media[i]->partition, sizeof(char*) * media[i]->partitions_count);
+						tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * media[i]->partitions_count);
 						if (tmp == NULL)
 						{
 							return -1;
@@ -225,6 +271,13 @@ int remove_media_partition(const char *block, const char *partition)
 						media[i]->partition = NULL;
 					}
 
+					if (del->label != NULL)
+					{
+						free(del->label);
+					}
+
+					free(del->path);
+					free(del->type);
 					free(del);
 
 					return 1;
@@ -249,6 +302,13 @@ void remove_all_media(void)
 			{
 				for (j = 0; j < media[i]->partitions_count; ++j)
 				{
+					if (media[i]->partition[j]->label != NULL)
+					{
+						free(media[i]->partition[j]->label);
+					}
+
+					free(media[i]->partition[j]->path);
+					free(media[i]->partition[j]->type);
 					free(media[i]->partition[j]);
 				}
 

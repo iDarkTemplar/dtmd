@@ -47,8 +47,8 @@ endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 
-set ( DAEMON_SOURCES daemon-main.c lists.c )
-set ( DAEMON_HEADERS dtmd.h        lists.h )
+set ( DAEMON_SOURCES daemon-main.c lists.c notify.c )
+set ( DAEMON_HEADERS dtmd.h        lists.h notify.h )
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon udev )

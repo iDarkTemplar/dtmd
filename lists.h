@@ -25,11 +25,26 @@
 extern "C" {
 #endif
 
+struct removable_partition
+{
+	char *path;
+	char *type;
+	char *label; // optional
+};
+
 struct removable_media
 {
 	char *path;
-	char **partition;
+	unsigned char type;
+
 	unsigned int partitions_count;
+	struct removable_partition **partition;
+};
+
+enum removable_media_type
+{
+	removable_disk = 0,
+	cdrom = 1
 };
 
 extern struct removable_media **media;
@@ -38,9 +53,9 @@ extern unsigned int media_count;
 extern int *clients;
 extern unsigned int clients_count;
 
-int add_media_block(const char *path);
+int add_media_block(const char *path, unsigned char media_type);
 int remove_media_block(const char *path);
-int add_media_partition(const char *block, const char *partition);
+int add_media_partition(const char *block, unsigned char media_type, const char *partition, const char *type, const char *label);
 int remove_media_partition(const char *block, const char *partition);
 void remove_all_media(void);
 

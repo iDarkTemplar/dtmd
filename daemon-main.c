@@ -45,6 +45,27 @@
 		type = SUBSYSTEM / DEVTYPE
 		removable media = block/disk + ATTRS{removable}=="1"
 		partition = block/partition + removable media parent
+
+	ATTR{events}=="media_change eject_request"
+
+	ID_FS_LABEL=BEAST_MODE
+	ID_FS_LABEL_ENC=BEAST\x20MODE
+	ID_FS_TYPE=vfat
+
+	LABEL_ENC decoding
+
+    \a – Bell (beep)
+    \b – Backspace
+    \f – Formfeed
+    \n – New line
+    \r – Carriage return
+    \t – Horizontal tab
+    \\ – Backslash
+    \' – Single quotation mark
+    \" – Double quotation mark
+    \ooo – Octal representation
+    \xdd – Hexadecimal representation
+
 */
 
 /* TODO: global
@@ -59,11 +80,6 @@ daemon:
 */
 
 int continue_working = 1;
-
-int send_notification(const char *media, const char *action)
-{
-	return 0;
-}
 
 void signal_handler(int signum)
 {
@@ -194,6 +210,11 @@ int main(int argc, char **argv)
 	const char *action;
 	const char *devtype;
 	const char *sysattr;
+	const char *is_cdrom;
+	const char *fstype;
+	const char *label;
+	const char *id_bus;
+	unsigned char media_type;
 	int monfd;
 
 	struct pollfd *pollfds = NULL;
@@ -358,9 +379,21 @@ int main(int argc, char **argv)
 		if (strcmp(devtype, "disk") == 0)
 		{
 			sysattr = udev_device_get_sysattr_value(dev, "removable");
-			if ((sysattr != NULL) && (strcmp(sysattr, "1") == 0))
+			is_cdrom = udev_device_get_property_value(dev, "ID_CDROM");
+			id_bus = udev_device_get_property_value(dev, "ID_BUS");
+
+			if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 			{
-				if (add_media_block(path) < 0)
+				media_type = cdrom;
+			}
+			else
+			{
+				media_type = removable_disk;
+			}
+
+			if ((sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))))
+			{
+				if (add_media_block(path, media_type) < 0)
 				{
 					udev_device_unref(dev);
 					udev_enumerate_unref(enumerate);
@@ -376,9 +409,23 @@ int main(int argc, char **argv)
 			{
 				path_parent = udev_device_get_devnode(dev_parent);
 				sysattr = udev_device_get_sysattr_value(dev_parent, "removable");
-				if ((path_parent != NULL) && (sysattr != NULL) && (strcmp(sysattr, "1") == 0))
+				is_cdrom = udev_device_get_property_value(dev_parent, "ID_CDROM");
+				fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
+				label = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+				id_bus = udev_device_get_property_value(dev, "ID_BUS");
+
+				if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 				{
-					if (add_media_partition(path_parent, path) < 0)
+					media_type = cdrom;
+				}
+				else
+				{
+					media_type = removable_disk;
+				}
+
+				if ((path_parent != NULL) && (sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))) && (fstype != NULL))
+				{
+					if (add_media_partition(path_parent, media_type, path, fstype, label) < 0)
 					{
 						udev_device_unref(dev);
 						udev_enumerate_unref(enumerate);
@@ -437,12 +484,62 @@ int main(int argc, char **argv)
 			{
 				path = udev_device_get_devnode(dev);
 				action = udev_device_get_action(dev);
+				devtype = udev_device_get_devtype(dev);
 
 				if ((action != NULL) && (path != NULL))
 				{
 					if ((strcmp(action, "add") == 0) || (strcmp(action, "online") == 0))
 					{
-						rc = add_media_block(path);
+						rc = 0;
+
+						if (strcmp(devtype, "disk") == 0)
+						{
+							sysattr = udev_device_get_sysattr_value(dev, "removable");
+							is_cdrom = udev_device_get_property_value(dev, "ID_CDROM");
+							id_bus = udev_device_get_property_value(dev, "ID_BUS");
+
+							if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
+							{
+								media_type = cdrom;
+							}
+							else
+							{
+								media_type = removable_disk;
+							}
+
+							if ((sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))))
+							{
+								rc = add_media_block(path, media_type);
+							}
+						}
+						else if (strcmp(devtype, "partition") == 0)
+						{
+							dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
+							if (dev_parent != NULL)
+							{
+								path_parent = udev_device_get_devnode(dev_parent);
+								sysattr = udev_device_get_sysattr_value(dev_parent, "removable");
+								is_cdrom = udev_device_get_property_value(dev_parent, "ID_CDROM");
+								fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
+								label = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+								id_bus = udev_device_get_property_value(dev, "ID_BUS");
+
+								if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
+								{
+									media_type = cdrom;
+								}
+								else
+								{
+									media_type = removable_disk;
+								}
+
+								if ((path_parent != NULL) && (sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))) && (fstype != NULL))
+								{
+									rc = add_media_partition(path_parent, media_type, path, fstype, label);
+								}
+							}
+						}
+
 						if (rc < 0)
 						{
 							udev_device_unref(dev);
@@ -455,7 +552,17 @@ int main(int argc, char **argv)
 					}
 					else if ((strcmp(action, "remove") == 0) || (strcmp(action, "offline") == 0))
 					{
-						rc = remove_media_block(path);
+						rc = 0;
+
+						if (strcmp(devtype, "disk") == 0)
+						{
+							rc = remove_media_block(path);
+						}
+						else if (strcmp(devtype, "partition") == 0)
+						{
+							rc = remove_media_partition(NULL, path);
+						}
+
 						if (rc < 0)
 						{
 							udev_device_unref(dev);
@@ -468,6 +575,7 @@ int main(int argc, char **argv)
 					}
 					else if (strcmp(action, "change") == 0)
 					{
+						// TODO: ignore?
 					}
 				}
 
@@ -489,7 +597,7 @@ int main(int argc, char **argv)
 
 			if (pollfds[i+1].revents & POLLIN)
 			{
-
+				// TODO: list all devices
 			}
 		}
 	}
