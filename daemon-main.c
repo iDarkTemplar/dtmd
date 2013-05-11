@@ -42,6 +42,9 @@
 	listen to partitions and check if they have removable parent?
 
 	removable media = removable parent + partitions
+		type = SUBSYSTEM / DEVTYPE
+		removable media = block/disk + ATTRS{removable}=="1"
+		partition = block/partition + removable media parent
 */
 
 /* TODO: global
@@ -185,8 +188,12 @@ int main(int argc, char **argv)
 	struct udev_enumerate *enumerate;
 	struct udev_list_entry *devices, *dev_list_entry;
 	struct udev_device *dev;
+	struct udev_device *dev_parent;
 	const char *path;
+	const char *path_parent;
 	const char *action;
+	const char *devtype;
+	const char *sysattr;
 	int monfd;
 
 	struct pollfd *pollfds = NULL;
@@ -318,22 +325,6 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-#if 1
-	if (udev_enumerate_add_match_sysattr(enumerate, "removable", "1") < 0)
-	{
-		udev_enumerate_unref(enumerate);
-		result = -1;
-		goto exit_6;
-	}
-#else
-	if (udev_enumerate_add_match_property(enumerate, "DEVTYPE", "partition") < 0)
-	{
-		udev_enumerate_unref(enumerate);
-		result = -1;
-		goto exit_6;
-	}
-#endif
-
 	if (udev_enumerate_scan_devices(enumerate) < 0)
 	{
 		udev_enumerate_unref(enumerate);
@@ -363,12 +354,39 @@ int main(int argc, char **argv)
 			goto exit_7;
 		}
 
-		if (add_media_block(path) < 0)
+		devtype = udev_device_get_devtype(dev);
+		if (strcmp(devtype, "disk") == 0)
 		{
-			udev_device_unref(dev);
-			udev_enumerate_unref(enumerate);
-			result = -1;
-			goto exit_7;
+			sysattr = udev_device_get_sysattr_value(dev, "removable");
+			if ((sysattr != NULL) && (strcmp(sysattr, "1") == 0))
+			{
+				if (add_media_block(path) < 0)
+				{
+					udev_device_unref(dev);
+					udev_enumerate_unref(enumerate);
+					result = -1;
+					goto exit_7;
+				}
+			}
+		}
+		else if (strcmp(devtype, "partition") == 0)
+		{
+			dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
+			if (dev_parent != NULL)
+			{
+				path_parent = udev_device_get_devnode(dev_parent);
+				sysattr = udev_device_get_sysattr_value(dev_parent, "removable");
+				if ((path_parent != NULL) && (sysattr != NULL) && (strcmp(sysattr, "1") == 0))
+				{
+					if (add_media_partition(path_parent, path) < 0)
+					{
+						udev_device_unref(dev);
+						udev_enumerate_unref(enumerate);
+						result = -1;
+						goto exit_7;
+					}
+				}
+			}
 		}
 
 		udev_device_unref(dev);
