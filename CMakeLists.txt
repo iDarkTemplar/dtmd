@@ -47,11 +47,21 @@ endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 
+set ( LINUX_UDEV_SOURCES linux/udev/udev.c )
+set ( LINUX_UDEV_HEADERS linux/udev/udev.h )
+set ( LINUX_UDEV_LIBS udev )
+
 set ( DAEMON_SOURCES daemon-main.c lists.c notify.c )
 set ( DAEMON_HEADERS dtmd.h        lists.h notify.h )
+set ( DAEMON_LIBS )
+
+set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
+set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
+set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
+add_definitions(-DSUBSYSTEM_LINUX_UDEV)
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
-target_link_libraries( dtmd-daemon udev )
+target_link_libraries( dtmd-daemon ${DAEMON_LIBS} )
 
 # installation config
 install(TARGETS dtmd-daemon RUNTIME DESTINATION ./sbin)

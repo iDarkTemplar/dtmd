@@ -34,6 +34,10 @@
 #include "dtmd.h"
 #include "lists.h"
 
+#ifdef SUBSYSTEM_LINUX_UDEV
+#include "linux/udev/udev.h"
+#endif
+
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
 /* TODO:
@@ -209,11 +213,9 @@ int main(int argc, char **argv)
 	const char *path_parent;
 	const char *action;
 	const char *devtype;
-	const char *sysattr;
 	const char *is_cdrom;
 	const char *fstype;
 	const char *label;
-	const char *id_bus;
 	unsigned char media_type;
 	int monfd;
 
@@ -378,9 +380,7 @@ int main(int argc, char **argv)
 		devtype = udev_device_get_devtype(dev);
 		if (strcmp(devtype, "disk") == 0)
 		{
-			sysattr = udev_device_get_sysattr_value(dev, "removable");
-			is_cdrom = udev_device_get_property_value(dev, "ID_CDROM");
-			id_bus = udev_device_get_property_value(dev, "ID_BUS");
+			is_cdrom                = udev_device_get_property_value(dev, "ID_CDROM");
 
 			if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 			{
@@ -391,7 +391,7 @@ int main(int argc, char **argv)
 				media_type = removable_disk;
 			}
 
-			if ((sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))))
+			if (is_device_removable(dev))
 			{
 				if (add_media_block(path, media_type) < 0)
 				{
@@ -407,12 +407,10 @@ int main(int argc, char **argv)
 			dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
 			if (dev_parent != NULL)
 			{
-				path_parent = udev_device_get_devnode(dev_parent);
-				sysattr = udev_device_get_sysattr_value(dev_parent, "removable");
-				is_cdrom = udev_device_get_property_value(dev_parent, "ID_CDROM");
-				fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
-				label = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-				id_bus = udev_device_get_property_value(dev, "ID_BUS");
+				path_parent             = udev_device_get_devnode(dev_parent);
+				is_cdrom                = udev_device_get_property_value(dev_parent, "ID_CDROM");
+				fstype                  = udev_device_get_property_value(dev, "ID_FS_TYPE");
+				label                   = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
 
 				if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 				{
@@ -423,7 +421,8 @@ int main(int argc, char **argv)
 					media_type = removable_disk;
 				}
 
-				if ((path_parent != NULL) && (sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))) && (fstype != NULL))
+				if ((is_device_removable(dev_parent))
+					&& (fstype != NULL))
 				{
 					if (add_media_partition(path_parent, media_type, path, fstype, label) < 0)
 					{
@@ -494,9 +493,7 @@ int main(int argc, char **argv)
 
 						if (strcmp(devtype, "disk") == 0)
 						{
-							sysattr = udev_device_get_sysattr_value(dev, "removable");
 							is_cdrom = udev_device_get_property_value(dev, "ID_CDROM");
-							id_bus = udev_device_get_property_value(dev, "ID_BUS");
 
 							if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 							{
@@ -507,7 +504,7 @@ int main(int argc, char **argv)
 								media_type = removable_disk;
 							}
 
-							if ((sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))))
+							if (is_device_removable(dev))
 							{
 								rc = add_media_block(path, media_type);
 							}
@@ -518,11 +515,9 @@ int main(int argc, char **argv)
 							if (dev_parent != NULL)
 							{
 								path_parent = udev_device_get_devnode(dev_parent);
-								sysattr = udev_device_get_sysattr_value(dev_parent, "removable");
-								is_cdrom = udev_device_get_property_value(dev_parent, "ID_CDROM");
-								fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
-								label = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-								id_bus = udev_device_get_property_value(dev, "ID_BUS");
+								is_cdrom    = udev_device_get_property_value(dev_parent, "ID_CDROM");
+								fstype      = udev_device_get_property_value(dev, "ID_FS_TYPE");
+								label       = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
 
 								if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 								{
@@ -533,7 +528,8 @@ int main(int argc, char **argv)
 									media_type = removable_disk;
 								}
 
-								if ((path_parent != NULL) && (sysattr != NULL) && ((strcmp(sysattr, "1") == 0) || ((id_bus != NULL) && (strcmp(id_bus, "usb") == 0))) && (fstype != NULL))
+								if ((is_device_removable(dev_parent))
+									&& (fstype != NULL))
 								{
 									rc = add_media_partition(path_parent, media_type, path, fstype, label);
 								}
