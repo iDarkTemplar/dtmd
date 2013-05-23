@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-int is_device_removable(struct udev_device *device);
+int get_device_type(struct udev_device *device);
 
 #ifdef __cplusplus
 }

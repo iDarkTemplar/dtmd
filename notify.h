@@ -27,12 +27,34 @@ extern "C" {
 
 /*
 	Notification types:
-	"add_disk"
-	"remove_disk"
-	"add_partition"
-	"remove_partition"
+	"add_disk(path, type)"
+	"remove_disk(path)"
+	"add_partition(path, fstype, label (optional, may be NULL), parent_path)"
+	"remove_partition(path)"
+	"mount(path, mount_point, mount_options?)" or mount_failed
+	"unmount(path, mount_point)" or unmount_failed
+
+	Commands:
+	"list_devices
+		returns:
+		"path, type"
+	"list_partitions"
+		returns:
+		"path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
 	"mount"
+		input:
+		"path, mount_point, mount_options?"
+		returns:
+		broadcast "mount"
+		or
+		single "mount_failed"
 	"unmount"
+		input:
+		"path, mount_point"
+		returns:
+		broadcast "mount"
+		or
+		single "mount_failed"
 */
 
 int send_notification(const char *type, const char *device);

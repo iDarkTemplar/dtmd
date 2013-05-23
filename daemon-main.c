@@ -30,6 +30,7 @@
 #include <string.h>
 #include <poll.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "dtmd.h"
 #include "lists.h"
@@ -93,6 +94,156 @@ void signal_handler(int signum)
 		continue_working = 0;
 		break;
 	}
+}
+
+char *decode_label(const char *label)
+{
+	char *result;
+	char *cur_result;
+	int i;
+	int k;
+
+	result = malloc(strlen(label)+1);
+	if (result == NULL)
+	{
+		return NULL;
+	}
+
+	cur_result = result;
+
+	while (*label)
+	{
+		if ((*label) == '\\')
+		{
+			++label;
+
+			if ((*label) == 0)
+			{
+				free(result);
+				return NULL;
+			}
+
+			switch (*label)
+			{
+			case 'a':
+				*cur_result = '\a';
+				++cur_result;
+				++label;
+				break;
+
+			case 'b':
+				*cur_result = '\b';
+				++cur_result;
+				++label;
+				break;
+
+			case 'n':
+				*cur_result = '\n';
+				++cur_result;
+				++label;
+				break;
+
+			case 'r':
+				*cur_result = '\r';
+				++cur_result;
+				++label;
+				break;
+
+			case 't':
+				*cur_result = '\t';
+				++cur_result;
+				++label;
+				break;
+
+			case '\\':
+				*cur_result = '\\';
+				++cur_result;
+				++label;
+				break;
+
+			case '\'':
+				*cur_result = '\'';
+				++cur_result;
+				++label;
+				break;
+
+			case '\"':
+				*cur_result = '\"';
+				++cur_result;
+				++label;
+				break;
+
+			case 'x':
+				k = 0;
+
+				for (i = 1; i < 3; ++i)
+				{
+					if (!isxdigit(label[i]))
+					{
+						free(result);
+						return NULL;
+					}
+
+					k *= 16;
+
+					if ((label[i] >= '0') && (label[i] <= '9'))
+					{
+						k += label[i] - '0';
+					}
+					else
+					{
+						k += tolower(label[i]) - 'a' + 10;
+					}
+				}
+				break;
+
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+				k = 0;
+
+				for (i = 1; i < 4; ++i)
+				{
+					if ((label[i] < '0') || (label[i] > '7'))
+					{
+						free(result);
+						return NULL;
+					}
+
+					k *= 7;
+					k += label[i] - '0';
+				}
+
+				*cur_result = k;
+				++cur_result;
+				label += 3;
+				break;
+
+			default:
+				*cur_result = '\\';
+				++cur_result;
+				*cur_result = *label;
+				++cur_result;
+				++label;
+			}
+		}
+		else
+		{
+			*cur_result = *label;
+		}
+
+		++cur_result;
+		++label;
+	}
+
+	*cur_result = 0;
+
+	return result;
 }
 
 int setSigHandlers(void)
@@ -213,11 +364,13 @@ int main(int argc, char **argv)
 	const char *path_parent;
 	const char *action;
 	const char *devtype;
-	const char *is_cdrom;
 	const char *fstype;
 	const char *label;
 	unsigned char media_type;
 	int monfd;
+	void *tmp;
+#define pollfds_count_default 2
+	int pollfds_count = pollfds_count_default;
 
 	struct pollfd *pollfds = NULL;
 
@@ -380,18 +533,9 @@ int main(int argc, char **argv)
 		devtype = udev_device_get_devtype(dev);
 		if (strcmp(devtype, "disk") == 0)
 		{
-			is_cdrom                = udev_device_get_property_value(dev, "ID_CDROM");
+			media_type = get_device_type(dev);
 
-			if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
-			{
-				media_type = cdrom;
-			}
-			else
-			{
-				media_type = removable_disk;
-			}
-
-			if (is_device_removable(dev))
+			if (media_type > 0)
 			{
 				if (add_media_block(path, media_type) < 0)
 				{
@@ -407,22 +551,12 @@ int main(int argc, char **argv)
 			dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
 			if (dev_parent != NULL)
 			{
-				path_parent             = udev_device_get_devnode(dev_parent);
-				is_cdrom                = udev_device_get_property_value(dev_parent, "ID_CDROM");
-				fstype                  = udev_device_get_property_value(dev, "ID_FS_TYPE");
-				label                   = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+				path_parent = udev_device_get_devnode(dev_parent);
+				fstype      = udev_device_get_property_value(dev, "ID_FS_TYPE");
+				label       = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+				media_type  = get_device_type(dev_parent);
 
-				if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
-				{
-					media_type = cdrom;
-				}
-				else
-				{
-					media_type = removable_disk;
-				}
-
-				if ((is_device_removable(dev_parent))
-					&& (fstype != NULL))
+				if ((media_type > 0) && (fstype != NULL))
 				{
 					if (add_media_partition(path_parent, media_type, path, fstype, label) < 0)
 					{
@@ -440,7 +574,7 @@ int main(int argc, char **argv)
 
 	udev_enumerate_unref(enumerate);
 
-	pollfds = (struct pollfd*) malloc(sizeof(struct pollfd));
+	pollfds = (struct pollfd*) malloc(sizeof(struct pollfd)*pollfds_count);
 	if (pollfds == NULL)
 	{
 		result = -1;
@@ -453,14 +587,18 @@ int main(int argc, char **argv)
 		pollfds[0].events = POLLIN;
 		pollfds[0].revents = 0;
 
+		pollfds[1].fd = socketfd;
+		pollfds[1].events = POLLIN;
+		pollfds[1].revents = 0;
+
 		for (i = 0; i < clients_count; ++i)
 		{
-			pollfds[i+1].fd = clients[i];
-			pollfds[i+1].events = POLLIN;
-			pollfds[i+1].revents = 0;
+			pollfds[i + pollfds_count_default].fd = clients[i];
+			pollfds[i + pollfds_count_default].events = POLLIN;
+			pollfds[i + pollfds_count_default].revents = 0;
 		}
 
-		rc = poll(pollfds, 1 + clients_count, -1);
+		rc = poll(pollfds, pollfds_count_default + clients_count, -1);
 		if (rc == -1)
 		{
 			if (errno != EINTR)
@@ -475,8 +613,7 @@ int main(int argc, char **argv)
 			result = -1;
 			goto exit_8;
 		}
-
-		if (pollfds[0].revents & POLLIN)
+		else if (pollfds[0].revents & POLLIN)
 		{
 			dev = udev_monitor_receive_device(mon);
 			if (dev != NULL)
@@ -493,18 +630,9 @@ int main(int argc, char **argv)
 
 						if (strcmp(devtype, "disk") == 0)
 						{
-							is_cdrom = udev_device_get_property_value(dev, "ID_CDROM");
+							media_type = get_device_type(dev);
 
-							if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
-							{
-								media_type = cdrom;
-							}
-							else
-							{
-								media_type = removable_disk;
-							}
-
-							if (is_device_removable(dev))
+							if (media_type > 0)
 							{
 								rc = add_media_block(path, media_type);
 							}
@@ -515,21 +643,11 @@ int main(int argc, char **argv)
 							if (dev_parent != NULL)
 							{
 								path_parent = udev_device_get_devnode(dev_parent);
-								is_cdrom    = udev_device_get_property_value(dev_parent, "ID_CDROM");
 								fstype      = udev_device_get_property_value(dev, "ID_FS_TYPE");
 								label       = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+								media_type  = get_device_type(dev_parent);
 
-								if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
-								{
-									media_type = cdrom;
-								}
-								else
-								{
-									media_type = removable_disk;
-								}
-
-								if ((is_device_removable(dev_parent))
-									&& (fstype != NULL))
+								if ((media_type > 0) && (fstype != NULL))
 								{
 									rc = add_media_partition(path_parent, media_type, path, fstype, label);
 								}
@@ -544,6 +662,7 @@ int main(int argc, char **argv)
 						}
 						else if (rc > 0)
 						{
+							// TODO: notify all clients
 						}
 					}
 					else if ((strcmp(action, "remove") == 0) || (strcmp(action, "offline") == 0))
@@ -567,6 +686,7 @@ int main(int argc, char **argv)
 						}
 						else if (rc > 0)
 						{
+							// TODO: notify all clients
 						}
 					}
 					else if (strcmp(action, "change") == 0)
@@ -584,17 +704,51 @@ int main(int argc, char **argv)
 			}
 		}
 
-		for (i = 0; i < clients_count; ++i)
+		if ((pollfds[1].revents & POLLHUP) || (pollfds[1].revents & POLLERR))
 		{
-			if ((pollfds[i+1].revents & POLLHUP) || (pollfds[i+1].revents & POLLERR))
+			result = -1;
+			goto exit_8;
+		}
+		else if (pollfds[1].revents & POLLIN)
+		{
+			rc = accept(socketfd, NULL, NULL);
+			if (rc < 0)
 			{
-
+				result = -1;
+				goto exit_8;
 			}
 
-			if (pollfds[i+1].revents & POLLIN)
+			rc = add_client(rc);
+			if (rc < 0)
 			{
-				// TODO: list all devices
+				result = -1;
+				goto exit_8;
 			}
+		}
+
+		for (i = 0; i < pollfds_count - pollfds_count_default; ++i)
+		{
+			if ((pollfds[i + pollfds_count_default].revents & POLLHUP) || (pollfds[i + pollfds_count_default].revents & POLLERR))
+			{
+				remove_client(pollfds[i + pollfds_count_default].fd);
+			}
+			else if (pollfds[i + pollfds_count_default].revents & POLLIN)
+			{
+				// TODO: read command and execute it
+			}
+		}
+
+		if (pollfds_count != clients_count)
+		{
+			pollfds_count = pollfds_count_default + clients_count;
+			tmp = realloc(pollfds, sizeof(struct pollfd)*pollfds_count);
+			if (tmp == NULL)
+			{
+				result = -1;
+				goto exit_8;
+			}
+
+			pollfds = (struct pollfd*) tmp;
 		}
 	}
 
@@ -603,6 +757,7 @@ exit_8:
 
 exit_7:
 	remove_all_media();
+	remove_all_clients();
 
 exit_6:
 	udev_monitor_unref(mon);

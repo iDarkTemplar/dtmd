@@ -43,8 +43,10 @@ struct removable_media
 
 enum removable_media_type
 {
-	removable_disk = 0,
-	cdrom = 1
+	unknown_or_persistent = 0,
+	cdrom                 = 1,
+	removable_disk        = 2,
+	sd_card               = 3
 };
 
 extern struct removable_media **media;

@@ -20,19 +20,24 @@
 
 #include "udev.h"
 
+#include "lists.h"
+
 #include <libudev.h>
 #include <stdlib.h>
 #include <string.h>
 
-int is_device_removable(struct udev_device *device)
+int get_device_type(struct udev_device *device)
 {
+	unsigned char media_type;
 	const char *removable;
 	const char *id_bus;
+	const char *is_cdrom;
 	const char *id_drive_flash_sd;
 	const char *id_drive_media_flash_sd;
 
 	removable               = udev_device_get_sysattr_value(device, "removable");
 	id_bus                  = udev_device_get_property_value(device, "ID_BUS");
+	is_cdrom                = udev_device_get_property_value(device, "ID_CDROM");
 	id_drive_flash_sd       = udev_device_get_property_value(device, "ID_DRIVE_FLASH_SD");
 	id_drive_media_flash_sd = udev_device_get_property_value(device, "ID_DRIVE_MEDIA_FLASH_SD");
 
@@ -41,8 +46,24 @@ int is_device_removable(struct udev_device *device)
 		|| ((id_drive_flash_sd != NULL) && (strcmp(id_drive_flash_sd, "1") == 0))
 		|| ((id_drive_media_flash_sd != NULL) && (strcmp(id_drive_media_flash_sd, "1") == 0))))
 	{
-		return 1;
+		if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
+		{
+			media_type = cdrom;
+		}
+		else if (((id_drive_flash_sd != NULL) && (strcmp(id_drive_flash_sd, "1") == 0))
+			|| ((id_drive_media_flash_sd != NULL) && (strcmp(id_drive_media_flash_sd, "1") == 0)))
+		{
+			media_type = sd_card;
+		}
+		else
+		{
+			media_type = removable_disk;
+		}
+	}
+	else
+	{
+		media_type = unknown_or_persistent;
 	}
 
-	return 0;
+	return media_type;
 }
