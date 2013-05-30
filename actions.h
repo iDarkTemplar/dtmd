@@ -35,12 +35,16 @@ extern "C" {
 	"unmount(path, mount_point)" or unmount_failed
 
 	Commands:
-	"list_devices
+	"enum_all"
 		returns:
-		"path, type"
-	"list_partitions"
+		device: "path, type"
+		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+	"list_device":
+		input:
+		"device path"
 		returns:
-		"path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+		device: "path, type"
+		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
 	"mount"
 		input:
 		"path, mount_point, mount_options?"
@@ -52,10 +56,12 @@ extern "C" {
 		input:
 		"path, mount_point"
 		returns:
-		broadcast "mount"
+		broadcast "unmount"
 		or
 		single "mount_failed"
 */
+
+int parse_command(char *cmd);
 
 int send_notification(const char *type, const char *device);
 

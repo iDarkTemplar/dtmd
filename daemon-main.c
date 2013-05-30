@@ -34,6 +34,7 @@
 
 #include "dtmd.h"
 #include "lists.h"
+#include "actions.h"
 
 #ifdef SUBSYSTEM_LINUX_UDEV
 #include "linux/udev/udev.h"
@@ -370,7 +371,7 @@ int main(int argc, char **argv)
 	int monfd;
 	void *tmp;
 #define pollfds_count_default 2
-	int pollfds_count = pollfds_count_default;
+	unsigned int pollfds_count = pollfds_count_default;
 
 	struct pollfd *pollfds = NULL;
 
@@ -384,7 +385,7 @@ int main(int argc, char **argv)
 
 	sockaddr.sun_family = AF_LOCAL;
 	memset(sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
-	strncat(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path));
+	strncat(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
 
 	check_lock_file();
 
@@ -593,7 +594,7 @@ int main(int argc, char **argv)
 
 		for (i = 0; i < clients_count; ++i)
 		{
-			pollfds[i + pollfds_count_default].fd = clients[i];
+			pollfds[i + pollfds_count_default].fd = clients[i]->clientfd;
 			pollfds[i + pollfds_count_default].events = POLLIN;
 			pollfds[i + pollfds_count_default].revents = 0;
 		}
@@ -735,6 +736,7 @@ int main(int argc, char **argv)
 			else if (pollfds[i + pollfds_count_default].revents & POLLIN)
 			{
 				// TODO: read command and execute it
+
 			}
 		}
 

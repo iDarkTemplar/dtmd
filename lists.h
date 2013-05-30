@@ -49,10 +49,16 @@ enum removable_media_type
 	sd_card               = 3
 };
 
+struct client
+{
+	int clientfd;
+	char *client_data;
+};
+
 extern struct removable_media **media;
 extern unsigned int media_count;
 
-extern int *clients;
+extern struct client **clients;
 extern unsigned int clients_count;
 
 int add_media_block(const char *path, unsigned char media_type);

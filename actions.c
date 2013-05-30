@@ -18,9 +18,20 @@
  *
  */
 
-#include "notify.h"
+#include "actions.h"
 
 #include "lists.h"
+
+int parse_command(char *cmd)
+{
+/*
+enum_all
+list_device device_path
+mount device_path, mount_point, mount_options
+unmount device_path, mount_point
+*/
+	return 0;
+}
 
 int send_notification(const char *type, const char *device)
 {

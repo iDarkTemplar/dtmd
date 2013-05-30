@@ -28,7 +28,7 @@
 struct removable_media **media = NULL;
 unsigned int media_count = 0;
 
-int *clients = NULL;
+struct client **clients = NULL;
 unsigned int clients_count = 0;
 
 int add_media_block(const char *path, unsigned char media_type)
@@ -93,11 +93,7 @@ int remove_media_block(const char *path)
 
 			if (media_count > 0)
 			{
-				for (j = i+1; j < media_count+1; ++j)
-				{
-					media[j-1] = media[j];
-				}
-
+				media[i] = media[media_count];
 				media[media_count] = del;
 
 				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*) * media_count);
@@ -218,8 +214,8 @@ int add_media_partition(const char *block, unsigned char media_type, const char 
 				return -1;
 			}
 
-			media[i]->partition = tmp;
 			++(media[i]->partitions_count);
+			media[i]->partition = tmp;
 			media[i]->partition[media[i]->partitions_count - 1] = cur_partition;
 
 			return 1;
@@ -233,7 +229,6 @@ int remove_media_partition(const char *block, const char *partition)
 {
 	unsigned int i;
 	unsigned int j;
-	unsigned int k;
 	struct removable_partition **tmp;
 	struct removable_partition *del;
 
@@ -250,11 +245,7 @@ int remove_media_partition(const char *block, const char *partition)
 
 					if (media[i]->partitions_count > 0)
 					{
-						for (k = j+1; k < media[i]->partitions_count+1; ++k)
-						{
-							media[i]->partition[k-1] = media[i]->partition[k];
-						}
-
+						media[i]->partition[j] = media[i]->partition[media[i]->partitions_count];
 						media[i]->partition[media[i]->partitions_count] = del;
 
 						tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * media[i]->partitions_count);
@@ -329,19 +320,32 @@ void remove_all_media(void)
 int add_client(int client)
 {
 	unsigned int i;
-	int *tmp;
+	struct client *cur_client;
+	struct client **tmp;
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		if (clients[i] == client)
+		if (clients[i]->clientfd == client)
 		{
 			return 0;
 		}
 	}
 
-	tmp = (int*) realloc(clients, sizeof(int)*(clients_count+1));
+	cur_client = (struct client*) malloc(sizeof(struct client));
+	if (cur_client == NULL)
+	{
+		shutdown(client, SHUT_RDWR);
+		close(client);
+		return -1;
+	}
+
+	cur_client->clientfd    = client;
+	cur_client->client_data = NULL;
+
+	tmp = (struct client**) realloc(clients, sizeof(struct client*)*(clients_count+1));
 	if (tmp == NULL)
 	{
+		free(cur_client);
 		shutdown(client, SHUT_RDWR);
 		close(client);
 		return -1;
@@ -349,7 +353,7 @@ int add_client(int client)
 
 	++clients_count;
 	clients = tmp;
-	clients[clients_count-1] = client;
+	clients[clients_count-1] = cur_client;
 
 	return 1;
 }
@@ -357,27 +361,22 @@ int add_client(int client)
 int remove_client(int client)
 {
 	unsigned int i;
-	unsigned int j;
-	int *tmp;
-	int del;
+	struct client **tmp;
+	struct client *del;
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		if (clients[i] == client)
+		if (clients[i]->clientfd == client)
 		{
 			del = clients[i];
 			--clients_count;
 
 			if (clients_count > 0)
 			{
-				for (j = i+1; j < clients_count+1; ++j)
-				{
-					clients[j-1] = clients[j];
-				}
-
+				clients[i] = clients[clients_count];
 				clients[clients_count] = del;
 
-				tmp = (int*) realloc(clients, sizeof(int)*media_count);
+				tmp = (struct client**) realloc(clients, sizeof(struct client*)*clients_count);
 				if (tmp == NULL)
 				{
 					return -1;
@@ -391,8 +390,15 @@ int remove_client(int client)
 				clients = NULL;
 			}
 
-			shutdown(del, SHUT_RDWR);
-			close(del);
+			shutdown(del->clientfd, SHUT_RDWR);
+			close(del->clientfd);
+
+			if (del->client_data != NULL)
+			{
+				free(del->client_data);
+			}
+
+			free(del);
 
 			return 1;
 		}
@@ -409,8 +415,15 @@ void remove_all_clients(void)
 	{
 		for (i = 0; i < media_count; ++i)
 		{
-			shutdown(clients[i], SHUT_RDWR);
-			close(clients[i]);
+			shutdown(clients[i]->clientfd, SHUT_RDWR);
+			close(clients[i]->clientfd);
+
+			if (clients[i]->client_data != NULL)
+			{
+				free(clients[i]->client_data);
+			}
+
+			free(clients[i]);
 		}
 
 		free(clients);
