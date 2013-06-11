@@ -21,6 +21,8 @@
 #ifndef DTMD_NOTIFY_H
 #define DTMD_NOTIFY_H
 
+#include "lists.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -64,6 +66,10 @@ extern "C" {
 int parse_command(int client_number);
 
 int send_notification(const char *type, const char *device);
+
+int print_device(int client_number, struct removable_media *media);
+
+int print_partition(int client_number, struct removable_media *media, unsigned int partition);
 
 #ifdef __cplusplus
 }

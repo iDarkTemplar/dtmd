@@ -51,8 +51,8 @@ set ( LINUX_UDEV_SOURCES linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS linux/udev/udev.h )
 set ( LINUX_UDEV_LIBS udev )
 
-set ( DAEMON_SOURCES daemon-main.c lists.c actions.c filesystems.c )
-set ( DAEMON_HEADERS dtmd.h        lists.h actions.h filesystems.h )
+set ( DAEMON_SOURCES daemon-main.c actions.c filesystems.c label_funcs.c lists.c mnt_funcs.c )
+set ( DAEMON_HEADERS dtmd.h        actions.h filesystems.h label_funcs.h lists.h mnt_funcs.h )
 set ( DAEMON_LIBS )
 
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )

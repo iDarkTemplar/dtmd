@@ -20,29 +20,42 @@
 
 #include "actions.h"
 
-#include "lists.h"
+#include "mnt_funcs.h"
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 int parse_command(int client_number)
 {
 	char *par1;
 	char *par2;
 	char *par3;
-	char *cur;
-	char *tmp;
+	unsigned char *cur;
+	unsigned char *tmp;
 	int len;
+	unsigned int i;
+	unsigned int j;
 
 	//len = strlen(clients[client_number]->buf);
 
-	if (strncmp(clients[client_number]->buf, "enum_all()\n", strlen("enum_all()\n")) == 0)
+	if (strncmp((const char*)clients[client_number]->buf, "enum_all()\n", strlen("enum_all()\n")) == 0)
 	{
 		// enum_all
 
-		// TODO: enum_all
+		for (i = 0; i < media_count; ++i)
+		{
+			print_device(client_number, media[i]);
+
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				print_partition(client_number, media[i], j);
+			}
+		}
+
+		dprintf(clients[client_number]->clientfd, "done(enum_all)\n");
 	}
-	else if (strncmp(clients[client_number]->buf, "list_device(\"", strlen("list_device(\"")) == 0)
+	else if (strncmp((const char*)clients[client_number]->buf, "list_device(\"", strlen("list_device(\"")) == 0)
 	{
 		// list_device device_path
 
@@ -70,7 +83,7 @@ int parse_command(int client_number)
 		memcpy(par1, cur, len);
 		par1[len] = 0;
 
-		if (strncmp(&(cur[len]), "\")\n", strlen("\")\n")) != 0)
+		if (strncmp((const char*)&(cur[len]), "\")\n", strlen("\")\n")) != 0)
 		{
 			free(par1);
 			return -1;
@@ -80,7 +93,7 @@ int parse_command(int client_number)
 
 		free(par1);
 	}
-	else if (strncmp(clients[client_number]->buf, "list_device(\"", strlen("list_device(\"")) == 0)
+	else if (strncmp((const char*)clients[client_number]->buf, "list_device(\"", strlen("list_device(\"")) == 0)
 	{
 		// mount device_path, mount_point, mount_options
 		// TODO: check
@@ -100,33 +113,107 @@ int parse_command(int client_number)
 
 // TODO: send UID/GID with SCM_CREDENTIALS
 
- //struct ucred credentials;
- //int ucred_length = sizeof(struct ucred);
+//struct ucred credentials;
+//int ucred_length = sizeof(struct ucred);
 
- /* fill in the user data structure */
+/* fill in the user data structure */
 /*
- if(getsockopt(connection_fd, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length))
- {
-  printf("could obtain credentials from unix domain socket");
-  return 1;
- }
+if(getsockopt(connection_fd, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length))
+{
+printf("could obtain credentials from unix domain socket");
+return 1;
+}
 */
 
- /* the process ID of the process on the other side of the socket */
- //credentials.pid;
+/* the process ID of the process on the other side of the socket */
+//credentials.pid;
 
- /* the effective UID of the process on the other side of the socket  */
- //credentials.uid;
+/* the effective UID of the process on the other side of the socket  */
+//credentials.uid;
 
- /* the effective primary GID of the process on the other side of the socket */
- //credentials.gid;
+/* the effective primary GID of the process on the other side of the socket */
+//credentials.gid;
 
- /* To get supplemental groups, we will have to look them up in our account
-    database, after a reverse lookup on the UID to get the account name.
-    We can take this opportunity to check to see if this is a legit account.
- */
+/* To get supplemental groups, we will have to look them up in our account
+   database, after a reverse lookup on the UID to get the account name.
+   We can take this opportunity to check to see if this is a legit account.
+*/
 
 int send_notification(const char *type, const char *device)
 {
+	return 0;
+}
+
+int print_device(int client_number, struct removable_media *media)
+{
+	dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\")\n",
+		media->path,
+		removable_type_to_string(media->type));
+
+	return 0;
+}
+
+int print_partition(int client_number, struct removable_media *media, unsigned int partition)
+{
+	char *mount_point;
+	char *mount_opts;
+
+	if (partition > media->partitions_count)
+	{
+		return -2;
+	}
+
+	if (get_mount_params(media->partition[partition]->path, &mount_point, &mount_opts) < 0)
+	{
+		return -1;
+	}
+
+	dprintf(clients[client_number]->clientfd, "partition(\"%s\", \"%s\", ",
+		media->partition[partition]->path,
+		media->partition[partition]->type);
+
+	if (media->partition[partition]->label != NULL)
+	{
+		dprintf(clients[client_number]->clientfd, "\"%s\", ",
+			media->partition[partition]->label);
+	}
+	else
+	{
+		dprintf(clients[client_number]->clientfd, "nil, ");
+	}
+
+	dprintf(clients[client_number]->clientfd, "\"%s\", ",
+		media->path);
+
+	if (mount_point != NULL)
+	{
+		dprintf(clients[client_number]->clientfd, "\"%s\", ",
+			mount_point);
+	}
+	else
+	{
+		dprintf(clients[client_number]->clientfd, "nil, ");
+	}
+
+	if (mount_opts != NULL)
+	{
+		dprintf(clients[client_number]->clientfd, "\"%s\")\n",
+			mount_opts);
+	}
+	else
+	{
+		dprintf(clients[client_number]->clientfd, "nil)\n");
+	}
+
+	if (mount_point != NULL)
+	{
+		free(mount_point);
+	}
+
+	if (mount_opts != NULL)
+	{
+		free(mount_opts);
+	}
+
 	return 0;
 }
