@@ -339,8 +339,10 @@ int add_client(int client)
 		return -1;
 	}
 
-	cur_client->clientfd    = client;
-	cur_client->client_data = NULL;
+	cur_client->clientfd = client;
+	cur_client->buf      = NULL;
+	cur_client->buf_size = 0;
+	cur_client->buf_used = 0;
 
 	tmp = (struct client**) realloc(clients, sizeof(struct client*)*(clients_count+1));
 	if (tmp == NULL)
@@ -393,9 +395,9 @@ int remove_client(int client)
 			shutdown(del->clientfd, SHUT_RDWR);
 			close(del->clientfd);
 
-			if (del->client_data != NULL)
+			if (del->buf != NULL)
 			{
-				free(del->client_data);
+				free(del->buf);
 			}
 
 			free(del);
@@ -418,9 +420,9 @@ void remove_all_clients(void)
 			shutdown(clients[i]->clientfd, SHUT_RDWR);
 			close(clients[i]->clientfd);
 
-			if (clients[i]->client_data != NULL)
+			if (clients[i]->buf != NULL)
 			{
-				free(clients[i]->client_data);
+				free(clients[i]->buf);
 			}
 
 			free(clients[i]);

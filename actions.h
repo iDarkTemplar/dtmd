@@ -61,7 +61,7 @@ extern "C" {
 		single "mount_failed"
 */
 
-int parse_command(char *cmd);
+int parse_command(int client_number);
 
 int send_notification(const char *type, const char *device);
 

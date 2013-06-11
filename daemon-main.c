@@ -41,6 +41,8 @@
 #endif
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
+#define default_read_size 4096
+#define maximum_read_size default_read_size * 10
 
 /* TODO:
 	partitions = enumerate partitions + parent
@@ -354,6 +356,7 @@ int main(int argc, char **argv)
 	char buffer[12];
 	const int backlog = 4;
 	unsigned int i;
+	unsigned int j;
 
 	struct udev *udev;
 	struct udev_monitor *mon;
@@ -735,8 +738,57 @@ int main(int argc, char **argv)
 			}
 			else if (pollfds[i + pollfds_count_default].revents & POLLIN)
 			{
-				// TODO: read command and execute it
+				for (j = 0; j < clients_count; ++j)
+				{
+					if (clients[j]->clientfd == pollfds[i + pollfds_count_default].fd)
+					{
+						break;
+					}
+				}
 
+				if (j == clients_count)
+				{
+					result = -1;
+					goto exit_8;
+				}
+
+				if (clients[j]->buf_size < clients[j]->buf_used + default_read_size)
+				{
+					if (clients[j]->buf_used + default_read_size >= maximum_read_size)
+					{
+						remove_client(pollfds[i + pollfds_count_default].fd);
+						continue;
+					}
+
+					tmp = realloc(clients[j]->buf, clients[j]->buf_used + default_read_size + 1);
+					if (tmp == NULL)
+					{
+						result = -1;
+						goto exit_8;
+					}
+
+					clients[j]->buf = (unsigned char*) tmp;
+					clients[j]->buf_size = clients[j]->buf_used + default_read_size;
+				}
+
+				rc = read(clients[j]->clientfd, &(clients[j]->buf[clients[j]->buf_used]), default_read_size);
+				if ((rc <= 0) && (errno != EINTR))
+				{
+					remove_client(pollfds[i + pollfds_count_default].fd);
+					continue;
+				}
+
+				clients[j]->buf[clients[j]->buf_used + rc] = 0;
+
+				while (strchr((const char*) clients[j]->buf, '\0') != NULL)
+				{
+					rc = parse_command(j);
+					if (rc < 0)
+					{
+						remove_client(pollfds[i + pollfds_count_default].fd);
+						break;
+					}
+				}
 			}
 		}
 

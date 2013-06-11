@@ -220,18 +220,22 @@ int is_option_allowed(const char *fstype, const char *option)
 		}
 	}
 
-	for (filesystem_list = filesystem_mount_options; (filesystem_list->fstype != NULL) && (strcmp(filesystem_list->fstype, fstype) != 0); ++filesystem_list)
+	for (filesystem_list = filesystem_mount_options;
+		(filesystem_list->fstype != NULL) && (strcmp(filesystem_list->fstype, fstype) != 0);
+		++filesystem_list)
 	{
 	}
 
 	if (filesystem_list->fstype != NULL)
 	{
-		if ((filesystem_list->option_uid != NULL) && (strncmp(option, filesystem_list->option_uid, strlen(filesystem_list->option_uid)) == 0))
+		if ((filesystem_list->option_uid != NULL)
+			&& (strncmp(option, filesystem_list->option_uid, strlen(filesystem_list->option_uid)) == 0))
 		{
 			return 1;
 		}
 
-		if ((filesystem_list->option_gid != NULL) && (strncmp(option, filesystem_list->option_gid, strlen(filesystem_list->option_gid)) == 0))
+		if ((filesystem_list->option_gid != NULL)
+			&& (strncmp(option, filesystem_list->option_gid, strlen(filesystem_list->option_gid)) == 0))
 		{
 			return 1;
 		}

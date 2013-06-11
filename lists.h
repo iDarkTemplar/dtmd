@@ -52,7 +52,9 @@ enum removable_media_type
 struct client
 {
 	int clientfd;
-	char *client_data;
+	unsigned char *buf;
+	unsigned int buf_size;
+	unsigned int buf_used;
 };
 
 extern struct removable_media **media;
