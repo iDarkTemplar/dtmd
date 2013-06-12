@@ -31,7 +31,7 @@
 #include <poll.h>
 #include <errno.h>
 
-#include "dtmd.h"
+#include "../dtmd.h"
 #include "lists.h"
 #include "actions.h"
 #include "mnt_funcs.h"

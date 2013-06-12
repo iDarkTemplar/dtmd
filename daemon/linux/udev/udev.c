@@ -20,7 +20,7 @@
 
 #include "udev.h"
 
-#include "lists.h"
+#include "../../lists.h"
 
 #include <libudev.h>
 #include <stdlib.h>

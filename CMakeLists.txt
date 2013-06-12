@@ -47,12 +47,12 @@ endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 
-set ( LINUX_UDEV_SOURCES linux/udev/udev.c )
-set ( LINUX_UDEV_HEADERS linux/udev/udev.h )
+set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
+set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
 set ( LINUX_UDEV_LIBS udev )
 
-set ( DAEMON_SOURCES daemon-main.c actions.c filesystems.c label_funcs.c lists.c mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h        actions.h filesystems.h label_funcs.h lists.h mnt_funcs.h )
+set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
 
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
