@@ -55,6 +55,10 @@ set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c 
 set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
 
+set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
+set ( CONSOLE_CLIENT_HEADERS dtmd.h )
+set ( CONSOLE_CLIENT_LIBS )
+
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
 set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
 set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
@@ -63,5 +67,9 @@ add_definitions(-DSUBSYSTEM_LINUX_UDEV)
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon ${DAEMON_LIBS} )
 
+add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
+target_link_libraries( dtmd ${CONSOLE_CLIENT_LIBS} )
+
 # installation config
 install(TARGETS dtmd-daemon RUNTIME DESTINATION ./sbin)
+install(TARGETS dtmd        RUNTIME DESTINATION ./bin)
