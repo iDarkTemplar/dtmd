@@ -20,8 +20,6 @@
 
 #include "actions.h"
 
-#include "mnt_funcs.h"
-
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -89,7 +87,23 @@ int parse_command(int client_number)
 			return -1;
 		}
 
-		// TODO: list_device
+		for (i = 0; i < media_count; ++i)
+		{
+			if (strcmp(media[i]->path, par1) == 0)
+			{
+				print_device(client_number, media[i]);
+
+				for (j = 0; j < media[i]->partitions_count; ++j)
+				{
+					print_partition(client_number, media[i], j);
+				}
+
+				break;
+			}
+		}
+
+		dprintf(clients[client_number]->clientfd, "done(list_device, \"%s\")\n",
+			par1);
 
 		free(par1);
 	}
@@ -155,15 +169,7 @@ int print_device(int client_number, struct removable_media *media)
 
 int print_partition(int client_number, struct removable_media *media, unsigned int partition)
 {
-	char *mount_point;
-	char *mount_opts;
-
 	if (partition > media->partitions_count)
-	{
-		return -2;
-	}
-
-	if (get_mount_params(media->partition[partition]->path, &mount_point, &mount_opts) < 0)
 	{
 		return -1;
 	}
@@ -185,34 +191,24 @@ int print_partition(int client_number, struct removable_media *media, unsigned i
 	dprintf(clients[client_number]->clientfd, "\"%s\", ",
 		media->path);
 
-	if (mount_point != NULL)
+	if (media->partition[partition]->mnt_point != NULL)
 	{
 		dprintf(clients[client_number]->clientfd, "\"%s\", ",
-			mount_point);
+			media->partition[partition]->mnt_point);
 	}
 	else
 	{
 		dprintf(clients[client_number]->clientfd, "nil, ");
 	}
 
-	if (mount_opts != NULL)
+	if (media->partition[partition]->mnt_opts != NULL)
 	{
 		dprintf(clients[client_number]->clientfd, "\"%s\")\n",
-			mount_opts);
+			media->partition[partition]->mnt_opts);
 	}
 	else
 	{
 		dprintf(clients[client_number]->clientfd, "nil)\n");
-	}
-
-	if (mount_point != NULL)
-	{
-		free(mount_point);
-	}
-
-	if (mount_opts != NULL)
-	{
-		free(mount_opts);
 	}
 
 	return 0;

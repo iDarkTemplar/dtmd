@@ -30,6 +30,8 @@ struct removable_partition
 	char *path;
 	char *type;
 	char *label; // optional
+	char *mnt_point; // optional
+	char *mnt_opts; // optional
 };
 
 struct removable_media

@@ -209,6 +209,7 @@ int main(int argc, char **argv)
 	unsigned char media_type;
 	int monfd;
 	void *tmp;
+	unsigned char *tmp_str;
 #define pollfds_count_default 2
 	unsigned int pollfds_count = pollfds_count_default;
 
@@ -433,12 +434,12 @@ int main(int argc, char **argv)
 
 		for (i = 0; i < clients_count; ++i)
 		{
-			pollfds[i + pollfds_count_default].fd = clients[i]->clientfd;
-			pollfds[i + pollfds_count_default].events = POLLIN;
+			pollfds[i + pollfds_count_default].fd      = clients[i]->clientfd;
+			pollfds[i + pollfds_count_default].events  = POLLIN;
 			pollfds[i + pollfds_count_default].revents = 0;
 		}
 
-		rc = poll(pollfds, pollfds_count_default + clients_count, -1);
+		rc = poll(pollfds, pollfds_count, -1);
 		if (rc == -1)
 		{
 			if (errno != EINTR)
@@ -566,17 +567,17 @@ int main(int argc, char **argv)
 			}
 		}
 
-		for (i = 0; i < pollfds_count - pollfds_count_default; ++i)
+		for (i = pollfds_count_default; i < pollfds_count; ++i)
 		{
-			if ((pollfds[i + pollfds_count_default].revents & POLLHUP) || (pollfds[i + pollfds_count_default].revents & POLLERR))
+			if ((pollfds[i].revents & POLLHUP) || (pollfds[i].revents & POLLERR))
 			{
-				remove_client(pollfds[i + pollfds_count_default].fd);
+				remove_client(pollfds[i].fd);
 			}
-			else if (pollfds[i + pollfds_count_default].revents & POLLIN)
+			else if (pollfds[i].revents & POLLIN)
 			{
 				for (j = 0; j < clients_count; ++j)
 				{
-					if (clients[j]->clientfd == pollfds[i + pollfds_count_default].fd)
+					if (clients[j]->clientfd == pollfds[i].fd)
 					{
 						break;
 					}
@@ -592,7 +593,7 @@ int main(int argc, char **argv)
 				{
 					if (clients[j]->buf_used + default_read_size >= maximum_read_size)
 					{
-						remove_client(pollfds[i + pollfds_count_default].fd);
+						remove_client(pollfds[i].fd);
 						continue;
 					}
 
@@ -610,25 +611,29 @@ int main(int argc, char **argv)
 				rc = read(clients[j]->clientfd, &(clients[j]->buf[clients[j]->buf_used]), default_read_size);
 				if ((rc <= 0) && (errno != EINTR))
 				{
-					remove_client(pollfds[i + pollfds_count_default].fd);
+					remove_client(pollfds[i].fd);
 					continue;
 				}
 
 				clients[j]->buf[clients[j]->buf_used + rc] = 0;
+				clients[j]->buf_used += rc;
 
-				while (strchr((const char*) clients[j]->buf, '\0') != NULL)
+				while ((tmp_str = (unsigned char*) strchr((const char*) clients[j]->buf, '\n')) != NULL)
 				{
 					rc = parse_command(j);
 					if (rc < 0)
 					{
-						remove_client(pollfds[i + pollfds_count_default].fd);
+						remove_client(pollfds[i].fd);
 						break;
 					}
+
+					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
+					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used);
 				}
 			}
 		}
 
-		if (pollfds_count != clients_count)
+		if (pollfds_count != pollfds_count_default + clients_count)
 		{
 			pollfds_count = pollfds_count_default + clients_count;
 			tmp = realloc(pollfds, sizeof(struct pollfd)*pollfds_count);
