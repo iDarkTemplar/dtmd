@@ -78,13 +78,24 @@ daemon:
 	client: make library
 */
 
-int continue_working = 1;
+static unsigned char continue_working = 1;
+static unsigned char daemonize        = 1;
+
+void print_usage(char *name)
+{
+	fprintf(stderr, "USAGE: %s [options]\n"
+		"where options are one or more of following:\n"
+		"\t-n\n"
+		"\t--no-daemon\t- do not daemonize\n",
+		name);
+}
 
 void signal_handler(int signum)
 {
 	switch (signum)
 	{
 	case SIGTERM:
+	case SIGINT:
 		continue_working = 0;
 		break;
 	}
@@ -101,6 +112,14 @@ int setSigHandlers(void)
 	if (sigaction(SIGTERM, &action, NULL) < 0)
 	{
 		return -1;
+	}
+
+	if (!daemonize)
+	{
+		if (sigaction(SIGINT, &action, NULL) < 0)
+		{
+			return -1;
+		}
 	}
 
 	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
@@ -221,6 +240,19 @@ int main(int argc, char **argv)
 
 	struct pollfd *pollfds = NULL;
 
+	for (rc = 1; rc < argc; ++rc)
+	{
+		if ((strcmp(argv[rc],"-n") == 0) || (strcmp(argv[rc],"--no-daemon") == 0))
+		{
+			daemonize = 0;
+		}
+		else
+		{
+			print_usage(argv[0]);
+			return -1;
+		}
+	}
+
 	socketfd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (socketfd == -1)
 	{
@@ -255,22 +287,26 @@ int main(int argc, char **argv)
 		goto exit_3;
 	}
 
-	child = fork();
-	if (child == -1)
+	if (daemonize)
 	{
-		fprintf(stderr, "Error forking\n");
-		result = -1;
-		goto exit_4;
-	}
-	else if (child != 0)
-	{
-		// parent - exit
-		close(socketfd);
-		close(lockfd);
-		goto exit_1;
+		child = fork();
+		if (child == -1)
+		{
+			fprintf(stderr, "Error forking\n");
+			result = -1;
+			goto exit_4;
+		}
+		else if (child != 0)
+		{
+			// parent - exit
+			close(socketfd);
+			close(lockfd);
+			goto exit_1;
+		}
+
+		// child - daemon
 	}
 
-	// child - daemon
 	snprintf(buffer, sizeof(buffer), "%10d\n", getpid());
 	write(lockfd, buffer, sizeof(buffer) - 1);
 #ifdef _POSIX_SYNCHRONIZED_IO
@@ -282,31 +318,53 @@ int main(int argc, char **argv)
 	rc = setSigHandlers();
 	if (rc == -1)
 	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error setting signal handlers\n");
+		}
+
 		result = -1;
 		goto exit_4;
 	}
 
 	umask(0);
-	if (setsid() == -1)
+
+	if (daemonize)
 	{
-		result = -1;
-		goto exit_4;
+		if (setsid() == -1)
+		{
+			result = -1;
+			goto exit_4;
+		}
 	}
 
 	if (chdir("/") == -1)
 	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error changing directory to /\n");
+		}
+
 		result = -1;
 		goto exit_4;
 	}
 
-	if (redirectStdio() != 0)
+	if (daemonize)
 	{
-		result = -1;
-		goto exit_4;
+		if (redirectStdio() != 0)
+		{
+			result = -1;
+			goto exit_4;
+		}
 	}
 
 	if (listen(socketfd, backlog) == -1)
 	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error listening socket\n");
+		}
+
 		result = -1;
 		goto exit_4;
 	}
