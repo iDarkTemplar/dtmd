@@ -34,6 +34,7 @@
 #include "dtmd.h"
 #include "lists.h"
 #include "actions.h"
+#include "mnt_funcs.h"
 
 #ifdef SUBSYSTEM_LINUX_UDEV
 #include "linux/udev/udev.h"
@@ -60,6 +61,10 @@
 	ID_FS_TYPE=vfat
 
 	LABEL_ENC decoding
+
+	monitor:
+		device add/remove
+		partition mount/unmount
 */
 
 /* TODO: global
@@ -208,9 +213,10 @@ int main(int argc, char **argv)
 	const char *label;
 	unsigned char media_type;
 	int monfd;
+	int mountfd;
 	void *tmp;
 	unsigned char *tmp_str;
-#define pollfds_count_default 2
+#define pollfds_count_default 3
 	unsigned int pollfds_count = pollfds_count_default;
 
 	struct pollfd *pollfds = NULL;
@@ -335,18 +341,25 @@ int main(int argc, char **argv)
 
 	enumerate = udev_enumerate_new(udev);
 
+	mountfd = open("/proc/self/mounts", O_RDONLY);
+	if (mountfd == -1)
+	{
+		result = -1;
+		goto exit_6;
+	}
+
 	if (udev_enumerate_add_match_subsystem(enumerate, "block") < 0)
 	{
 		udev_enumerate_unref(enumerate);
 		result = -1;
-		goto exit_6;
+		goto exit_mountfd;
 	}
 
 	if (udev_enumerate_scan_devices(enumerate) < 0)
 	{
 		udev_enumerate_unref(enumerate);
 		result = -1;
-		goto exit_6;
+		goto exit_mountfd;
 	}
 
 	devices = udev_enumerate_get_list_entry(enumerate);
@@ -431,6 +444,10 @@ int main(int argc, char **argv)
 		pollfds[1].fd = socketfd;
 		pollfds[1].events = POLLIN;
 		pollfds[1].revents = 0;
+
+		pollfds[2].fd = mountfd;
+		pollfds[2].events = POLLERR;
+		pollfds[2].revents = 0;
 
 		for (i = 0; i < clients_count; ++i)
 		{
@@ -567,6 +584,20 @@ int main(int argc, char **argv)
 			}
 		}
 
+		if (pollfds[2].revents & POLLHUP)
+		{
+			result = -1;
+			goto exit_8;
+		}
+		else if (pollfds[2].revents & POLLERR)
+		{
+			if (check_mount_changes() < 0)
+			{
+				result = -1;
+				goto exit_8;
+			}
+		}
+
 		for (i = pollfds_count_default; i < pollfds_count; ++i)
 		{
 			if ((pollfds[i].revents & POLLHUP) || (pollfds[i].revents & POLLERR))
@@ -653,6 +684,9 @@ exit_8:
 exit_7:
 	remove_all_media();
 	remove_all_clients();
+
+exit_mountfd:
+	close(mountfd);
 
 exit_6:
 	udev_monitor_unref(mon);

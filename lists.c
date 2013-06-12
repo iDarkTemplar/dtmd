@@ -205,8 +205,9 @@ int add_media_partition(const char *block, unsigned char media_type, const char 
 				cur_partition->label = NULL;
 			}
 
-			cur_partition->mnt_point = NULL;
-			cur_partition->mnt_opts  = NULL;
+			cur_partition->mnt_point  = NULL;
+			cur_partition->mnt_opts   = NULL;
+			cur_partition->is_mounted = 0;
 
 			tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * (media[i]->partitions_count + 1));
 			if (tmp == NULL)

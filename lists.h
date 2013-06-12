@@ -30,6 +30,7 @@ struct removable_partition
 	char *path;
 	char *type;
 	char *label; // optional
+	unsigned char is_mounted;
 	char *mnt_point; // optional
 	char *mnt_opts; // optional
 };
