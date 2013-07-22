@@ -18,23 +18,45 @@
  *
  */
 
-#ifndef MNT_FUNCS_H
-#define MNT_FUNCS_H
+#ifndef DT_TESTS_H
+#define DT_TESTS_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <stdio.h>
 
-/*
-int get_mount_params(const char *device, char **mount_point, char **mount_opts);
-*/
+#define tests_init(); static int tests_result_value = 0; \
+static int tests_on_error_quit_value = 0;
 
-/* TODO: notifications on mount/umount. */
+#define tests_result() tests_result_value
 
-int check_mount_changes(void);
+#define tests_quit_on_error(bool); tests_on_error_quit_value = bool;
 
-#ifdef __cplusplus
+#define test_compare(test) \
+if (!(test)) \
+{ \
+	printf("line %d, test failed: %s\n",__LINE__, #test ); \
+	if (tests_on_error_quit_value) \
+	{ \
+		return -1; \
+	} \
+	else \
+	{ \
+		tests_result_value = -1; \
+	} \
 }
-#endif
 
-#endif /* MNT_FUNCS_H */
+#define test_compare_comment(test, comment) \
+if (!(test)) \
+{ \
+	printf("line %d, test failed: %s\n",__LINE__, #test ); \
+	printf("Comment: %s\n", comment); \
+	if (tests_on_error_quit_value) \
+	{ \
+		return -1; \
+	} \
+	else \
+	{ \
+		tests_result_value = -1; \
+	} \
+}
+
+#endif /* DT_TESTS_H */

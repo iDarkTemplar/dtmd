@@ -23,6 +23,8 @@
 
 #include "lists.h"
 
+#include "common/commands.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,7 +65,7 @@ extern "C" {
 		single "mount_failed"
 */
 
-int parse_command(int client_number);
+int invoke_command(int client_number, struct command *cmd);
 
 int send_notification(const char *type, const char *device);
 

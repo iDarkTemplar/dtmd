@@ -18,23 +18,26 @@
  *
  */
 
-#ifndef MNT_FUNCS_H
-#define MNT_FUNCS_H
+#ifndef COMMANDS_H
+#define COMMANDS_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*
-int get_mount_params(const char *device, char **mount_point, char **mount_opts);
-*/
+struct command
+{
+	unsigned char *cmd;
+	int args_count;
+	unsigned char **args;
+};
 
-/* TODO: notifications on mount/umount. */
+struct command* parse_command(unsigned char *buffer);
 
-int check_mount_changes(void);
+void free_command(struct command *cmd);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* MNT_FUNCS_H */
+#endif // COMMANDS_H

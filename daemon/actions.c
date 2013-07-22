@@ -20,108 +20,11 @@
 
 #include "actions.h"
 
-#include <string.h>
-#include <stdlib.h>
 #include <stdio.h>
 
-int parse_command(int client_number)
+int invoke_command(int client_number, struct command *cmd)
 {
-	char *par1;
-	char *par2;
-	char *par3;
-	unsigned char *cur;
-	unsigned char *tmp;
-	int len;
-	unsigned int i;
-	unsigned int j;
-
-	//len = strlen(clients[client_number]->buf);
-
-	if (strncmp((const char*)clients[client_number]->buf, "enum_all()\n", strlen("enum_all()\n")) == 0)
-	{
-		// enum_all
-
-		for (i = 0; i < media_count; ++i)
-		{
-			print_device(client_number, media[i]);
-
-			for (j = 0; j < media[i]->partitions_count; ++j)
-			{
-				print_partition(client_number, media[i], j);
-			}
-		}
-
-		dprintf(clients[client_number]->clientfd, "done(enum_all)\n");
-	}
-	else if (strncmp((const char*)clients[client_number]->buf, "list_device(\"", strlen("list_device(\"")) == 0)
-	{
-		// list_device device_path
-
-		cur = &(clients[client_number]->buf[strlen("list_device(\"")+1]);
-		len = 0;
-		tmp = cur;
-
-		while (((*tmp) != '\"') && ((*tmp) != 0))
-		{
-			++len;
-			++tmp;
-		}
-
-		if ((len == 0) || (*tmp == 0))
-		{
-			return -1;
-		}
-
-		par1 = (char*) malloc(len + 1);
-		if (par1 == NULL)
-		{
-			return -1;
-		}
-
-		memcpy(par1, cur, len);
-		par1[len] = 0;
-
-		if (strncmp((const char*)&(cur[len]), "\")\n", strlen("\")\n")) != 0)
-		{
-			free(par1);
-			return -1;
-		}
-
-		for (i = 0; i < media_count; ++i)
-		{
-			if (strcmp(media[i]->path, par1) == 0)
-			{
-				print_device(client_number, media[i]);
-
-				for (j = 0; j < media[i]->partitions_count; ++j)
-				{
-					print_partition(client_number, media[i], j);
-				}
-
-				break;
-			}
-		}
-
-		dprintf(clients[client_number]->clientfd, "done(list_device, \"%s\")\n",
-			par1);
-
-		free(par1);
-	}
-	else if (strncmp((const char*)clients[client_number]->buf, "list_device(\"", strlen("list_device(\"")) == 0)
-	{
-		// mount device_path, mount_point, mount_options
-		// TODO: check
-	}
-	else if (0)
-	{
-		// unmount device_path, mount_point
-		// TODO: check
-	}
-	else
-	{
-		return -1;
-	}
-
+	// TODO: issue command
 	return 0;
 }
 

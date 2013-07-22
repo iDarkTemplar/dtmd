@@ -154,18 +154,6 @@ int check_mount_changes(void)
 						else
 						{
 							media[i]->partition[j]->is_mounted = 0;
-
-							if (media[i]->partition[j]->mnt_point != NULL)
-							{
-								free(media[i]->partition[j]->mnt_point);
-								media[i]->partition[j]->mnt_point = NULL;
-							}
-
-							if (media[i]->partition[j]->mnt_opts != NULL)
-							{
-								free(media[i]->partition[j]->mnt_opts);
-								media[i]->partition[j]->mnt_opts = NULL;
-							}
 						}
 					}
 

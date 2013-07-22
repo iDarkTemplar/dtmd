@@ -51,6 +51,9 @@ set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
 set ( LINUX_UDEV_LIBS udev )
 
+set ( COMMON_SOURCES common/commands.c )
+set ( COMMON_HEADERS common/commands.h )
+
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
 set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
@@ -58,6 +61,9 @@ set ( DAEMON_LIBS )
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS dtmd.h )
 set ( CONSOLE_CLIENT_LIBS )
+
+set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${COMMON_SOURCES} )
+set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${COMMON_HEADERS} )
 
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
 set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
@@ -69,6 +75,16 @@ target_link_libraries( dtmd-daemon ${DAEMON_LIBS} )
 
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 target_link_libraries( dtmd ${CONSOLE_CLIENT_LIBS} )
+
+ENABLE_TESTING()
+
+set (TEST_SOURCES_commands common/commands.c tests/commands_test.c tests/dt_tests.h)
+
+set (ALL_TESTS commands)
+foreach (CURRENT_TEST ${ALL_TESTS})
+	add_executable( ${CURRENT_TEST}_test ${TEST_SOURCES_${CURRENT_TEST}})
+	add_test( ${CURRENT_TEST}_test ${CMAKE_CURRENT_BINARY_DIR}/${CURRENT_TEST}_test )
+endforeach (CURRENT_TEST)
 
 # installation config
 install(TARGETS dtmd-daemon RUNTIME DESTINATION ./sbin)

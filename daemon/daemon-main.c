@@ -308,7 +308,17 @@ int main(int argc, char **argv)
 	}
 
 	snprintf(buffer, sizeof(buffer), "%10d\n", getpid());
-	write(lockfd, buffer, sizeof(buffer) - 1);
+	if (write(lockfd, buffer, sizeof(buffer) - 1) != sizeof(buffer) - 1)
+	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error writing process pid to lockfile\n");
+		}
+
+		result = -1;
+		goto exit_4;
+	}
+
 #ifdef _POSIX_SYNCHRONIZED_IO
 	fdatasync(lockfd);
 #else
@@ -485,6 +495,12 @@ int main(int argc, char **argv)
 	}
 
 	udev_enumerate_unref(enumerate);
+
+	if (check_mount_changes() < 0)
+	{
+		result = -1;
+		goto exit_7;
+	}
 
 	pollfds = (struct pollfd*) malloc(sizeof(struct pollfd)*pollfds_count);
 	if (pollfds == NULL)
@@ -709,6 +725,7 @@ int main(int argc, char **argv)
 
 				while ((tmp_str = (unsigned char*) strchr((const char*) clients[j]->buf, '\n')) != NULL)
 				{
+					/* TODO: get command and issue it
 					rc = parse_command(j);
 					if (rc < 0)
 					{
@@ -718,6 +735,7 @@ int main(int argc, char **argv)
 
 					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used);
+					*/
 				}
 			}
 		}
