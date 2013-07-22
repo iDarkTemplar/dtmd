@@ -21,9 +21,56 @@
 #include "actions.h"
 
 #include <stdio.h>
+#include <string.h>
 
 int invoke_command(int client_number, struct command *cmd)
 {
+	if ((strcmp((char*) cmd->cmd, "enum_all") == 0) && (cmd->args_count == 0))
+	{
+
+	}
+	else if ((strcmp((char*) cmd->cmd, "list_device") == 0) && (cmd->args_count == 1))
+	{
+
+	}
+	else if ((strcmp((char*) cmd->cmd, "mount") == 0) && ((cmd->args_count == 2) || (cmd->args_count == 3)))
+	{
+
+	}
+	else if ((strcmp((char*) cmd->cmd, "unmount") == 0) && (cmd->args_count == 2))
+	{
+
+	}
+	else
+	{
+		return -1;
+	}
+/*
+	"enum_all"
+		returns:
+		device: "path, type"
+		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+	"list_device":
+		input:
+		"device path"
+		returns:
+		device: "path, type"
+		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+	"mount"
+		input:
+		"path, mount_point, mount_options?"
+		returns:
+		broadcast "mount"
+		or
+		single "mount_failed"
+	"unmount"
+		input:
+		"path, mount_point"
+		returns:
+		broadcast "unmount"
+		or
+		single "mount_failed"
+*/
 	// TODO: issue command
 	return 0;
 }

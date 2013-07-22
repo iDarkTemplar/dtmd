@@ -80,61 +80,77 @@ struct command* parse_command(unsigned char *buffer)
 		return result;
 	}
 
-	if ((*cur) != '\"')
-	{
-		goto parse_command_error_2;
-	}
-
-	++cur;
-
 	for (;;)
 	{
-		start = cur;
-		i     = 0;
-
-		for (;;)
+		if ((*cur) == '\"')
 		{
-			if (((*cur) == '\n') || ((*cur) == 0))
+			++cur;
+
+			start = cur;
+			i     = 0;
+
+			for (;;)
+			{
+				if (((*cur) == '\n') || ((*cur) == 0))
+				{
+					goto parse_command_error_2;
+				}
+
+				if ((*cur) == '\"')
+				{
+					break;
+				}
+
+				++i;
+				++cur;
+			}
+
+			tmp_str = (unsigned char*) malloc((i+1)*sizeof(unsigned char));
+			if (tmp_str == NULL)
 			{
 				goto parse_command_error_2;
 			}
 
-			if ((*cur) == '\"')
+			tmp = (unsigned char**) realloc(result->args, (result->args_count+1)*sizeof(unsigned char*));
+			if (tmp == NULL)
 			{
-				break;
+				free(tmp_str);
+				goto parse_command_error_2;
 			}
 
-			++i;
+			result->args = tmp;
+			memcpy(tmp_str, start, i);
+			tmp_str[i] = 0;
+			result->args[result->args_count] = tmp_str;
+			++(result->args_count);
+
 			++cur;
 		}
+		else if (((*cur) == 'n') && ((*(cur+1)) == 'i') && ((*(cur+2)) == 'l'))
+		{
+			tmp = (unsigned char**) realloc(result->args, (result->args_count+1)*sizeof(unsigned char*));
+			if (tmp == NULL)
+			{
+				goto parse_command_error_2;
+			}
 
-		tmp_str = (unsigned char*) malloc((i+1)*sizeof(unsigned char));
-		if (tmp_str == NULL)
+			result->args = tmp;
+			result->args[result->args_count] = NULL;
+			++(result->args_count);
+
+			cur += 3;
+		}
+		else
 		{
 			goto parse_command_error_2;
 		}
 
-		tmp = (unsigned char**) realloc(result->args, (result->args_count+1)*sizeof(unsigned char*));
-		if (tmp == NULL)
-		{
-			free(tmp_str);
-			goto parse_command_error_2;
-		}
-
-		result->args = tmp;
-		memcpy(tmp_str, start, i);
-		tmp_str[i] = 0;
-		result->args[result->args_count] = tmp_str;
-		++(result->args_count);
-
-		++cur;
-
-		if (((*cur) != ',') || ((*(cur+1)) != ' ') || ((*(cur+2)) != '\"'))
+		if (((*cur) != ',') || ((*(cur+1)) != ' '))
 		{
 			break;
 		}
 
-		cur += 3;
+		cur += 2;
 	}
 
 	if (((*cur) == ')') && ((*(cur+1)) == '\n'))
@@ -164,7 +180,10 @@ void free_command(struct command *cmd)
 		{
 			for (i = 0; i < cmd->args_count; ++i)
 			{
-				free(cmd->args[i]);
+				if (cmd->args[i] != NULL)
+				{
+					free(cmd->args[i]);
+				}
 			}
 
 			free(cmd->args);

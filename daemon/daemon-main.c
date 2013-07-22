@@ -237,6 +237,7 @@ int main(int argc, char **argv)
 	unsigned char *tmp_str;
 #define pollfds_count_default 3
 	unsigned int pollfds_count = pollfds_count_default;
+	struct command *cmd;
 
 	struct pollfd *pollfds = NULL;
 
@@ -725,8 +726,15 @@ int main(int argc, char **argv)
 
 				while ((tmp_str = (unsigned char*) strchr((const char*) clients[j]->buf, '\n')) != NULL)
 				{
-					/* TODO: get command and issue it
-					rc = parse_command(j);
+					cmd = parse_command(clients[j]->buf);
+					if (cmd == NULL)
+					{
+						remove_client(pollfds[i].fd);
+						break;
+					}
+
+					rc = invoke_command(j, cmd);
+					free_command(cmd);
 					if (rc < 0)
 					{
 						remove_client(pollfds[i].fd);
@@ -735,7 +743,6 @@ int main(int argc, char **argv)
 
 					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used);
-					*/
 				}
 			}
 		}

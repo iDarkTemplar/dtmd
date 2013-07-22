@@ -31,7 +31,14 @@ void print_command(struct command *cmd)
 
 	for (i = 0; i < cmd->args_count; ++i)
 	{
-		printf("arg %d: \"%s\"\n", i+1, cmd->args[i]);
+		if (cmd->args[i] != NULL)
+		{
+			printf("arg %d: \"%s\"\n", i+1, cmd->args[i]);
+		}
+		else
+		{
+			printf("arg %d: nil\n", i+1);
+		}
 	}
 }
 
@@ -46,6 +53,9 @@ int main(int argc, char **argv)
 	unsigned char *cmd5 = (unsigned char*) "cmd5(\"arg1\")\n";
 	unsigned char *cmd6 = (unsigned char*) "cmd_6(\"arg1\")\n";
 	unsigned char *cmd7 = (unsigned char*) "cmd_7(\"\")\n";
+	unsigned char *cmd8 = (unsigned char*) "cmd_8(nil)\n";
+	unsigned char *cmd9 = (unsigned char*) "cmd_9(\"arg1\", nil, \"arg3\")\n";
+	unsigned char *cmd10 = (unsigned char*) "cmd10(nil \"arg3\")\n";
 
 	struct command *cmd1_res;
 	struct command *cmd2_res;
@@ -54,6 +64,9 @@ int main(int argc, char **argv)
 	struct command *cmd5_res;
 	struct command *cmd6_res;
 	struct command *cmd7_res;
+	struct command *cmd8_res;
+	struct command *cmd9_res;
+	struct command *cmd10_res;
 
 	(void)argc;
 	(void)argv;
@@ -65,6 +78,9 @@ int main(int argc, char **argv)
 	test_compare((cmd5_res = parse_command(cmd5)) != NULL);
 	test_compare((cmd6_res = parse_command(cmd6)) != NULL);
 	test_compare((cmd7_res = parse_command(cmd7)) != NULL);
+	test_compare((cmd8_res = parse_command(cmd8)) != NULL);
+	test_compare((cmd9_res = parse_command(cmd9)) != NULL);
+	test_compare((cmd10_res = parse_command(cmd10)) == NULL);
 
 	if (cmd1_res)
 	{
@@ -106,6 +122,24 @@ int main(int argc, char **argv)
 	{
 		print_command(cmd7_res);
 		free_command(cmd7_res);
+	}
+
+	if (cmd8_res)
+	{
+		print_command(cmd8_res);
+		free_command(cmd8_res);
+	}
+
+	if (cmd9_res)
+	{
+		print_command(cmd9_res);
+		free_command(cmd9_res);
+	}
+
+	if (cmd10_res)
+	{
+		print_command(cmd10_res);
+		free_command(cmd10_res);
 	}
 
 	return tests_result();
