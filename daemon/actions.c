@@ -25,9 +25,24 @@
 
 int invoke_command(int client_number, struct command *cmd)
 {
+	unsigned int i;
+	unsigned int j;
+
 	if ((strcmp((char*) cmd->cmd, "enum_all") == 0) && (cmd->args_count == 0))
 	{
+		dprintf(clients[client_number]->clientfd, "started(\"enum_all\")\n");
 
+		for (i = 0; i < media_count; ++i)
+		{
+			print_device(client_number, media[i]);
+
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				print_partition(client_number, media[i], j);
+			}
+		}
+
+		dprintf(clients[client_number]->clientfd, "finished(\"enum_all\")\n");
 	}
 	else if ((strcmp((char*) cmd->cmd, "list_device") == 0) && (cmd->args_count == 1))
 	{

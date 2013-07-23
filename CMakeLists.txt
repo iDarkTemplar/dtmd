@@ -44,6 +44,11 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
+if (UNIX)
+	set( CMAKE_THREAD_PREFER_PTHREAD 1 )
+endif (UNIX)
+find_package (Threads REQUIRED)
+
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 
@@ -54,6 +59,9 @@ set ( LINUX_UDEV_LIBS udev )
 set ( COMMON_SOURCES common/commands.c )
 set ( COMMON_HEADERS common/commands.h )
 
+set ( LIBRARY_SOURCES library/dtmd-library.c )
+set ( LIBRARY_HEADERS library/dtmd-library.h )
+
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
 set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
@@ -61,6 +69,9 @@ set ( DAEMON_LIBS )
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS dtmd.h )
 set ( CONSOLE_CLIENT_LIBS )
+
+set ( LIBRARY_SOURCES ${LIBRARY_SOURCES} ${COMMON_SOURCES} )
+set ( LIBRARY_HEADERS ${LIBRARY_HEADERS} ${COMMON_HEADERS} )
 
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${COMMON_SOURCES} )
 set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${COMMON_HEADERS} )
@@ -73,8 +84,11 @@ add_definitions(-DSUBSYSTEM_LINUX_UDEV)
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon ${DAEMON_LIBS} )
 
+add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
+target_link_libraries( dtmd-library ${CMAKE_THREAD_LIBS_INIT} )
+
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
-target_link_libraries( dtmd ${CONSOLE_CLIENT_LIBS} )
+target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
 
 ENABLE_TESTING()
 

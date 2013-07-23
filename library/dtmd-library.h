@@ -18,26 +18,23 @@
  *
  */
 
-#ifndef COMMANDS_H
-#define COMMANDS_H
+#ifndef DTMD_LIBRARY_H
+#define DTMD_LIBRARY_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct command
-{
-	unsigned char *cmd;
-	int args_count;
-	unsigned char **args;
-};
+typedef struct dtmd_library dtmd_t;
+typedef void (*dtmd_callback)(void *arg);
 
-struct command* parse_command(unsigned char *buffer);
+dtmd_t* dtmd_init(void);
+void dtmd_deinit(dtmd_t *handle);
 
-void free_command(struct command *cmd);
+void dtmd_set_callback(dtmd_t *handle, dtmd_callback callback, void *arg);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* COMMANDS_H */
+#endif /* DTMD_LIBRARY_H */

@@ -42,10 +42,17 @@ void print_command(struct command *cmd)
 	}
 }
 
+void print_and_free(struct command *cmd)
+{
+	if (cmd != NULL)
+	{
+		print_command(cmd);
+		free_command(cmd);
+	}
+}
+
 int main(int argc, char **argv)
 {
-	tests_init();
-
 	unsigned char *cmd1 = (unsigned char*) "cmd()\n";
 	unsigned char *cmd2 = (unsigned char*) "cmd2(\"arg1\", \"arg2\", \"arg3\")\n";
 	unsigned char *cmd3 = (unsigned char*) "cmd3(arg1\", \"arg2\", \"arg3\")\n";
@@ -56,6 +63,7 @@ int main(int argc, char **argv)
 	unsigned char *cmd8 = (unsigned char*) "cmd_8(nil)\n";
 	unsigned char *cmd9 = (unsigned char*) "cmd_9(\"arg1\", nil, \"arg3\")\n";
 	unsigned char *cmd10 = (unsigned char*) "cmd10(nil \"arg3\")\n";
+	unsigned char *cmd11 = (unsigned char*) "(\"arg1\")\n";
 
 	struct command *cmd1_res;
 	struct command *cmd2_res;
@@ -67,6 +75,9 @@ int main(int argc, char **argv)
 	struct command *cmd8_res;
 	struct command *cmd9_res;
 	struct command *cmd10_res;
+	struct command *cmd11_res;
+
+	tests_init();
 
 	(void)argc;
 	(void)argv;
@@ -81,66 +92,19 @@ int main(int argc, char **argv)
 	test_compare((cmd8_res = parse_command(cmd8)) != NULL);
 	test_compare((cmd9_res = parse_command(cmd9)) != NULL);
 	test_compare((cmd10_res = parse_command(cmd10)) == NULL);
+	test_compare((cmd11_res = parse_command(cmd11)) == NULL);
 
-	if (cmd1_res)
-	{
-		print_command(cmd1_res);
-		free_command(cmd1_res);
-	}
-
-	if (cmd2_res)
-	{
-		print_command(cmd2_res);
-		free_command(cmd2_res);
-	}
-
-	if (cmd3_res)
-	{
-		print_command(cmd3_res);
-		free_command(cmd3_res);
-	}
-
-	if (cmd4_res)
-	{
-		print_command(cmd4_res);
-		free_command(cmd4_res);
-	}
-
-	if (cmd5_res)
-	{
-		print_command(cmd5_res);
-		free_command(cmd5_res);
-	}
-
-	if (cmd6_res)
-	{
-		print_command(cmd6_res);
-		free_command(cmd6_res);
-	}
-
-	if (cmd7_res)
-	{
-		print_command(cmd7_res);
-		free_command(cmd7_res);
-	}
-
-	if (cmd8_res)
-	{
-		print_command(cmd8_res);
-		free_command(cmd8_res);
-	}
-
-	if (cmd9_res)
-	{
-		print_command(cmd9_res);
-		free_command(cmd9_res);
-	}
-
-	if (cmd10_res)
-	{
-		print_command(cmd10_res);
-		free_command(cmd10_res);
-	}
+	print_and_free(cmd1_res);
+	print_and_free(cmd2_res);
+	print_and_free(cmd3_res);
+	print_and_free(cmd4_res);
+	print_and_free(cmd5_res);
+	print_and_free(cmd6_res);
+	print_and_free(cmd7_res);
+	print_and_free(cmd8_res);
+	print_and_free(cmd9_res);
+	print_and_free(cmd10_res);
+	print_and_free(cmd11_res);
 
 	return tests_result();
 }
