@@ -28,10 +28,20 @@ extern "C" {
 typedef struct dtmd_library dtmd_t;
 typedef void (*dtmd_callback)(void *arg);
 
-dtmd_t* dtmd_init(void);
+enum dtmd_result
+{
+	dtmd_ok = 0,
+	dtmd_library_not_initialized = -1,
+	dtmd_input_error = -2
+};
+
+dtmd_t* dtmd_init(dtmd_callback callback, void *arg);
 void dtmd_deinit(dtmd_t *handle);
 
-void dtmd_set_callback(dtmd_t *handle, dtmd_callback callback, void *arg);
+int dtmd_enum_devices(dtmd_t *handle);
+int dtmd_list_device(dtmd_t *handle, const char *device_path);
+int dtmd_mount(dtmd_t *handle, const char *path, const char *mount_point, const char *mount_options);
+int dtmd_unmount(dtmd_t *handle, const char *path, const char *mount_point);
 
 #ifdef __cplusplus
 }

@@ -35,17 +35,22 @@ struct dtmd_library
 	dtmd_callback callback;
 	void *callback_arg;
 	pthread_t worker;
-	pthread_mutex_t callback_mutex;
 	int pipes[2];
 	int socket_fd;
+	int worker_fd;
 };
 
 static void* dtmd_worker_function(void *arg);
 
-dtmd_t* dtmd_init(void)
+dtmd_t* dtmd_init(dtmd_callback callback, void *arg)
 {
 	dtmd_t *handle;
 	struct sockaddr_un sockaddr;
+
+	if (callback == NULL)
+	{
+		goto dtmd_init_error_1;
+	}
 
 	handle = (dtmd_t*) malloc(sizeof(dtmd_t));
 	if (handle == NULL)
@@ -53,18 +58,22 @@ dtmd_t* dtmd_init(void)
 		goto dtmd_init_error_1;
 	}
 
-	if (pthread_mutex_init(&(handle->callback_mutex), NULL) != 0)
+	handle->callback     = callback;
+	handle->callback_arg = arg;
+
+	if (pipe(handle->pipes) == -1)
 	{
 		goto dtmd_init_error_2;
 	}
 
-	if (pipe(handle->pipes) == -1)
+	handle->socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+	if (handle->socket_fd == -1)
 	{
 		goto dtmd_init_error_3;
 	}
 
-	handle->socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-	if (handle->socket_fd == -1)
+	handle->worker_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+	if (handle->worker_fd == -1)
 	{
 		goto dtmd_init_error_4;
 	}
@@ -74,6 +83,11 @@ dtmd_t* dtmd_init(void)
 	strncat(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
 
 	if (connect(handle->socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
+	{
+		goto dtmd_init_error_5;
+	}
+
+	if (connect(handle->worker_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
 	{
 		goto dtmd_init_error_5;
 	}
@@ -90,14 +104,16 @@ dtmd_init_error_6:
 	pthread_join(handle->worker, NULL);
 */
 dtmd_init_error_5:
-	close(handle->socket_fd);
+	shutdown(handle->worker_fd, SHUT_RDWR);
+	close(handle->worker_fd);
 
 dtmd_init_error_4:
-	close(handle->pipes[0]);
-	close(handle->pipes[1]);
+	shutdown(handle->socket_fd, SHUT_RDWR);
+	close(handle->socket_fd);
 
 dtmd_init_error_3:
-	pthread_mutex_destroy(&(handle->callback_mutex));
+	close(handle->pipes[0]);
+	close(handle->pipes[1]);
 
 dtmd_init_error_2:
 	free(handle);
@@ -116,24 +132,13 @@ void dtmd_deinit(dtmd_t *handle)
 	write(handle->pipes[1], "", sizeof(""));
 	pthread_join(handle->worker, NULL);
 
+	shutdown(handle->worker_fd, SHUT_RDWR);
+	close(handle->worker_fd);
+	shutdown(handle->socket_fd, SHUT_RDWR);
 	close(handle->socket_fd);
 	close(handle->pipes[0]);
 	close(handle->pipes[1]);
-	pthread_mutex_destroy(&(handle->callback_mutex));
 	free(handle);
-}
-
-void dtmd_set_callback(dtmd_t *handle, dtmd_callback callback, void *arg)
-{
-	if (handle == NULL)
-	{
-		return;
-	}
-
-	pthread_mutex_lock(&(handle->callback_mutex));
-	handle->callback     = callback;
-	handle->callback_arg = arg;
-	pthread_mutex_unlock(&(handle->callback_mutex));
 }
 
 static void* dtmd_worker_function(void *arg)
@@ -143,4 +148,66 @@ static void* dtmd_worker_function(void *arg)
 	handle = (dtmd_t*) arg;
 
 	pthread_exit(0);
+}
+
+int dtmd_enum_devices(dtmd_t *handle)
+{
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	// TODO: implement
+	return dtmd_ok;
+}
+
+int dtmd_list_device(dtmd_t *handle, const char *device_path)
+{
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((device_path == NULL) || (strlen(device_path) == 0))
+	{
+		return dtmd_input_error;
+	}
+
+	// TODO: implement
+	return dtmd_ok;
+}
+
+int dtmd_mount(dtmd_t *handle, const char *path, const char *mount_point, const char *mount_options)
+{
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((path == NULL) || (mount_point == NULL)
+		|| (strlen(path) == 0) || (strlen(mount_point) == 0)
+		|| ((mount_options != NULL) && (strlen(mount_options) == 0)))
+	{
+		return dtmd_input_error;
+	}
+
+	// TODO: implement
+	return dtmd_ok;
+}
+
+int dtmd_unmount(dtmd_t *handle, const char *path, const char *mount_point)
+{
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((path == NULL) || (mount_point == NULL)
+		|| (strlen(path) == 0) || (strlen(mount_point) == 0))
+	{
+		return dtmd_input_error;
+	}
+
+	// TODO: implement
+	return dtmd_ok;
 }
