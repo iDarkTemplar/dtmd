@@ -20,10 +20,10 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "common/commands.h"
+#include "library/dtmd-commands.h"
 #include "tests/dt_tests.h"
 
-void print_command(struct command *cmd)
+void print_command(struct dtmd_command *cmd)
 {
 	int i;
 
@@ -42,12 +42,12 @@ void print_command(struct command *cmd)
 	}
 }
 
-void print_and_free(struct command *cmd)
+void print_and_free(struct dtmd_command *cmd)
 {
 	if (cmd != NULL)
 	{
 		print_command(cmd);
-		free_command(cmd);
+		dtmd_free_command(cmd);
 	}
 }
 
@@ -65,34 +65,34 @@ int main(int argc, char **argv)
 	unsigned char *cmd10 = (unsigned char*) "cmd10(nil \"arg3\")\n";
 	unsigned char *cmd11 = (unsigned char*) "(\"arg1\")\n";
 
-	struct command *cmd1_res;
-	struct command *cmd2_res;
-	struct command *cmd3_res;
-	struct command *cmd4_res;
-	struct command *cmd5_res;
-	struct command *cmd6_res;
-	struct command *cmd7_res;
-	struct command *cmd8_res;
-	struct command *cmd9_res;
-	struct command *cmd10_res;
-	struct command *cmd11_res;
+	struct dtmd_command *cmd1_res;
+	struct dtmd_command *cmd2_res;
+	struct dtmd_command *cmd3_res;
+	struct dtmd_command *cmd4_res;
+	struct dtmd_command *cmd5_res;
+	struct dtmd_command *cmd6_res;
+	struct dtmd_command *cmd7_res;
+	struct dtmd_command *cmd8_res;
+	struct dtmd_command *cmd9_res;
+	struct dtmd_command *cmd10_res;
+	struct dtmd_command *cmd11_res;
 
 	tests_init();
 
 	(void)argc;
 	(void)argv;
 
-	test_compare((cmd1_res = parse_command(cmd1)) != NULL);
-	test_compare((cmd2_res = parse_command(cmd2)) != NULL);
-	test_compare((cmd3_res = parse_command(cmd3)) == NULL);
-	test_compare((cmd4_res = parse_command(cmd4)) == NULL);
-	test_compare((cmd5_res = parse_command(cmd5)) != NULL);
-	test_compare((cmd6_res = parse_command(cmd6)) != NULL);
-	test_compare((cmd7_res = parse_command(cmd7)) != NULL);
-	test_compare((cmd8_res = parse_command(cmd8)) != NULL);
-	test_compare((cmd9_res = parse_command(cmd9)) != NULL);
-	test_compare((cmd10_res = parse_command(cmd10)) == NULL);
-	test_compare((cmd11_res = parse_command(cmd11)) == NULL);
+	test_compare((cmd1_res = dtmd_parse_command(cmd1)) != NULL);
+	test_compare((cmd2_res = dtmd_parse_command(cmd2)) != NULL);
+	test_compare((cmd3_res = dtmd_parse_command(cmd3)) == NULL);
+	test_compare((cmd4_res = dtmd_parse_command(cmd4)) == NULL);
+	test_compare((cmd5_res = dtmd_parse_command(cmd5)) != NULL);
+	test_compare((cmd6_res = dtmd_parse_command(cmd6)) != NULL);
+	test_compare((cmd7_res = dtmd_parse_command(cmd7)) != NULL);
+	test_compare((cmd8_res = dtmd_parse_command(cmd8)) != NULL);
+	test_compare((cmd9_res = dtmd_parse_command(cmd9)) != NULL);
+	test_compare((cmd10_res = dtmd_parse_command(cmd10)) == NULL);
+	test_compare((cmd11_res = dtmd_parse_command(cmd11)) == NULL);
 
 	print_and_free(cmd1_res);
 	print_and_free(cmd2_res);

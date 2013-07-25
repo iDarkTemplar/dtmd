@@ -56,8 +56,8 @@ set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
 set ( LINUX_UDEV_LIBS udev )
 
-set ( COMMON_SOURCES common/commands.c )
-set ( COMMON_HEADERS common/commands.h )
+set ( COMMANDS_LIBRARY_SOURCES library/dtmd-commands.c )
+set ( COMMANDS_LIBRARY_HEADERS library/dtmd-commands.h )
 
 set ( LIBRARY_SOURCES library/dtmd-library.c )
 set ( LIBRARY_HEADERS library/dtmd-library.h )
@@ -70,29 +70,32 @@ set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS dtmd.h )
 set ( CONSOLE_CLIENT_LIBS )
 
-set ( LIBRARY_SOURCES ${LIBRARY_SOURCES} ${COMMON_SOURCES} )
-set ( LIBRARY_HEADERS ${LIBRARY_HEADERS} ${COMMON_HEADERS} )
+set ( LIBRARY_SOURCES ${LIBRARY_SOURCES} )
+set ( LIBRARY_HEADERS ${LIBRARY_HEADERS} )
 
-set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${COMMON_SOURCES} )
-set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${COMMON_HEADERS} )
+set ( DAEMON_SOURCES ${DAEMON_SOURCES} )
+set ( DAEMON_HEADERS ${DAEMON_HEADERS} )
 
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
 set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
 set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
 add_definitions(-DSUBSYSTEM_LINUX_UDEV)
 
-add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
-target_link_libraries( dtmd-daemon ${DAEMON_LIBS} )
+add_library( dtmd-commands SHARED ${COMMANDS_LIBRARY_SOURCES} ${COMMANDS_LIBRARY_HEADERS} )
+target_link_libraries( dtmd-commands )
 
 add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
-target_link_libraries( dtmd-library ${CMAKE_THREAD_LIBS_INIT} )
+target_link_libraries( dtmd-library ${CMAKE_THREAD_LIBS_INIT} dtmd-commands )
+
+add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
+target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-commands )
 
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
 
 ENABLE_TESTING()
 
-set (TEST_SOURCES_commands common/commands.c tests/commands_test.c tests/dt_tests.h)
+set (TEST_SOURCES_commands library/dtmd-commands.c tests/commands_test.c tests/dt_tests.h)
 
 set (ALL_TESTS commands)
 foreach (CURRENT_TEST ${ALL_TESTS})

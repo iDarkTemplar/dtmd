@@ -18,7 +18,7 @@
  *
  */
 
-#include "library/dtmd-library.h"
+#include "dtmd-library.h"
 
 #include <stdlib.h>
 #include <string.h>

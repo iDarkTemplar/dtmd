@@ -21,12 +21,14 @@
 #ifndef DTMD_LIBRARY_H
 #define DTMD_LIBRARY_H
 
+#include "dtmd-commands.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct dtmd_library dtmd_t;
-typedef void (*dtmd_callback)(void *arg);
+typedef void (*dtmd_callback)(void *arg, struct dtmd_command *cmd);
 
 enum dtmd_result
 {
@@ -43,6 +45,15 @@ int dtmd_enum_devices(dtmd_t *handle);
 int dtmd_list_device(dtmd_t *handle, const char *device_path);
 int dtmd_mount(dtmd_t *handle, const char *path, const char *mount_point, const char *mount_options);
 int dtmd_unmount(dtmd_t *handle, const char *path, const char *mount_point);
+
+/*
+	"add_disk(path, type)"
+	"remove_disk(path)"
+	"add_partition(path, fstype, label (optional, may be NULL), parent_path)"
+	"remove_partition(path)"
+	"mount(path, mount_point, mount_options?)" or mount_failed
+	"unmount(path, mount_point)" or unmount_failed
+*/
 
 #ifdef __cplusplus
 }

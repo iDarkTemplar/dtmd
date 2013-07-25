@@ -18,12 +18,12 @@
  *
  */
 
-#include "actions.h"
+#include "daemon/actions.h"
 
 #include <stdio.h>
 #include <string.h>
 
-int invoke_command(int client_number, struct command *cmd)
+int invoke_command(int client_number, struct dtmd_command *cmd)
 {
 	unsigned int i;
 	unsigned int j;
@@ -125,9 +125,12 @@ int send_notification(const char *type, const char *device)
 
 int print_device(int client_number, struct removable_media *media)
 {
-	dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\")\n",
+	if (dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\")\n",
 		media->path,
-		removable_type_to_string(media->type));
+		removable_type_to_string(media->type)) < 0)
+	{
+		return -1;
+	}
 
 	return 0;
 }
@@ -139,41 +142,21 @@ int print_partition(int client_number, struct removable_media *media, unsigned i
 		return -1;
 	}
 
-	dprintf(clients[client_number]->clientfd, "partition(\"%s\", \"%s\", ",
+	if (dprintf(clients[client_number]->clientfd, "partition(\"%s\", \"%s\", %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
 		media->partition[partition]->path,
-		media->partition[partition]->type);
-
-	if (media->partition[partition]->label != NULL)
+		media->partition[partition]->type,
+		((media->partition[partition]->label != NULL) ? ("\"") : ("")),
+		((media->partition[partition]->label != NULL) ? (media->partition[partition]->label) : ("nil")),
+		((media->partition[partition]->label != NULL) ? ("\"") : ("")),
+		media->path,
+		((media->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
+		((media->partition[partition]->mnt_point != NULL) ? (media->partition[partition]->mnt_point) : ("nil")),
+		((media->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
+		((media->partition[partition]->mnt_opts != NULL) ? ("\"") : ("")),
+		((media->partition[partition]->mnt_opts != NULL) ? (media->partition[partition]->mnt_opts) : ("nil")),
+		((media->partition[partition]->mnt_opts != NULL) ? ("\"") : (""))) < 0)
 	{
-		dprintf(clients[client_number]->clientfd, "\"%s\", ",
-			media->partition[partition]->label);
-	}
-	else
-	{
-		dprintf(clients[client_number]->clientfd, "nil, ");
-	}
-
-	dprintf(clients[client_number]->clientfd, "\"%s\", ",
-		media->path);
-
-	if (media->partition[partition]->mnt_point != NULL)
-	{
-		dprintf(clients[client_number]->clientfd, "\"%s\", ",
-			media->partition[partition]->mnt_point);
-	}
-	else
-	{
-		dprintf(clients[client_number]->clientfd, "nil, ");
-	}
-
-	if (media->partition[partition]->mnt_opts != NULL)
-	{
-		dprintf(clients[client_number]->clientfd, "\"%s\")\n",
-			media->partition[partition]->mnt_opts);
-	}
-	else
-	{
-		dprintf(clients[client_number]->clientfd, "nil)\n");
+		return -1;
 	}
 
 	return 0;

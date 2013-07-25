@@ -18,22 +18,22 @@
  *
  */
 
-#include "commands.h"
+#include "dtmd-commands.h"
 
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
 
-struct command* parse_command(unsigned char *buffer)
+struct dtmd_command* dtmd_parse_command(unsigned char *buffer)
 {
 	unsigned char *cur;
 	unsigned char *start;
-	struct command *result;
+	struct dtmd_command *result;
 	int i;
 	unsigned char *tmp_str;
 	unsigned char **tmp;
 
-	result = (struct command*) malloc(sizeof(struct command));
+	result = (struct dtmd_command*) malloc(sizeof(struct dtmd_command));
 	if (result == NULL)
 	{
 		goto parse_command_error_1;
@@ -159,13 +159,13 @@ struct command* parse_command(unsigned char *buffer)
 	}
 
 parse_command_error_2:
-	free_command(result);
+	dtmd_free_command(result);
 
 parse_command_error_1:
 	return NULL;
 }
 
-void free_command(struct command *cmd)
+void dtmd_free_command(struct dtmd_command *cmd)
 {
 	int i;
 

@@ -25,16 +25,16 @@
 extern "C" {
 #endif
 
-struct command
+struct dtmd_command
 {
 	unsigned char *cmd;
 	int args_count;
 	unsigned char **args;
 };
 
-struct command* parse_command(unsigned char *buffer);
+struct dtmd_command* dtmd_parse_command(unsigned char *buffer);
 
-void free_command(struct command *cmd);
+void dtmd_free_command(struct dtmd_command *cmd);
 
 #ifdef __cplusplus
 }

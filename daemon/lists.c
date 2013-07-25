@@ -18,7 +18,7 @@
  *
  */
 
-#include "lists.h"
+#include "daemon/lists.h"
 
 #include <stdlib.h>
 #include <string.h>

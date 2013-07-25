@@ -21,9 +21,9 @@
 #ifndef DTMD_NOTIFY_H
 #define DTMD_NOTIFY_H
 
-#include "lists.h"
+#include "daemon/lists.h"
 
-#include "common/commands.h"
+#include "library/dtmd-commands.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,7 +65,7 @@ extern "C" {
 		single "mount_failed"
 */
 
-int invoke_command(int client_number, struct command *cmd);
+int invoke_command(int client_number, struct dtmd_command *cmd);
 
 int send_notification(const char *type, const char *device);
 

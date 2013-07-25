@@ -31,13 +31,13 @@
 #include <poll.h>
 #include <errno.h>
 
-#include "../dtmd.h"
-#include "lists.h"
-#include "actions.h"
-#include "mnt_funcs.h"
+#include "dtmd.h"
+#include "daemon/lists.h"
+#include "daemon/actions.h"
+#include "daemon/mnt_funcs.h"
 
 #ifdef SUBSYSTEM_LINUX_UDEV
-#include "linux/udev/udev.h"
+#include "daemon/linux/udev/udev.h"
 #endif
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
 	unsigned char *tmp_str;
 #define pollfds_count_default 3
 	unsigned int pollfds_count = pollfds_count_default;
-	struct command *cmd;
+	struct dtmd_command *cmd;
 
 	struct pollfd *pollfds = NULL;
 
@@ -726,7 +726,7 @@ int main(int argc, char **argv)
 
 				while ((tmp_str = (unsigned char*) strchr((const char*) clients[j]->buf, '\n')) != NULL)
 				{
-					cmd = parse_command(clients[j]->buf);
+					cmd = dtmd_parse_command(clients[j]->buf);
 					if (cmd == NULL)
 					{
 						remove_client(pollfds[i].fd);
@@ -734,7 +734,7 @@ int main(int argc, char **argv)
 					}
 
 					rc = invoke_command(j, cmd);
-					free_command(cmd);
+					dtmd_free_command(cmd);
 					if (rc < 0)
 					{
 						remove_client(pollfds[i].fd);

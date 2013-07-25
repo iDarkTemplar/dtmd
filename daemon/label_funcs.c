@@ -18,7 +18,7 @@
  *
  */
 
-#include "label_funcs.h"
+#include "daemon/label_funcs.h"
 
 #include <stdlib.h>
 #include <string.h>

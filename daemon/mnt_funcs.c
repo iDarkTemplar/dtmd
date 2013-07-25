@@ -18,7 +18,7 @@
  *
  */
 
-#include "mnt_funcs.h"
+#include "daemon/mnt_funcs.h"
 
 #include "lists.h"
 
