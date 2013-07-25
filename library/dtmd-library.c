@@ -28,6 +28,9 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include <poll.h>
+#include <stdio.h>
+
 #include "dtmd.h"
 
 struct dtmd_library
@@ -37,7 +40,6 @@ struct dtmd_library
 	pthread_t worker;
 	int pipes[2];
 	int socket_fd;
-	int worker_fd;
 };
 
 static void* dtmd_worker_function(void *arg);
@@ -72,41 +74,26 @@ dtmd_t* dtmd_init(dtmd_callback callback, void *arg)
 		goto dtmd_init_error_3;
 	}
 
-	handle->worker_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-	if (handle->worker_fd == -1)
-	{
-		goto dtmd_init_error_4;
-	}
-
 	sockaddr.sun_family = AF_LOCAL;
 	memset(sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
 	strncat(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
 
 	if (connect(handle->socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
 	{
-		goto dtmd_init_error_5;
-	}
-
-	if (connect(handle->worker_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
-	{
-		goto dtmd_init_error_5;
+		goto dtmd_init_error_4;
 	}
 
 	if ((pthread_create(&(handle->worker), NULL, &dtmd_worker_function, handle)) != 0)
 	{
-		goto dtmd_init_error_5;
+		goto dtmd_init_error_4;
 	}
 
 	return handle;
 /*
-dtmd_init_error_6:
+dtmd_init_error_5:
 	write(handle->pipes[1], "", sizeof(""));
 	pthread_join(handle->worker, NULL);
 */
-dtmd_init_error_5:
-	shutdown(handle->worker_fd, SHUT_RDWR);
-	close(handle->worker_fd);
-
 dtmd_init_error_4:
 	shutdown(handle->socket_fd, SHUT_RDWR);
 	close(handle->socket_fd);
@@ -132,8 +119,6 @@ void dtmd_deinit(dtmd_t *handle)
 	write(handle->pipes[1], "", sizeof(""));
 	pthread_join(handle->worker, NULL);
 
-	shutdown(handle->worker_fd, SHUT_RDWR);
-	close(handle->worker_fd);
 	shutdown(handle->socket_fd, SHUT_RDWR);
 	close(handle->socket_fd);
 	close(handle->pipes[0]);
@@ -144,8 +129,45 @@ void dtmd_deinit(dtmd_t *handle)
 static void* dtmd_worker_function(void *arg)
 {
 	dtmd_t *handle;
+	struct pollfd fds[2];
+	int rc;
 
 	handle = (dtmd_t*) arg;
+
+	fds[0].fd = handle->pipes[0];
+	fds[1].fd = handle->socket_fd;
+
+	for (;;)
+	{
+		fds[0].events  = POLLIN;
+		fds[0].revents = 0;
+		fds[1].events  = POLLOUT;
+		fds[1].revents = 0;
+
+		rc = poll(fds, 2, -1);
+
+		if ((rc == -1)
+			|| (fds[0].revents & POLLERR)
+			|| (fds[0].revents & POLLHUP)
+			|| (fds[0].revents & POLLNVAL)
+			|| (fds[1].revents & POLLERR)
+			|| (fds[1].revents & POLLHUP)
+			|| (fds[1].revents & POLLNVAL))
+		{
+			// TODO: signal error
+		}
+
+		if (fds[0].revents & POLLIN)
+		{
+			// TODO: deinitialize?
+			break;
+		}
+
+		if (fds[1].revents & POLLIN)
+		{
+			// TODO: process notifications
+		}
+	}
 
 	pthread_exit(0);
 }
@@ -157,7 +179,11 @@ int dtmd_enum_devices(dtmd_t *handle)
 		return dtmd_library_not_initialized;
 	}
 
-	// TODO: implement
+	if (dprintf(handle->socket_fd, "enum_all()\n") < 0)
+	{
+		return dtmd_io_error;
+	}
+
 	return dtmd_ok;
 }
 
@@ -173,7 +199,11 @@ int dtmd_list_device(dtmd_t *handle, const char *device_path)
 		return dtmd_input_error;
 	}
 
-	// TODO: implement
+	if (dprintf(handle->socket_fd, "list_device(\"%s\")\n", device_path) < 0)
+	{
+		return dtmd_io_error;
+	}
+
 	return dtmd_ok;
 }
 
@@ -191,7 +221,21 @@ int dtmd_mount(dtmd_t *handle, const char *path, const char *mount_point, const 
 		return dtmd_input_error;
 	}
 
-	// TODO: implement
+	if (mount_options != NULL)
+	{
+		if (dprintf(handle->socket_fd, "mount(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options) < 0)
+		{
+			return dtmd_io_error;
+		}
+	}
+	else
+	{
+		if (dprintf(handle->socket_fd, "mount(\"%s\", \"%s\", nil)\n", path, mount_point) < 0)
+		{
+			return dtmd_io_error;
+		}
+	}
+
 	return dtmd_ok;
 }
 
@@ -208,6 +252,10 @@ int dtmd_unmount(dtmd_t *handle, const char *path, const char *mount_point)
 		return dtmd_input_error;
 	}
 
-	// TODO: implement
+	if (dprintf(handle->socket_fd, "unmount(\"%s\", \"%s\")\n", path, mount_point) < 0)
+	{
+		return dtmd_io_error;
+	}
+
 	return dtmd_ok;
 }

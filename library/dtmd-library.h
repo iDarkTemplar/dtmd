@@ -32,7 +32,8 @@ enum dtmd_result
 {
 	dtmd_ok = 0,
 	dtmd_library_not_initialized = -1,
-	dtmd_input_error = -2
+	dtmd_input_error = -2,
+	dtmd_io_error = -3
 };
 
 dtmd_t* dtmd_init(dtmd_callback callback, void *arg);

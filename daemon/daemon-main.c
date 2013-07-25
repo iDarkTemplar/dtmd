@@ -541,7 +541,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if ((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR))
+		if ((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR) || (pollfds[0].revents & POLLNVAL))
 		{
 			result = -1;
 			goto exit_8;
@@ -637,7 +637,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if ((pollfds[1].revents & POLLHUP) || (pollfds[1].revents & POLLERR))
+		if ((pollfds[1].revents & POLLHUP) || (pollfds[1].revents & POLLERR) || (pollfds[1].revents & POLLNVAL))
 		{
 			result = -1;
 			goto exit_8;
@@ -659,7 +659,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if (pollfds[2].revents & POLLHUP)
+		if ((pollfds[2].revents & POLLHUP) || (pollfds[2].revents & POLLNVAL))
 		{
 			result = -1;
 			goto exit_8;
@@ -675,7 +675,7 @@ int main(int argc, char **argv)
 
 		for (i = pollfds_count_default; i < pollfds_count; ++i)
 		{
-			if ((pollfds[i].revents & POLLHUP) || (pollfds[i].revents & POLLERR))
+			if ((pollfds[i].revents & POLLHUP) || (pollfds[i].revents & POLLERR) || (pollfds[i].revents & POLLNVAL))
 			{
 				remove_client(pollfds[i].fd);
 			}

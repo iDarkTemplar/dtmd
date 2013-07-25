@@ -48,7 +48,7 @@ int invoke_command(int client_number, struct command *cmd)
 	{
 
 	}
-	else if ((strcmp((char*) cmd->cmd, "mount") == 0) && ((cmd->args_count == 2) || (cmd->args_count == 3)))
+	else if ((strcmp((char*) cmd->cmd, "mount") == 0) && (cmd->args_count == 3))
 	{
 
 	}
