@@ -24,14 +24,14 @@
 #include <string.h>
 #include <stdlib.h>
 
-struct dtmd_command* dtmd_parse_command(unsigned char *buffer)
+struct dtmd_command* dtmd_parse_command(char *buffer)
 {
-	unsigned char *cur;
-	unsigned char *start;
+	char *cur;
+	char *start;
 	struct dtmd_command *result;
 	int i;
-	unsigned char *tmp_str;
-	unsigned char **tmp;
+	char *tmp_str;
+	char **tmp;
 
 	result = (struct dtmd_command*) malloc(sizeof(struct dtmd_command));
 	if (result == NULL)
@@ -64,7 +64,7 @@ struct dtmd_command* dtmd_parse_command(unsigned char *buffer)
 		++cur;
 	}
 
-	result->cmd = (unsigned char*) malloc((i+1)*sizeof(unsigned char));
+	result->cmd = (char*) malloc((i+1)*sizeof(char));
 	if (result->cmd == NULL)
 	{
 		goto parse_command_error_2;
@@ -105,13 +105,13 @@ struct dtmd_command* dtmd_parse_command(unsigned char *buffer)
 				++cur;
 			}
 
-			tmp_str = (unsigned char*) malloc((i+1)*sizeof(unsigned char));
+			tmp_str = (char*) malloc((i+1)*sizeof(char));
 			if (tmp_str == NULL)
 			{
 				goto parse_command_error_2;
 			}
 
-			tmp = (unsigned char**) realloc(result->args, (result->args_count+1)*sizeof(unsigned char*));
+			tmp = (char**) realloc(result->args, (result->args_count+1)*sizeof(char*));
 			if (tmp == NULL)
 			{
 				free(tmp_str);
@@ -128,7 +128,7 @@ struct dtmd_command* dtmd_parse_command(unsigned char *buffer)
 		}
 		else if (((*cur) == 'n') && ((*(cur+1)) == 'i') && ((*(cur+2)) == 'l'))
 		{
-			tmp = (unsigned char**) realloc(result->args, (result->args_count+1)*sizeof(unsigned char*));
+			tmp = (char**) realloc(result->args, (result->args_count+1)*sizeof(char*));
 			if (tmp == NULL)
 			{
 				goto parse_command_error_2;

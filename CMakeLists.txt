@@ -26,10 +26,10 @@ message(STATUS "To change installation directory use -DINST_PREFIX=path, for exa
 
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
-	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra")
+	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra -Wno-unused-result")
 	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 
-	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe -march=native -Wall -Wextra -g -ggdb")
+	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe -march=native -Wall -Wextra -Wno-unused-result -g -ggdb")
 	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 endif (CMAKE_COMPILER_IS_GNUCC)
 
@@ -95,11 +95,13 @@ target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
 
 ENABLE_TESTING()
 
-set (TEST_SOURCES_commands library/dtmd-commands.c tests/commands_test.c tests/dt_tests.h)
+set (TEST_SOURCES_commands tests/commands_test.c tests/dt_tests.h)
+set (TEST_LIBS_commands dtmd-commands)
 
 set (ALL_TESTS commands)
 foreach (CURRENT_TEST ${ALL_TESTS})
 	add_executable( ${CURRENT_TEST}_test ${TEST_SOURCES_${CURRENT_TEST}})
+	target_link_libraries( ${CURRENT_TEST}_test ${TEST_LIBS_${CURRENT_TEST}} )
 	add_test( ${CURRENT_TEST}_test ${CMAKE_CURRENT_BINARY_DIR}/${CURRENT_TEST}_test )
 endforeach (CURRENT_TEST)
 

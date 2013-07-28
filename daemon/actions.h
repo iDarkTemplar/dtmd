@@ -38,6 +38,9 @@ extern "C" {
 	"mount(path, mount_point, mount_options?)" or mount_failed
 	"unmount(path, mount_point)" or unmount_failed
 
+	command responses start with "started"
+	and finish with "finished" or "failed"
+
 	Commands:
 	"enum_all"
 		returns:
@@ -54,15 +57,11 @@ extern "C" {
 		"path, mount_point, mount_options?"
 		returns:
 		broadcast "mount"
-		or
-		single "mount_failed"
 	"unmount"
 		input:
 		"path, mount_point"
 		returns:
 		broadcast "unmount"
-		or
-		single "mount_failed"
 */
 
 int invoke_command(int client_number, struct dtmd_command *cmd);

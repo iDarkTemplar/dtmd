@@ -28,14 +28,15 @@ extern "C" {
 #endif
 
 typedef struct dtmd_library dtmd_t;
-typedef void (*dtmd_callback)(void *arg, struct dtmd_command *cmd);
+typedef void (*dtmd_callback)(void *arg, const struct dtmd_command *cmd);
 
 enum dtmd_result
 {
 	dtmd_ok = 0,
-	dtmd_library_not_initialized = -1,
-	dtmd_input_error = -2,
-	dtmd_io_error = -3
+	dtmd_invalid_state = -1,
+	dtmd_library_not_initialized = -2,
+	dtmd_input_error = -3,
+	dtmd_io_error = -4
 };
 
 dtmd_t* dtmd_init(dtmd_callback callback, void *arg);
@@ -45,15 +46,6 @@ int dtmd_enum_devices(dtmd_t *handle);
 int dtmd_list_device(dtmd_t *handle, const char *device_path);
 int dtmd_mount(dtmd_t *handle, const char *path, const char *mount_point, const char *mount_options);
 int dtmd_unmount(dtmd_t *handle, const char *path, const char *mount_point);
-
-/*
-	"add_disk(path, type)"
-	"remove_disk(path)"
-	"add_partition(path, fstype, label (optional, may be NULL), parent_path)"
-	"remove_partition(path)"
-	"mount(path, mount_point, mount_options?)" or mount_failed
-	"unmount(path, mount_point)" or unmount_failed
-*/
 
 #ifdef __cplusplus
 }

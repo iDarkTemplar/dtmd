@@ -53,17 +53,17 @@ void print_and_free(struct dtmd_command *cmd)
 
 int main(int argc, char **argv)
 {
-	unsigned char *cmd1 = (unsigned char*) "cmd()\n";
-	unsigned char *cmd2 = (unsigned char*) "cmd2(\"arg1\", \"arg2\", \"arg3\")\n";
-	unsigned char *cmd3 = (unsigned char*) "cmd3(arg1\", \"arg2\", \"arg3\")\n";
-	unsigned char *cmd4 = (unsigned char*) "cmd4(\"arg1\" \"arg2\", \"arg3\")\n";
-	unsigned char *cmd5 = (unsigned char*) "cmd5(\"arg1\")\n";
-	unsigned char *cmd6 = (unsigned char*) "cmd_6(\"arg1\")\n";
-	unsigned char *cmd7 = (unsigned char*) "cmd_7(\"\")\n";
-	unsigned char *cmd8 = (unsigned char*) "cmd_8(nil)\n";
-	unsigned char *cmd9 = (unsigned char*) "cmd_9(\"arg1\", nil, \"arg3\")\n";
-	unsigned char *cmd10 = (unsigned char*) "cmd10(nil \"arg3\")\n";
-	unsigned char *cmd11 = (unsigned char*) "(\"arg1\")\n";
+	char *cmd1 = "cmd()\n";
+	char *cmd2 = "cmd2(\"arg1\", \"arg2\", \"arg3\")\n";
+	char *cmd3 = "cmd3(arg1\", \"arg2\", \"arg3\")\n";
+	char *cmd4 = "cmd4(\"arg1\" \"arg2\", \"arg3\")\n";
+	char *cmd5 = "cmd5(\"arg1\")\n";
+	char *cmd6 = "cmd_6(\"arg1\")\n";
+	char *cmd7 = "cmd_7(\"\")\n";
+	char *cmd8 = "cmd_8(nil)\n";
+	char *cmd9 = "cmd_9(\"arg1\", nil, \"arg3\")\n";
+	char *cmd10 = "cmd10(nil \"arg3\")\n";
+	char *cmd11 = "(\"arg1\")\n";
 
 	struct dtmd_command *cmd1_res;
 	struct dtmd_command *cmd2_res;

@@ -234,7 +234,7 @@ int main(int argc, char **argv)
 	int monfd;
 	int mountfd;
 	void *tmp;
-	unsigned char *tmp_str;
+	char *tmp_str;
 #define pollfds_count_default 3
 	unsigned int pollfds_count = pollfds_count_default;
 	struct dtmd_command *cmd;
@@ -710,7 +710,7 @@ int main(int argc, char **argv)
 						goto exit_8;
 					}
 
-					clients[j]->buf = (unsigned char*) tmp;
+					clients[j]->buf = (char*) tmp;
 					clients[j]->buf_size = clients[j]->buf_used + default_read_size;
 				}
 
@@ -724,7 +724,7 @@ int main(int argc, char **argv)
 				clients[j]->buf[clients[j]->buf_used + rc] = 0;
 				clients[j]->buf_used += rc;
 
-				while ((tmp_str = (unsigned char*) strchr((const char*) clients[j]->buf, '\n')) != NULL)
+				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
 					cmd = dtmd_parse_command(clients[j]->buf);
 					if (cmd == NULL)

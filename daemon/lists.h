@@ -55,7 +55,7 @@ enum removable_media_type
 struct client
 {
 	int clientfd;
-	unsigned char *buf;
+	char *buf;
 	unsigned int buf_size;
 	unsigned int buf_used;
 };

@@ -27,12 +27,12 @@ extern "C" {
 
 struct dtmd_command
 {
-	unsigned char *cmd;
+	char *cmd;
 	int args_count;
-	unsigned char **args;
+	char **args;
 };
 
-struct dtmd_command* dtmd_parse_command(unsigned char *buffer);
+struct dtmd_command* dtmd_parse_command(char *buffer);
 
 void dtmd_free_command(struct dtmd_command *cmd);
 

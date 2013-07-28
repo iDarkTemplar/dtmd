@@ -28,7 +28,7 @@ int invoke_command(int client_number, struct dtmd_command *cmd)
 	unsigned int i;
 	unsigned int j;
 
-	if ((strcmp((char*) cmd->cmd, "enum_all") == 0) && (cmd->args_count == 0))
+	if ((strcmp(cmd->cmd, "enum_all") == 0) && (cmd->args_count == 0))
 	{
 		dprintf(clients[client_number]->clientfd, "started(\"enum_all\")\n");
 
@@ -44,17 +44,50 @@ int invoke_command(int client_number, struct dtmd_command *cmd)
 
 		dprintf(clients[client_number]->clientfd, "finished(\"enum_all\")\n");
 	}
-	else if ((strcmp((char*) cmd->cmd, "list_device") == 0) && (cmd->args_count == 1))
+	else if ((strcmp(cmd->cmd, "list_device") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
+		dprintf(clients[client_number]->clientfd, "started(\"list_devices\", \"%s\")\n", cmd->args[0]);
 
+		for (i = 0; i < media_count; ++i)
+		{
+			if (strcmp(media[i]->path, cmd->args[0]) == 0)
+			{
+				print_device(client_number, media[i]);
+
+				for (j = 0; j < media[i]->partitions_count; ++j)
+				{
+					print_partition(client_number, media[i], j);
+				}
+
+				break;
+			}
+		}
+
+		if (i < media_count)
+		{
+			dprintf(clients[client_number]->clientfd, "finished(\"list_devices\", \"%s\")\n", cmd->args[0]);
+		}
+		else
+		{
+			dprintf(clients[client_number]->clientfd, "failed(\"list_devices\", \"%s\")\n", cmd->args[0]);
+		}
 	}
-	else if ((strcmp((char*) cmd->cmd, "mount") == 0) && (cmd->args_count == 3))
+	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 	{
+		dprintf(clients[client_number]->clientfd, "started(\"mount\", \"%s\", \"%s\", %s%s%s)\n",
+			cmd->args[0],
+			cmd->args[1],
+			((cmd->args[2] != NULL) ? ("\"") : ("")),
+			((cmd->args[2] != NULL) ? (cmd->args[2]) : ("nil")),
+			((cmd->args[2] != NULL) ? ("\"") : ("")));
 
+		// TODO: implement mount and notifications
 	}
-	else if ((strcmp((char*) cmd->cmd, "unmount") == 0) && (cmd->args_count == 2))
+	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 	{
+		dprintf(clients[client_number]->clientfd, "started(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
 
+		// TODO: implement unmount and notifications
 	}
 	else
 	{
