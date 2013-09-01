@@ -21,6 +21,8 @@
 #ifndef DTMD_LISTS_H
 #define DTMD_LISTS_H
 
+#include "dtmd.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,26 +40,17 @@ struct removable_partition
 struct removable_media
 {
 	char *path;
-	unsigned char type;
+	dtmd_removable_media_type_t type;
 
 	unsigned int partitions_count;
 	struct removable_partition **partition;
 };
 
-enum removable_media_type
-{
-	unknown_or_persistent = 0,
-	cdrom                 = 1,
-	removable_disk        = 2,
-	sd_card               = 3
-};
-
 struct client
 {
 	int clientfd;
-	char *buf;
-	unsigned int buf_size;
 	unsigned int buf_used;
+	char buf[dtmd_command_max_length + 1];
 };
 
 extern struct removable_media **media;
@@ -66,9 +59,9 @@ extern unsigned int media_count;
 extern struct client **clients;
 extern unsigned int clients_count;
 
-int add_media_block(const char *path, unsigned char media_type);
+int add_media_block(const char *path, dtmd_removable_media_type_t media_type);
 int remove_media_block(const char *path);
-int add_media_partition(const char *block, unsigned char media_type, const char *partition, const char *type, const char *label);
+int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *type, const char *label);
 int remove_media_partition(const char *block, const char *partition);
 void remove_all_media(void);
 
@@ -76,7 +69,7 @@ int add_client(int client);
 int remove_client(int client);
 void remove_all_clients(void);
 
-const char* removable_type_to_string(enum removable_media_type removable_type);
+const char* removable_type_to_string(dtmd_removable_media_type_t removable_type);
 
 #ifdef __cplusplus
 }

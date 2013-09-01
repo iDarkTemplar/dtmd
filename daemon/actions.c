@@ -23,7 +23,13 @@
 #include <stdio.h>
 #include <string.h>
 
-int invoke_command(int client_number, struct dtmd_command *cmd)
+static int print_devices_count(unsigned int client_number);
+
+static int print_device(unsigned int client_number, unsigned int device);
+
+static int print_partition(unsigned int client_number, unsigned int device, unsigned int partition);
+
+int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 {
 	unsigned int i;
 	unsigned int j;
@@ -32,13 +38,15 @@ int invoke_command(int client_number, struct dtmd_command *cmd)
 	{
 		dprintf(clients[client_number]->clientfd, "started(\"enum_all\")\n");
 
+		print_devices_count(client_number);
+
 		for (i = 0; i < media_count; ++i)
 		{
-			print_device(client_number, media[i]);
+			print_device(client_number, i);
 
 			for (j = 0; j < media[i]->partitions_count; ++j)
 			{
-				print_partition(client_number, media[i], j);
+				print_partition(client_number, i, j);
 			}
 		}
 
@@ -46,25 +54,25 @@ int invoke_command(int client_number, struct dtmd_command *cmd)
 	}
 	else if ((strcmp(cmd->cmd, "list_device") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		dprintf(clients[client_number]->clientfd, "started(\"list_devices\", \"%s\")\n", cmd->args[0]);
-
 		for (i = 0; i < media_count; ++i)
 		{
 			if (strcmp(media[i]->path, cmd->args[0]) == 0)
 			{
-				print_device(client_number, media[i]);
-
-				for (j = 0; j < media[i]->partitions_count; ++j)
-				{
-					print_partition(client_number, media[i], j);
-				}
-
 				break;
 			}
 		}
 
 		if (i < media_count)
 		{
+			dprintf(clients[client_number]->clientfd, "started(\"list_devices\", \"%s\")\n", cmd->args[0]);
+
+			print_device(client_number, i);
+
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				print_partition(client_number, i, j);
+			}
+
 			dprintf(clients[client_number]->clientfd, "finished(\"list_devices\", \"%s\")\n", cmd->args[0]);
 		}
 		else
@@ -93,32 +101,7 @@ int invoke_command(int client_number, struct dtmd_command *cmd)
 	{
 		return -1;
 	}
-/*
-	"enum_all"
-		returns:
-		device: "path, type"
-		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
-	"list_device":
-		input:
-		"device path"
-		returns:
-		device: "path, type"
-		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
-	"mount"
-		input:
-		"path, mount_point, mount_options?"
-		returns:
-		broadcast "mount"
-		or
-		single "mount_failed"
-	"unmount"
-		input:
-		"path, mount_point"
-		returns:
-		broadcast "unmount"
-		or
-		single "mount_failed"
-*/
+
 	// TODO: issue command
 	return 0;
 }
@@ -156,11 +139,10 @@ int send_notification(const char *type, const char *device)
 	return 0;
 }
 
-int print_device(int client_number, struct removable_media *media)
+static int print_devices_count(unsigned int client_number)
 {
-	if (dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\")\n",
-		media->path,
-		removable_type_to_string(media->type)) < 0)
+	if (dprintf(clients[client_number]->clientfd, "devices(\"%d\")\n",
+		media_count) < 0)
 	{
 		return -1;
 	}
@@ -168,26 +150,48 @@ int print_device(int client_number, struct removable_media *media)
 	return 0;
 }
 
-int print_partition(int client_number, struct removable_media *media, unsigned int partition)
+static int print_device(unsigned int client_number, unsigned int device)
 {
-	if (partition > media->partitions_count)
+#ifndef NDEBUG
+	if (device > media_count)
+	{
+		return -1;
+	}
+#endif /* NDEBUG */
+
+	if (dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\", \"%d\")\n",
+		media[device]->path,
+		removable_type_to_string(media[device]->type),
+		media[device]->partitions_count) < 0)
 	{
 		return -1;
 	}
 
+	return 0;
+}
+
+static int print_partition(unsigned int client_number, unsigned int device, unsigned int partition)
+{
+#ifndef NDEBUG
+	if ((device > media_count) || (partition > media[device]->partitions_count))
+	{
+		return -1;
+	}
+#endif /* NDEBUG */
+
 	if (dprintf(clients[client_number]->clientfd, "partition(\"%s\", \"%s\", %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
-		media->partition[partition]->path,
-		media->partition[partition]->type,
-		((media->partition[partition]->label != NULL) ? ("\"") : ("")),
-		((media->partition[partition]->label != NULL) ? (media->partition[partition]->label) : ("nil")),
-		((media->partition[partition]->label != NULL) ? ("\"") : ("")),
-		media->path,
-		((media->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
-		((media->partition[partition]->mnt_point != NULL) ? (media->partition[partition]->mnt_point) : ("nil")),
-		((media->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
-		((media->partition[partition]->mnt_opts != NULL) ? ("\"") : ("")),
-		((media->partition[partition]->mnt_opts != NULL) ? (media->partition[partition]->mnt_opts) : ("nil")),
-		((media->partition[partition]->mnt_opts != NULL) ? ("\"") : (""))) < 0)
+		media[device]->partition[partition]->path,
+		media[device]->partition[partition]->type,
+		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
+		((media[device]->partition[partition]->label != NULL) ? (media[device]->partition[partition]->label) : ("nil")),
+		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
+		media[device]->path,
+		((media[device]->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
+		((media[device]->partition[partition]->mnt_point != NULL) ? (media[device]->partition[partition]->mnt_point) : ("nil")),
+		((media[device]->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
+		((media[device]->partition[partition]->mnt_opts != NULL) ? ("\"") : ("")),
+		((media[device]->partition[partition]->mnt_opts != NULL) ? (media[device]->partition[partition]->mnt_opts) : ("nil")),
+		((media[device]->partition[partition]->mnt_opts != NULL) ? ("\"") : (""))) < 0)
 	{
 		return -1;
 	}

@@ -23,7 +23,7 @@
 #include "library/dtmd-commands.h"
 #include "tests/dt_tests.h"
 
-void print_command(struct dtmd_command *cmd)
+void print_command(dtmd_command_t *cmd)
 {
 	int i;
 
@@ -42,7 +42,7 @@ void print_command(struct dtmd_command *cmd)
 	}
 }
 
-void print_and_free(struct dtmd_command *cmd)
+void print_and_free(dtmd_command_t *cmd)
 {
 	if (cmd != NULL)
 	{
@@ -65,17 +65,17 @@ int main(int argc, char **argv)
 	char *cmd10 = "cmd10(nil \"arg3\")\n";
 	char *cmd11 = "(\"arg1\")\n";
 
-	struct dtmd_command *cmd1_res;
-	struct dtmd_command *cmd2_res;
-	struct dtmd_command *cmd3_res;
-	struct dtmd_command *cmd4_res;
-	struct dtmd_command *cmd5_res;
-	struct dtmd_command *cmd6_res;
-	struct dtmd_command *cmd7_res;
-	struct dtmd_command *cmd8_res;
-	struct dtmd_command *cmd9_res;
-	struct dtmd_command *cmd10_res;
-	struct dtmd_command *cmd11_res;
+	dtmd_command_t *cmd1_res;
+	dtmd_command_t *cmd2_res;
+	dtmd_command_t *cmd3_res;
+	dtmd_command_t *cmd4_res;
+	dtmd_command_t *cmd5_res;
+	dtmd_command_t *cmd6_res;
+	dtmd_command_t *cmd7_res;
+	dtmd_command_t *cmd8_res;
+	dtmd_command_t *cmd9_res;
+	dtmd_command_t *cmd10_res;
+	dtmd_command_t *cmd11_res;
 
 	tests_init();
 

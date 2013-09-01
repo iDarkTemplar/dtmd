@@ -22,5 +22,14 @@
 #define DTMD_H
 
 #define dtmd_daemon_socket_addr "/var/run/dtmd.socket"
+#define dtmd_command_max_length 4096
+
+typedef enum dtmd_removable_media_type
+{
+	unknown_or_persistent = 0,
+	cdrom                 = 1,
+	removable_disk        = 2,
+	sd_card               = 3
+} dtmd_removable_media_type_t;
 
 #endif /* DTMD_H */

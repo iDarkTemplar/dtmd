@@ -18,26 +18,12 @@
  *
  */
 
-#ifndef COMMANDS_H
-#define COMMANDS_H
+#ifndef DEVICES_LIST_H
+#define DEVICES_LIST_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define string_device_unknown_or_persistent "unknown"
+#define string_device_cdrom                 "cdrom"
+#define string_device_removable_disk        "disk"
+#define string_device_sd_card               "sdcard"
 
-typedef struct dtmd_command
-{
-	char *cmd;
-	int args_count;
-	char **args;
-} dtmd_command_t;
-
-dtmd_command_t* dtmd_parse_command(char *buffer);
-
-void dtmd_free_command(dtmd_command_t *cmd);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* COMMANDS_H */
+#endif /* DEVICES_LIST_H */

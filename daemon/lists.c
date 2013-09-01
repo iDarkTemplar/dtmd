@@ -20,6 +20,8 @@
 
 #include "daemon/lists.h"
 
+#include "devices_list.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -31,12 +33,12 @@ unsigned int media_count = 0;
 struct client **clients = NULL;
 unsigned int clients_count = 0;
 
-static const char *str_unknown_or_persistent = "unknown";
-static const char *str_cdrom                 = "cdrom";
-static const char *str_removable_disk        = "disk";
-static const char *str_sd_card               = "sdcard";
+static const char *str_unknown_or_persistent = string_device_unknown_or_persistent;
+static const char *str_cdrom                 = string_device_cdrom;
+static const char *str_removable_disk        = string_device_removable_disk;
+static const char *str_sd_card               = string_device_sd_card;
 
-int add_media_block(const char *path, unsigned char media_type)
+int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 {
 	unsigned int i;
 	struct removable_media *cur_media;
@@ -142,7 +144,7 @@ int remove_media_block(const char *path)
 	return 0;
 }
 
-int add_media_partition(const char *block, unsigned char media_type, const char *partition, const char *type, const char *label)
+int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *type, const char *label)
 {
 	int rc;
 	unsigned int i;
@@ -369,8 +371,6 @@ int add_client(int client)
 	}
 
 	cur_client->clientfd = client;
-	cur_client->buf      = NULL;
-	cur_client->buf_size = 0;
 	cur_client->buf_used = 0;
 
 	tmp = (struct client**) realloc(clients, sizeof(struct client*)*(clients_count+1));
@@ -423,12 +423,6 @@ int remove_client(int client)
 
 			shutdown(del->clientfd, SHUT_RDWR);
 			close(del->clientfd);
-
-			if (del->buf != NULL)
-			{
-				free(del->buf);
-			}
-
 			free(del);
 
 			return 1;
@@ -448,12 +442,6 @@ void remove_all_clients(void)
 		{
 			shutdown(clients[i]->clientfd, SHUT_RDWR);
 			close(clients[i]->clientfd);
-
-			if (clients[i]->buf != NULL)
-			{
-				free(clients[i]->buf);
-			}
-
 			free(clients[i]);
 		}
 
@@ -464,7 +452,7 @@ void remove_all_clients(void)
 	}
 }
 
-const char* removable_type_to_string(enum removable_media_type removable_type)
+const char* removable_type_to_string(dtmd_removable_media_type_t removable_type)
 {
 	switch (removable_type)
 	{

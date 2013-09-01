@@ -26,7 +26,7 @@ message(STATUS "To change installation directory use -DINST_PREFIX=path, for exa
 
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
-	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra -Wno-unused-result")
+	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra -Wno-unused-result -DNDEBUG")
 	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 
 	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe -march=native -Wall -Wextra -Wno-unused-result -g -ggdb")
@@ -37,7 +37,7 @@ endif (CMAKE_COMPILER_IS_GNUCC)
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	set (CLANG_WARNINGS "-Weverything -Wno-missing-prototypes -Wno-padded -Wno-sign-conversion -Wno-conversion -Wno-disabled-macro-expansion -Wno-cast-align" )
 
-	set (CMAKE_C_FLAGS_RELEASE "-O3 -pipe ${CLANG_WARNINGS}")
+	set (CMAKE_C_FLAGS_RELEASE "-O3 -pipe ${CLANG_WARNINGS} -DNDEBUG")
 	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 
 	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe ${CLANG_WARNINGS} -g -ggdb")
@@ -51,6 +51,7 @@ find_package (Threads REQUIRED)
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
+include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/library )
 
 set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
@@ -60,10 +61,15 @@ set ( COMMANDS_LIBRARY_SOURCES library/dtmd-commands.c )
 set ( COMMANDS_LIBRARY_HEADERS library/dtmd-commands.h )
 
 set ( LIBRARY_SOURCES library/dtmd-library.c )
-set ( LIBRARY_HEADERS library/dtmd-library.h )
+set ( LIBRARY_HEADERS library/dtmd-library.h dtmd.h devices_list.h )
+set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} )
 
-set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
+if (UNIX AND NOT APPLE)
+	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
+endif (UNIX AND NOT APPLE)
+
+set ( DAEMON_SOURCES daemon/daemon-main.c                daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
+set ( DAEMON_HEADERS dtmd.h               devices_list.h daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -85,7 +91,7 @@ add_library( dtmd-commands SHARED ${COMMANDS_LIBRARY_SOURCES} ${COMMANDS_LIBRARY
 target_link_libraries( dtmd-commands )
 
 add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
-target_link_libraries( dtmd-library ${CMAKE_THREAD_LIBS_INIT} dtmd-commands )
+target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-commands )
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-commands )

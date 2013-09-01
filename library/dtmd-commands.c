@@ -24,16 +24,16 @@
 #include <string.h>
 #include <stdlib.h>
 
-struct dtmd_command* dtmd_parse_command(char *buffer)
+dtmd_command_t* dtmd_parse_command(char *buffer)
 {
 	char *cur;
 	char *start;
-	struct dtmd_command *result;
+	dtmd_command_t *result;
 	int i;
 	char *tmp_str;
 	char **tmp;
 
-	result = (struct dtmd_command*) malloc(sizeof(struct dtmd_command));
+	result = (dtmd_command_t*) malloc(sizeof(dtmd_command_t));
 	if (result == NULL)
 	{
 		goto parse_command_error_1;
@@ -165,7 +165,7 @@ parse_command_error_1:
 	return NULL;
 }
 
-void dtmd_free_command(struct dtmd_command *cmd)
+void dtmd_free_command(dtmd_command_t *cmd)
 {
 	int i;
 

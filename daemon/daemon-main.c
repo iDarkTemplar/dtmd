@@ -41,8 +41,6 @@
 #endif
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
-#define default_read_size 4096
-#define maximum_read_size default_read_size * 10
 
 /* TODO:
 	partitions = enumerate partitions + parent
@@ -237,7 +235,7 @@ int main(int argc, char **argv)
 	char *tmp_str;
 #define pollfds_count_default 3
 	unsigned int pollfds_count = pollfds_count_default;
-	struct dtmd_command *cmd;
+	dtmd_command_t *cmd;
 
 	struct pollfd *pollfds = NULL;
 
@@ -695,34 +693,15 @@ int main(int argc, char **argv)
 					goto exit_8;
 				}
 
-				if (clients[j]->buf_size < clients[j]->buf_used + default_read_size)
-				{
-					if (clients[j]->buf_used + default_read_size >= maximum_read_size)
-					{
-						remove_client(pollfds[i].fd);
-						continue;
-					}
-
-					tmp = realloc(clients[j]->buf, clients[j]->buf_used + default_read_size + 1);
-					if (tmp == NULL)
-					{
-						result = -1;
-						goto exit_8;
-					}
-
-					clients[j]->buf = (char*) tmp;
-					clients[j]->buf_size = clients[j]->buf_used + default_read_size;
-				}
-
-				rc = read(clients[j]->clientfd, &(clients[j]->buf[clients[j]->buf_used]), default_read_size);
+				rc = read(clients[j]->clientfd, &(clients[j]->buf[clients[j]->buf_used]), dtmd_command_max_length - clients[j]->buf_used);
 				if ((rc <= 0) && (errno != EINTR))
 				{
 					remove_client(pollfds[i].fd);
 					continue;
 				}
 
-				clients[j]->buf[clients[j]->buf_used + rc] = 0;
 				clients[j]->buf_used += rc;
+				clients[j]->buf[clients[j]->buf_used] = 0;
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
@@ -743,6 +722,12 @@ int main(int argc, char **argv)
 
 					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used);
+				}
+
+				if (clients[j]->buf_used == dtmd_command_max_length)
+				{
+					remove_client(pollfds[i].fd);
+					continue;
 				}
 			}
 		}

@@ -30,47 +30,55 @@ extern "C" {
 #endif
 
 /*
+
+	TODO: remake strings to include their lengths first?
+
 	Notification types:
 	"add_disk(path, type)"
 	"remove_disk(path)"
 	"add_partition(path, fstype, label (optional, may be NULL), parent_path)"
 	"remove_partition(path)"
-	"mount(path, mount_point, mount_options?)" or mount_failed
-	"unmount(path, mount_point)" or unmount_failed
+	"mount(path, mount_point, mount_options?)"
+	"unmount(path, mount_point)"
 
-	command responses start with "started"
-	and finish with "finished" or "failed"
+	command responses start with "started" or "failed" or "succeeded"
+	and finish with "finished" if "started"
 
 	Commands:
 	"enum_all"
 		returns:
-		device: "path, type"
+		devices: count
+		device: "path, type, partitions_count"
 		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+		or "failed" on fail
 	"list_device":
 		input:
 		"device path"
 		returns:
-		device: "path, type"
+		device: "path, type, partitions_count"
 		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+		or "failed" on fail
+	"list_partition":
+		input:
+		"partition path"
+		returns:
+		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+		or "failed" on fail
 	"mount"
 		input:
 		"path, mount_point, mount_options?"
 		returns:
-		broadcast "mount"
+		"succeeded" or "failed"
 	"unmount"
 		input:
 		"path, mount_point"
 		returns:
-		broadcast "unmount"
+		"succeeded" or "failed"
 */
 
-int invoke_command(int client_number, struct dtmd_command *cmd);
+int invoke_command(unsigned int client_number, dtmd_command_t *cmd);
 
 int send_notification(const char *type, const char *device);
-
-int print_device(int client_number, struct removable_media *media);
-
-int print_partition(int client_number, struct removable_media *media, unsigned int partition);
 
 #ifdef __cplusplus
 }
