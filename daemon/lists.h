@@ -22,6 +22,7 @@
 #define DTMD_LISTS_H
 
 #include "dtmd.h"
+#include "dtmd_private.h"
 
 #ifdef __cplusplus
 extern "C" {

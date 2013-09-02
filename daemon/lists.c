@@ -20,7 +20,7 @@
 
 #include "daemon/lists.h"
 
-#include "devices_list.h"
+#include "dtmd_private.h"
 
 #include <stdlib.h>
 #include <string.h>

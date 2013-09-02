@@ -18,12 +18,14 @@
  *
  */
 
-#ifndef DEVICES_LIST_H
-#define DEVICES_LIST_H
+#ifndef DTMD_PRIVATE_H
+#define DTMD_PRIVATE_H
 
 #define string_device_unknown_or_persistent "unknown"
 #define string_device_cdrom                 "cdrom"
 #define string_device_removable_disk        "disk"
 #define string_device_sd_card               "sdcard"
 
-#endif /* DEVICES_LIST_H */
+#define dtmd_command_max_length 4096
+
+#endif /* DTMD_PRIVATE_H */

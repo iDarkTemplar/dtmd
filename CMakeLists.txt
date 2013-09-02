@@ -61,7 +61,7 @@ set ( COMMANDS_LIBRARY_SOURCES library/dtmd-commands.c )
 set ( COMMANDS_LIBRARY_HEADERS library/dtmd-commands.h )
 
 set ( LIBRARY_SOURCES library/dtmd-library.c )
-set ( LIBRARY_HEADERS library/dtmd-library.h dtmd.h devices_list.h )
+set ( LIBRARY_HEADERS library/dtmd-library.h dtmd.h dtmd_private.h )
 set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} )
 
 if (UNIX AND NOT APPLE)
@@ -69,7 +69,7 @@ if (UNIX AND NOT APPLE)
 endif (UNIX AND NOT APPLE)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c                daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               devices_list.h daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
+set ( DAEMON_HEADERS dtmd.h               dtmd_private.h daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )

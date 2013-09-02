@@ -34,7 +34,7 @@
 #include <time.h>
 
 #include "dtmd.h"
-#include "devices_list.h"
+#include "dtmd_private.h"
 
 typedef enum dtmd_library_state
 {
@@ -86,8 +86,8 @@ static int dtmd_helper_string_to_int(const char *string, unsigned int *number);
 static int dtmd_helper_validate_device(dtmd_device_t *device);
 static int dtmd_helper_validate_partition(dtmd_partition_t *partition);
 
-static dtmd_result_t dtmd_helper_init_timeout(int handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
-static dtmd_result_t dtmd_helper_next_timeout(int handle, struct timespec *time_cur, struct timespec *time_end);
+static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
+static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 
 dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg)
 {
@@ -289,17 +289,12 @@ static void* dtmd_worker_function(void *arg)
 		}
 	}
 
-dtmd_worker_function_exit:
-	// Signal about exit
-	data = 0;
-	write(handle->feedback[1], &data, sizeof(char));
-
-	pthread_exit(0);
-
 dtmd_worker_function_error:
-	// Signal about exit
+	// Signal about error
 	handle->callback(handle->callback_arg, NULL);
 
+dtmd_worker_function_exit:
+	// Signal about exit
 	data = 0;
 	write(handle->feedback[1], &data, sizeof(char));
 
@@ -308,13 +303,24 @@ dtmd_worker_function_error:
 
 dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count, dtmd_device_t ***result)
 {
-	// TODO: rewrite
+	char data = 1;
+	dtmd_command_t *cmd;
+	dtmd_result_t res;
+	struct timespec time_cur, time_end;
+	char *eol;
+	int got_started = 0;
+	unsigned int result_count = 0;
+	dtmd_device_t **result_devices = NULL;
+	void *tmp;
+	unsigned int device;
+	unsigned int partition;
+
 	if (handle == NULL)
 	{
 		return dtmd_library_not_initialized;
 	}
 
-	if (handle->result_state != dtmd_ok)
+	if (dtmd_is_state_invalid(handle))
 	{
 		return dtmd_invalid_state;
 	}
@@ -324,13 +330,303 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count
 		return dtmd_input_error;
 	}
 
-	if (dprintf(handle->socket_fd, "enum_all()\n") < 0)
+	res = dtmd_helper_capture_socket(handle, timeout, &time_cur, &time_end);
+	if (res != dtmd_ok)
 	{
-		handle->result_state = 1;
-		return dtmd_io_error;
+		handle->result_state = res;
+
+		if (dtmd_helper_is_state_invalid(res))
+		{
+			goto dtmd_enum_all_error_1;
+		}
+		else
+		{
+			goto dtmd_enum_all_exit_1;
+		}
 	}
 
-	return dtmd_ok;
+	if (dprintf(handle->socket_fd, "enum_all()\n") < 0)
+	{
+		handle->result_state = dtmd_io_error;
+		goto dtmd_enum_all_error_1;
+	}
+
+	for (;;)
+	{
+		while ((eol = strchr(handle->buffer, '\n')) != NULL)
+		{
+			cmd = dtmd_parse_command(handle->buffer);
+
+			handle->cur_pos -= (eol + 1 - handle->buffer);
+			memmove(handle->buffer, eol+1, handle->cur_pos);
+
+			if (cmd == NULL)
+			{
+				handle->result_state = dtmd_invalid_state;
+				goto dtmd_enum_all_error_1;
+			}
+
+			if (got_started)
+			{
+				if ((strcmp(cmd->cmd, "finished") == 0)
+					&& (dtmd_helper_is_helper_enum_all(cmd)))
+				{
+					dtmd_free_command(cmd);
+					handle->result_state = dtmd_ok;
+					handle->library_state = dtmd_state_default;
+					goto dtmd_enum_all_exit_1;
+				}
+
+				if ((strcmp(cmd->cmd, "device") == 0)
+					&& (cmd->args_count == 3)
+					&& (cmd->args[0] != NULL)
+					&& (cmd->args[1] != NULL)
+					&& (cmd->args[2] != NULL))
+				{
+					if (result_count > 0)
+					{
+						if (!dtmd_helper_validate_device(result_devices[result_count-1]))
+						{
+							dtmd_free_command(cmd);
+							handle->result_state = dtmd_invalid_state;
+							goto dtmd_enum_all_error_1;
+						}
+					}
+
+					tmp = realloc(result_devices, sizeof(dtmd_device_t*)*(result_count+1));
+					if (tmp == NULL)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_memory_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					result_devices = (dtmd_device_t**) tmp;
+					++result_count;
+
+					result_devices[result_count-1] = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
+					if (result_devices[result_count-1] == NULL)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_memory_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					result_devices[result_count-1]->path = NULL;
+					result_devices[result_count-1]->partition = NULL;
+					result_devices[result_count-1]->partitions_count = 0;
+
+					result_devices[result_count-1]->type = dtmd_helper_string_to_removable_type(cmd->args[1]);
+					if (result_devices[result_count-1]->type == unknown_or_persistent)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_invalid_state;
+						goto dtmd_enum_all_error_1;
+					}
+
+					result_devices[result_count-1]->path = cmd->args[0];
+					cmd->args[0] = NULL;
+
+					if (!dtmd_helper_string_to_int(cmd->args[2], &(result_devices[result_count-1]->partitions_count)))
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_io_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					if (result_devices[result_count-1]->partitions_count > 0)
+					{
+						result_devices[result_count-1]->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*(result_devices[result_count-1]->partitions_count));
+						if (result_devices[result_count-1]->partition == NULL)
+						{
+							dtmd_free_command(cmd);
+							handle->result_state = dtmd_memory_error;
+							goto dtmd_enum_all_error_1;
+						}
+
+						for (partition = 0; partition < result_devices[result_count-1]->partitions_count; ++partition)
+						{
+							result_devices[result_count-1]->partition[partition] = NULL;
+						}
+					}
+				}
+				else if ((strcmp(cmd->cmd, "partition") == 0)
+					&& (cmd->args_count == 6)
+					&& (cmd->args[0] != NULL)
+					&& (cmd->args[1] != NULL)
+					&& (cmd->args[3] != NULL))
+				{
+					if (result_count == 0)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_io_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					if (strcmp(cmd->args[3], result_devices[result_count-1]->path) != 0)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_io_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					for (partition = 0; partition < result_devices[result_count-1]->partitions_count; ++partition)
+					{
+						if (result_devices[result_count-1]->partition[partition] == NULL)
+						{
+							break;
+						}
+					}
+
+					if (partition >= result_devices[result_count-1]->partitions_count)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_io_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					result_devices[result_count-1]->partition[partition] = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
+					if (result_devices[result_count-1]->partition[partition] == NULL)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_memory_error;
+						goto dtmd_enum_all_error_1;
+					}
+
+					result_devices[result_count-1]->partition[partition]->path      = cmd->args[0];
+					result_devices[result_count-1]->partition[partition]->type      = cmd->args[1];
+					result_devices[result_count-1]->partition[partition]->label     = cmd->args[2];
+					result_devices[result_count-1]->partition[partition]->mnt_point = cmd->args[4];
+					result_devices[result_count-1]->partition[partition]->mnt_opts  = cmd->args[5];
+
+					cmd->args[0] = NULL;
+					cmd->args[1] = NULL;
+					cmd->args[2] = NULL;
+					cmd->args[4] = NULL;
+					cmd->args[5] = NULL;
+				}
+				else
+				{
+					dtmd_free_command(cmd);
+					handle->result_state = dtmd_invalid_state;
+					goto dtmd_enum_all_error_1;
+				}
+			}
+			else
+			{
+				if ((handle->library_state == dtmd_state_default)
+					&& (dtmd_helper_is_helper_enum_all(cmd)))
+				{
+					if (strcmp(cmd->cmd, "started") == 0)
+					{
+						got_started = 1;
+						handle->library_state = dtmd_state_in_enum_all;
+					}
+					else if (strcmp(cmd->cmd, "failed") == 0)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_command_failed;
+						handle->library_state = dtmd_state_default;
+						goto dtmd_enum_all_exit_1;
+					}
+				}
+				else
+				{
+					res = dtmd_helper_handle_cmd(handle, cmd);
+
+					if (res != dtmd_ok)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = res;
+
+						if (dtmd_helper_is_state_invalid(res))
+						{
+							goto dtmd_enum_all_error_1;
+						}
+						else
+						{
+							goto dtmd_enum_all_exit_1;
+						}
+					}
+				}
+			}
+
+			dtmd_free_command(cmd);
+		}
+
+		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
+
+		if (res != dtmd_ok)
+		{
+			handle->result_state = res;
+
+			if (dtmd_helper_is_state_invalid(res))
+			{
+				goto dtmd_enum_all_error_1;
+			}
+			else
+			{
+				goto dtmd_enum_all_exit_1;
+			}
+		}
+	}
+
+dtmd_enum_all_exit_1:
+	if (handle->result_state == dtmd_ok)
+	{
+		if (result_devices != NULL)
+		{
+			if ((result_devices[result_count-1] == NULL) || (!dtmd_helper_validate_device(result_devices[result_count-1])))
+			{
+				handle->result_state = dtmd_invalid_state;
+				goto dtmd_enum_all_error_1;
+			}
+		}
+
+		*result = result_devices;
+		*count  = result_count;
+	}
+	else
+	{
+		if (result_devices != NULL)
+		{
+			for (device = 0; device < result_count; ++device)
+			{
+				if (result_devices[device] != NULL)
+				{
+					dtmd_helper_free_device(result_devices[device]);
+				}
+			}
+
+			free(result_devices);
+		}
+
+		*result = NULL;
+		*count  = 0;
+	}
+
+	sem_post(&(handle->caller_socket));
+
+	return handle->result_state;
+
+dtmd_enum_all_error_1:
+	if (result_devices != NULL)
+	{
+		for (device = 0; device < result_count; ++device)
+		{
+			if (result_devices[device] != NULL)
+			{
+				dtmd_helper_free_device(result_devices[device]);
+			}
+		}
+
+		free(result_devices);
+	}
+
+	data = 0;
+	write(handle->pipes[1], &data, sizeof(char));
+	sem_post(&(handle->caller_socket));
+	return handle->result_state;
 }
 
 dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_path, dtmd_device_t **result)
@@ -339,7 +635,6 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
-	int rc;
 	char *eol;
 	int got_started = 0;
 	dtmd_device_t *result_device = NULL;
@@ -360,33 +655,19 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 		return dtmd_input_error;
 	}
 
-	write(handle->pipes[1], &data, sizeof(char));
-
-	if (timeout >= 0)
+	res = dtmd_helper_capture_socket(handle, timeout, &time_cur, &time_end);
+	if (res != dtmd_ok)
 	{
-		res = dtmd_helper_init_timeout(handle->feedback[0], timeout, &time_cur, &time_end);
+		handle->result_state = res;
 
-		if (res != dtmd_ok)
+		if (dtmd_helper_is_state_invalid(res))
 		{
-			handle->result_state = res;
-
-			if (dtmd_helper_is_state_invalid(res))
-			{
-				goto dtmd_list_device_error_1;
-			}
-			else
-			{
-				goto dtmd_list_device_exit_1;
-			}
+			goto dtmd_list_device_error_1;
 		}
-	}
-
-	read(handle->feedback[0], &data, sizeof(char));
-
-	if (data == 0)
-	{
-		handle->result_state = dtmd_invalid_state;
-		goto dtmd_list_device_error_1;
+		else
+		{
+			goto dtmd_list_device_exit_1;
+		}
 	}
 
 	if (dprintf(handle->socket_fd, "list_device(\"%s\")\n", device_path) < 0)
@@ -447,7 +728,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 						{
 							dtmd_free_command(cmd);
 							handle->result_state = dtmd_invalid_state;
-							goto dtmd_list_device_error_2;
+							goto dtmd_list_device_error_1;
 						}
 
 						result_device->path = cmd->args[0];
@@ -457,7 +738,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 						{
 							dtmd_free_command(cmd);
 							handle->result_state = dtmd_io_error;
-							goto dtmd_list_device_error_2;
+							goto dtmd_list_device_error_1;
 						}
 
 						if (result_device->partitions_count > 0)
@@ -467,7 +748,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 							{
 								dtmd_free_command(cmd);
 								handle->result_state = dtmd_memory_error;
-								goto dtmd_list_device_error_2;
+								goto dtmd_list_device_error_1;
 							}
 
 							for (partition = 0; partition < result_device->partitions_count; ++partition)
@@ -480,7 +761,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_2;
+						goto dtmd_list_device_error_1;
 					}
 				}
 				else if ((strcmp(cmd->cmd, "partition") == 0)
@@ -500,7 +781,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_2;
+						goto dtmd_list_device_error_1;
 					}
 
 					for (partition = 0; partition < result_device->partitions_count; ++partition)
@@ -515,7 +796,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_2;
+						goto dtmd_list_device_error_1;
 					}
 
 					result_device->partition[partition] = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
@@ -523,7 +804,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_memory_error;
-						goto dtmd_list_device_error_2;
+						goto dtmd_list_device_error_1;
 					}
 
 					result_device->partition[partition]->path      = cmd->args[0];
@@ -542,10 +823,8 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 				{
 					dtmd_free_command(cmd);
 					handle->result_state = dtmd_invalid_state;
-					goto dtmd_list_device_error_2;
+					goto dtmd_list_device_error_1;
 				}
-
-				dtmd_free_command(cmd);
 			}
 			else
 			{
@@ -590,62 +869,54 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 			dtmd_free_command(cmd);
 		}
 
-		if (handle->cur_pos == dtmd_command_max_length)
+		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
+
+		if (res != dtmd_ok)
+		{
+			handle->result_state = res;
+
+			if (dtmd_helper_is_state_invalid(res))
+			{
+				goto dtmd_list_device_error_1;
+			}
+			else
+			{
+				goto dtmd_list_device_exit_1;
+			}
+		}
+	}
+
+dtmd_list_device_exit_1:
+	if (handle->result_state == dtmd_ok)
+	{
+		if ((result_device != NULL) && (!dtmd_helper_validate_device(result_device)))
 		{
 			handle->result_state = dtmd_invalid_state;
 			goto dtmd_list_device_error_1;
 		}
 
-		if (timeout >= 0)
-		{
-			res = dtmd_helper_next_timeout(handle->socket_fd, &time_cur, &time_end);
-
-			if (res != dtmd_ok)
-			{
-				handle->result_state = res;
-
-				if (dtmd_helper_is_state_invalid(res))
-				{
-					goto dtmd_list_device_error_1;
-				}
-				else
-				{
-					goto dtmd_list_device_exit_1;
-				}
-			}
-		}
-
-		rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
-		if (rc <= 0)
-		{
-			handle->result_state = dtmd_io_error;
-			goto dtmd_list_device_error_1;
-		}
-
-		handle->cur_pos += rc;
-		handle->buffer[handle->cur_pos] = 0;
+		*result = result_device;
 	}
-
-dtmd_list_device_exit_1:
-	if ((result_device != NULL) && (!dtmd_helper_validate_device(result_device)))
+	else
 	{
-		handle->result_state = dtmd_invalid_state;
-		goto dtmd_list_device_error_2;
-	}
+		if (result_device != NULL)
+		{
+			dtmd_helper_free_device(result_device);
+		}
 
-	*result = result_device;
+		*result = NULL;
+	}
 
 	sem_post(&(handle->caller_socket));
 
 	return handle->result_state;
 
-dtmd_list_device_error_2:
+dtmd_list_device_error_1:
 	if (result_device != NULL)
 	{
 		dtmd_helper_free_device(result_device);
 	}
 
-dtmd_list_device_error_1:
 	data = 0;
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
@@ -658,7 +929,6 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
-	int rc;
 	char *eol;
 	int got_started = 0;
 	dtmd_partition_t *result_partition = NULL;
@@ -678,33 +948,19 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 		return dtmd_input_error;
 	}
 
-	write(handle->pipes[1], &data, sizeof(char));
-
-	if (timeout >= 0)
+	res = dtmd_helper_capture_socket(handle, timeout, &time_cur, &time_end);
+	if (res != dtmd_ok)
 	{
-		res = dtmd_helper_init_timeout(handle->feedback[0], timeout, &time_cur, &time_end);
+		handle->result_state = res;
 
-		if (res != dtmd_ok)
+		if (dtmd_helper_is_state_invalid(res))
 		{
-			handle->result_state = res;
-
-			if (dtmd_helper_is_state_invalid(res))
-			{
-				goto dtmd_list_partition_error_1;
-			}
-			else
-			{
-				goto dtmd_list_partition_exit_1;
-			}
+			goto dtmd_list_partition_error_1;
 		}
-	}
-
-	read(handle->feedback[0], &data, sizeof(char));
-
-	if (data == 0)
-	{
-		handle->result_state = dtmd_invalid_state;
-		goto dtmd_list_partition_error_1;
+		else
+		{
+			goto dtmd_list_partition_exit_1;
+		}
 	}
 
 	if (dprintf(handle->socket_fd, "list_partition(\"%s\")\n", partition_path) < 0)
@@ -750,7 +1006,7 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_io_error;
-						goto dtmd_list_partition_error_2;
+						goto dtmd_list_partition_error_1;
 					}
 
 					result_partition = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
@@ -758,7 +1014,7 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_memory_error;
-						goto dtmd_list_partition_error_2;
+						goto dtmd_list_partition_error_1;
 					}
 
 					result_partition->path      = cmd->args[0];
@@ -777,10 +1033,8 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 				{
 					dtmd_free_command(cmd);
 					handle->result_state = dtmd_invalid_state;
-					goto dtmd_list_partition_error_2;
+					goto dtmd_list_partition_error_1;
 				}
-
-				dtmd_free_command(cmd);
 			}
 			else
 			{
@@ -825,62 +1079,54 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 			dtmd_free_command(cmd);
 		}
 
-		if (handle->cur_pos == dtmd_command_max_length)
+		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
+
+		if (res != dtmd_ok)
+		{
+			handle->result_state = res;
+
+			if (dtmd_helper_is_state_invalid(res))
+			{
+				goto dtmd_list_partition_error_1;
+			}
+			else
+			{
+				goto dtmd_list_partition_exit_1;
+			}
+		}
+	}
+
+dtmd_list_partition_exit_1:
+	if (handle->result_state == dtmd_ok)
+	{
+		if ((result_partition != NULL) && (!dtmd_helper_validate_partition(result_partition)))
 		{
 			handle->result_state = dtmd_invalid_state;
 			goto dtmd_list_partition_error_1;
 		}
 
-		if (timeout >= 0)
-		{
-			res = dtmd_helper_next_timeout(handle->socket_fd, &time_cur, &time_end);
-
-			if (res != dtmd_ok)
-			{
-				handle->result_state = res;
-
-				if (dtmd_helper_is_state_invalid(res))
-				{
-					goto dtmd_list_partition_error_1;
-				}
-				else
-				{
-					goto dtmd_list_partition_exit_1;
-				}
-			}
-		}
-
-		rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
-		if (rc <= 0)
-		{
-			handle->result_state = dtmd_io_error;
-			goto dtmd_list_partition_error_1;
-		}
-
-		handle->cur_pos += rc;
-		handle->buffer[handle->cur_pos] = 0;
+		*result = result_partition;
 	}
-
-dtmd_list_partition_exit_1:
-	if ((result_partition != NULL) && (!dtmd_helper_validate_partition(result_partition)))
+	else
 	{
-		handle->result_state = dtmd_invalid_state;
-		goto dtmd_list_partition_error_2;
-	}
+		if (result_partition != NULL)
+		{
+			dtmd_helper_free_partition(result_partition);
+		}
 
-	*result = result_partition;
+		*result = NULL;
+	}
 
 	sem_post(&(handle->caller_socket));
 
 	return handle->result_state;
 
-dtmd_list_partition_error_2:
+dtmd_list_partition_error_1:
 	if (result_partition != NULL)
 	{
 		dtmd_helper_free_partition(result_partition);
 	}
 
-dtmd_list_partition_error_1:
 	data = 0;
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
@@ -1007,11 +1253,6 @@ void dtmd_free_partition(dtmd_t *handle, dtmd_partition_t *partition)
 
 static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dtmd_command_t *cmd)
 {
-	if (dtmd_helper_handle_callback_cmd(handle, cmd) == dtmd_ok)
-	{
-		return dtmd_ok;
-	}
-
 	switch (handle->library_state)
 	{
 	case dtmd_state_default:
@@ -1050,6 +1291,8 @@ static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dtmd_command_t *cmd)
 				return dtmd_ok;
 			}
 		}
+
+		return dtmd_helper_handle_callback_cmd(handle, cmd);
 		break;
 
 	case dtmd_state_in_enum_all:
@@ -1337,41 +1580,87 @@ static int dtmd_helper_validate_partition(dtmd_partition_t *partition)
 	return 1;
 }
 
-static dtmd_result_t dtmd_helper_init_timeout(int handle, int timeout, struct timespec *time_cur, struct timespec *time_end)
+static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end)
 {
+	char data = 1;
+	dtmd_result_t res;
 	int rc;
 
-	if (clock_gettime(CLOCK_MONOTONIC, time_cur) == -1)
+	write(handle->pipes[1], &data, sizeof(char));
+
+	if (timeout >= 0)
 	{
-		return dtmd_time_error;
+		if (clock_gettime(CLOCK_MONOTONIC, time_cur) == -1)
+		{
+			return dtmd_time_error;
+		}
+
+		time_end->tv_sec  = time_cur->tv_sec  + timeout / 1000;
+		time_end->tv_nsec = time_cur->tv_nsec + (timeout % 1000) * 1000000;
+
+		rc = (time_end->tv_sec - time_cur->tv_sec) * 1000 + (time_end->tv_nsec - time_cur->tv_nsec) / 1000000;
+		if (rc < 0)
+		{
+			rc = 0;
+		}
+
+		res = dtmd_helper_wait_for_input(handle->feedback[0], rc);
+
+		if (res != dtmd_ok)
+		{
+			return res;
+		}
 	}
 
-	time_end->tv_sec  = time_cur->tv_sec  + timeout / 1000;
-	time_end->tv_nsec = time_cur->tv_nsec + (timeout % 1000) * 1000000;
+	read(handle->feedback[0], &data, sizeof(char));
 
-	rc = (time_end->tv_sec - time_cur->tv_sec) * 1000 + (time_end->tv_nsec - time_cur->tv_nsec) / 1000000;
-	if (rc < 0)
+	if (data == 0)
 	{
-		rc = 0;
+		return dtmd_invalid_state;
 	}
 
-	return dtmd_helper_wait_for_input(handle, rc);
+	return dtmd_ok;
 }
 
-static dtmd_result_t dtmd_helper_next_timeout(int handle, struct timespec *time_cur, struct timespec *time_end)
+static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end)
 {
+	dtmd_result_t res;
 	int rc;
 
-	if (clock_gettime(CLOCK_MONOTONIC, time_cur) == -1)
+	if (handle->cur_pos == dtmd_command_max_length)
 	{
-		return dtmd_time_error;
+		return dtmd_invalid_state;
 	}
 
-	rc = (time_end->tv_sec - time_cur->tv_sec) * 1000 + (time_end->tv_nsec - time_cur->tv_nsec) / 1000000;
-	if (rc < 0)
+	if (timeout >= 0)
 	{
-		rc = 0;
+		if (clock_gettime(CLOCK_MONOTONIC, time_cur) == -1)
+		{
+			return dtmd_time_error;
+		}
+
+		rc = (time_end->tv_sec - time_cur->tv_sec) * 1000 + (time_end->tv_nsec - time_cur->tv_nsec) / 1000000;
+		if (rc < 0)
+		{
+			rc = 0;
+		}
+
+		res = dtmd_helper_wait_for_input(handle->socket_fd, rc);
+
+		if (res != dtmd_ok)
+		{
+			return res;
+		}
 	}
 
-	return dtmd_helper_wait_for_input(handle, rc);
+	rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
+	if (rc <= 0)
+	{
+		return dtmd_io_error;
+	}
+
+	handle->cur_pos += rc;
+	handle->buffer[handle->cur_pos] = 0;
+
+	return dtmd_ok;
 }
