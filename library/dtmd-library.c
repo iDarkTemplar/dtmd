@@ -60,6 +60,11 @@ struct dtmd_library
 	char buffer[dtmd_command_max_length + 1];
 };
 
+static const char *str_unknown_or_persistent = dtmd_string_device_unknown_or_persistent;
+static const char *str_cdrom                 = dtmd_string_device_cdrom;
+static const char *str_removable_disk        = dtmd_string_device_removable_disk;
+static const char *str_sd_card               = dtmd_string_device_sd_card;
+
 static void* dtmd_worker_function(void *arg);
 
 static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dtmd_command_t *cmd);
@@ -1405,6 +1410,25 @@ int dtmd_is_state_invalid(dtmd_t *handle)
 	return dtmd_helper_is_state_invalid(handle->result_state);
 }
 
+const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type)
+{
+	switch (type)
+	{
+	case cdrom:
+		return str_cdrom;
+
+	case removable_disk:
+		return str_removable_disk;
+
+	case sd_card:
+		return str_sd_card;
+
+	case unknown_or_persistent:
+	default:
+		return str_unknown_or_persistent;
+	}
+}
+
 void dtmd_free_devices_array(dtmd_t *handle, unsigned int count, dtmd_device_t **devices)
 {
 	unsigned int i;
@@ -1686,15 +1710,15 @@ static void dtmd_helper_free_partition(dtmd_partition_t *partition)
 
 static dtmd_removable_media_type_t dtmd_helper_string_to_removable_type(const char *string)
 {
-	if (strcmp(string, dtmd_string_device_cdrom) == 0)
+	if (strcmp(string, str_cdrom) == 0)
 	{
 		return cdrom;
 	}
-	else if (strcmp(string, dtmd_string_device_removable_disk) == 0)
+	else if (strcmp(string, str_removable_disk) == 0)
 	{
 		return removable_disk;
 	}
-	else if (strcmp(string, dtmd_string_device_sd_card) == 0)
+	else if (strcmp(string, str_sd_card) == 0)
 	{
 		return sd_card;
 	}

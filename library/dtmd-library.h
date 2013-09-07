@@ -74,6 +74,8 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const char *mount_point);
 int dtmd_is_state_invalid(dtmd_t *handle);
 
+const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
+
 void dtmd_free_devices_array(dtmd_t *handle, unsigned int count, dtmd_device_t **devices);
 void dtmd_free_device(dtmd_t *handle, dtmd_device_t *device);
 void dtmd_free_partition(dtmd_t *handle, dtmd_partition_t *partition);
