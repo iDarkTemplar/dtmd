@@ -20,8 +20,6 @@
 
 #include "daemon/lists.h"
 
-#include "dtmd_private.h"
-
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -33,10 +31,10 @@ unsigned int media_count = 0;
 struct client **clients = NULL;
 unsigned int clients_count = 0;
 
-static const char *str_unknown_or_persistent = string_device_unknown_or_persistent;
-static const char *str_cdrom                 = string_device_cdrom;
-static const char *str_removable_disk        = string_device_removable_disk;
-static const char *str_sd_card               = string_device_sd_card;
+static const char *str_unknown_or_persistent = dtmd_string_device_unknown_or_persistent;
+static const char *str_cdrom                 = dtmd_string_device_cdrom;
+static const char *str_removable_disk        = dtmd_string_device_removable_disk;
+static const char *str_sd_card               = dtmd_string_device_sd_card;
 
 int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 {
