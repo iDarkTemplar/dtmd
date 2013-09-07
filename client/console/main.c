@@ -22,19 +22,70 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <signal.h>
+
+volatile int run = 1;
+
+void client_sighandler(int signum)
+{
+	run = 0;
+}
 
 void client_callback(void *arg, const dtmd_command_t *cmd)
 {
 	if (arg == (void*)1)
 	{
-		//
+		if (cmd != NULL)
+		{
+			if ((strcmp(cmd->cmd, "add_disk") == 0) && (cmd->args_count == 2)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
+			{
+				fprintf(stdout, "Disk added\nPath: %s\nType: %s\n", cmd->args[0], cmd->args[1]);
+			}
+			else if ((strcmp(cmd->cmd, "remove_disk") == 0) && (cmd->args_count == 1)
+				&& (cmd->args[0] != NULL))
+			{
+				fprintf(stdout, "Disk removed\nPath: %s\n", cmd->args[0]);
+			}
+			else if ((strcmp(cmd->cmd, "add_partition") == 0) && (cmd->args_count == 4)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[3] != NULL))
+			{
+				fprintf(stdout, "Partition added\nParent device: %s\nPath: %s\n Filesystem type: %s\n", cmd->args[3], cmd->args[0], cmd->args[1]);
+
+				if (cmd->args[2] != NULL)
+				{
+					fprintf(stdout, "Label: %s\n", cmd->args[2]);
+				}
+			}
+			else if ((strcmp(cmd->cmd, "remove_partition") == 0) && (cmd->args_count == 1)
+				&& (cmd->args[0] != NULL))
+			{
+				fprintf(stdout, "Partition removed\nPath: %s\n", cmd->args[0]);
+			}
+			else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
+			{
+				fprintf(stdout, "Partition mounted\nPath: %s\nMount point: %s\nMount options: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
+			}
+			else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
+			{
+				fprintf(stdout, "Partition unmounted\nPath: %s\nMount point: %s\n", cmd->args[0], cmd->args[1]);
+			}
+		}
+		else
+		{
+			fprintf(stdout, "Got exit signal from daemon\n");
+			run = 0;
+		}
 	}
 }
 
 void printUsage(char *app)
 {
 	fprintf(stderr, "USAGE: %s [ enumerate | mount device mount_point [ mount_options ]\n"
-	"\t| unmount device mount_point | monitor\n", app);
+		"\t| unmount device mount_point | monitor\n", app);
 }
 
 int client_enumerate(void)
@@ -157,6 +208,32 @@ int client_unmount(char *device, char *mount_point)
 
 int client_monitor(void)
 {
+	dtmd_t *lib;
+	struct sigaction act;
+
+	memset(&act, 0, sizeof(struct sigaction));
+	act.sa_handler = &client_sighandler;
+
+	if ((sigaction(SIGINT, &act, NULL) != 0) || (sigaction(SIGTERM, &act, NULL) != 0))
+	{
+		fprintf(stderr, "Couldn't set signal handler\n");
+		return -1;
+	}
+
+	lib = dtmd_init(&client_callback, (void*)1);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library\n");
+		return -1;
+	}
+
+	while (run)
+	{
+		sleep(1);
+	}
+
+	dtmd_deinit(lib);
+
 	return 0;
 }
 
