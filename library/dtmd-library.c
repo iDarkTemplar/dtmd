@@ -93,20 +93,23 @@ static int dtmd_helper_validate_partition(dtmd_partition_t *partition);
 static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 
-dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg)
+dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
 {
 	dtmd_t *handle;
 	struct sockaddr_un sockaddr;
+	dtmd_result_t errorcode;
 	/* char data = 0; */
 
 	if (callback == NULL)
 	{
+		errorcode = dtmd_input_error;
 		goto dtmd_init_error_1;
 	}
 
 	handle = (dtmd_t*) malloc(sizeof(dtmd_t));
 	if (handle == NULL)
 	{
+		errorcode = dtmd_memory_error;
 		goto dtmd_init_error_1;
 	}
 
@@ -119,22 +122,26 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg)
 
 	if (sem_init(&(handle->caller_socket), 0, 0) == -1)
 	{
+		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_2;
 	}
 
 	if (pipe(handle->feedback) == -1)
 	{
+		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_3;
 	}
 
 	if (pipe(handle->pipes) == -1)
 	{
+		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_4;
 	}
 
 	handle->socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (handle->socket_fd == -1)
 	{
+		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_5;
 	}
 
@@ -144,12 +151,19 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg)
 
 	if (connect(handle->socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
 	{
+		errorcode = dtmd_daemon_not_responding_error;
 		goto dtmd_init_error_6;
 	}
 
 	if ((pthread_create(&(handle->worker), NULL, &dtmd_worker_function, handle)) != 0)
 	{
+		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_6;
+	}
+
+	if (result != NULL)
+	{
+		*result = dtmd_ok;
 	}
 
 	return handle;
@@ -177,6 +191,11 @@ dtmd_init_error_2:
 	free(handle);
 
 dtmd_init_error_1:
+	if (result != NULL)
+	{
+		*result = errorcode;
+	}
+
 	return NULL;
 }
 

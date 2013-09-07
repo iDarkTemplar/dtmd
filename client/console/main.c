@@ -95,10 +95,10 @@ int client_enumerate(void)
 	unsigned int count, i, j;
 	dtmd_device_t **devices;
 
-	lib = dtmd_init(&client_callback, (void*)0);
+	lib = dtmd_init(&client_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
-		fprintf(stderr, "Couldn't initialize dtmd-library\n");
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
 		return -1;
 	}
 
@@ -154,10 +154,10 @@ int client_mount(char *device, char *mount_point, char *mount_opts)
 	dtmd_result_t result;
 	int func_result = 0;
 
-	lib = dtmd_init(&client_callback, (void*)0);
+	lib = dtmd_init(&client_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
-		fprintf(stderr, "Couldn't initialize dtmd-library\n");
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
 		return -1;
 	}
 
@@ -183,10 +183,10 @@ int client_unmount(char *device, char *mount_point)
 	dtmd_result_t result;
 	int func_result = 0;
 
-	lib = dtmd_init(&client_callback, (void*)0);
+	lib = dtmd_init(&client_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
-		fprintf(stderr, "Couldn't initialize dtmd-library\n");
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
 		return -1;
 	}
 
@@ -209,6 +209,7 @@ int client_unmount(char *device, char *mount_point)
 int client_monitor(void)
 {
 	dtmd_t *lib;
+	dtmd_result_t result;
 	struct sigaction act;
 
 	memset(&act, 0, sizeof(struct sigaction));
@@ -220,10 +221,10 @@ int client_monitor(void)
 		return -1;
 	}
 
-	lib = dtmd_init(&client_callback, (void*)1);
+	lib = dtmd_init(&client_callback, (void*)1, &result);
 	if (lib == NULL)
 	{
-		fprintf(stderr, "Couldn't initialize dtmd-library\n");
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
 		return -1;
 	}
 
