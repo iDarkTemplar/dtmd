@@ -109,6 +109,7 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg)
 	handle->callback_arg  = arg;
 	handle->result_state  = dtmd_ok;
 	handle->library_state = dtmd_state_default;
+	handle->buffer[0]     = 0;
 	handle->cur_pos       = 0;
 
 	if (sem_init(&(handle->caller_socket), 0, 0) == -1)
@@ -211,6 +212,27 @@ static void* dtmd_worker_function(void *arg)
 
 	for (;;)
 	{
+		while ((eol = strchr(handle->buffer, '\n')) != NULL)
+		{
+			cmd = dtmd_parse_command(handle->buffer);
+
+			handle->cur_pos -= (eol + 1 - handle->buffer);
+			memmove(handle->buffer, eol+1, handle->cur_pos);
+
+			if (cmd == NULL)
+			{
+				goto dtmd_worker_function_error;
+			}
+
+			res = dtmd_helper_handle_cmd(handle, cmd);
+			dtmd_free_command(cmd);
+
+			if (res != dtmd_ok)
+			{
+				goto dtmd_worker_function_error;
+			}
+		}
+
 		fds[0].events  = POLLIN;
 		fds[0].revents = 0;
 		fds[1].events  = POLLIN;
@@ -264,27 +286,6 @@ static void* dtmd_worker_function(void *arg)
 
 			handle->cur_pos += rc;
 			handle->buffer[handle->cur_pos] = 0;
-
-			while ((eol = strchr(handle->buffer, '\n')) != NULL)
-			{
-				cmd = dtmd_parse_command(handle->buffer);
-
-				handle->cur_pos -= (eol + 1 - handle->buffer);
-				memmove(handle->buffer, eol+1, handle->cur_pos);
-
-				if (cmd == NULL)
-				{
-					goto dtmd_worker_function_error;
-				}
-
-				res = dtmd_helper_handle_cmd(handle, cmd);
-				dtmd_free_command(cmd);
-
-				if (res != dtmd_ok)
-				{
-					goto dtmd_worker_function_error;
-				}
-			}
 		}
 	}
 
