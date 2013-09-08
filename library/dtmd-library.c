@@ -760,61 +760,53 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 					&& (cmd->args_count == 3)
 					&& (cmd->args[0] != NULL)
 					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL))
+					&& (cmd->args[2] != NULL)
+					&& (result_device == NULL))
 				{
+					result_device = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
 					if (result_device == NULL)
 					{
-						result_device = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
-						if (result_device == NULL)
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_memory_error;
+						goto dtmd_list_device_error_1;
+					}
+
+					result_device->path = NULL;
+					result_device->partition = NULL;
+					result_device->partitions_count = 0;
+
+					result_device->type = dtmd_helper_string_to_removable_type(cmd->args[1]);
+					if (result_device->type == unknown_or_persistent)
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_invalid_state;
+						goto dtmd_list_device_error_1;
+					}
+
+					result_device->path = cmd->args[0];
+					cmd->args[0] = NULL;
+
+					if (!dtmd_helper_string_to_int(cmd->args[2], &(result_device->partitions_count)))
+					{
+						dtmd_free_command(cmd);
+						handle->result_state = dtmd_io_error;
+						goto dtmd_list_device_error_1;
+					}
+
+					if (result_device->partitions_count > 0)
+					{
+						result_device->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*result_device->partitions_count);
+						if (result_device->partition == NULL)
 						{
 							dtmd_free_command(cmd);
 							handle->result_state = dtmd_memory_error;
 							goto dtmd_list_device_error_1;
 						}
 
-						result_device->path = NULL;
-						result_device->partition = NULL;
-						result_device->partitions_count = 0;
-
-						result_device->type = dtmd_helper_string_to_removable_type(cmd->args[1]);
-						if (result_device->type == unknown_or_persistent)
+						for (partition = 0; partition < result_device->partitions_count; ++partition)
 						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_invalid_state;
-							goto dtmd_list_device_error_1;
+							result_device->partition[partition] = NULL;
 						}
-
-						result_device->path = cmd->args[0];
-						cmd->args[0] = NULL;
-
-						if (!dtmd_helper_string_to_int(cmd->args[2], &(result_device->partitions_count)))
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_io_error;
-							goto dtmd_list_device_error_1;
-						}
-
-						if (result_device->partitions_count > 0)
-						{
-							result_device->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*result_device->partitions_count);
-							if (result_device->partition == NULL)
-							{
-								dtmd_free_command(cmd);
-								handle->result_state = dtmd_memory_error;
-								goto dtmd_list_device_error_1;
-							}
-
-							for (partition = 0; partition < result_device->partitions_count; ++partition)
-							{
-								result_device->partition[partition] = NULL;
-							}
-						}
-					}
-					else
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_1;
 					}
 				}
 				else if ((strcmp(cmd->cmd, "partition") == 0)
@@ -1054,7 +1046,8 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 					&& (cmd->args_count == 6)
 					&& (cmd->args[0] != NULL)
 					&& (cmd->args[1] != NULL)
-					&& (cmd->args[3] != NULL))
+					&& (cmd->args[3] != NULL)
+					&& (result_partition == NULL))
 				{
 					if (strcmp(cmd->args[0], partition_path) != 0)
 					{

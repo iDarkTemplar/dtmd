@@ -87,16 +87,56 @@ void printUsage(char *app)
 	fprintf(stderr, "USAGE: %s command\n"
 		"\twhere command is one of following:\n"
 		"\t\tenumerate\n"
+		"\t\tlist_device path\n"
+		"\t\tlist_partition path\n"
 		"\t\tmount device mount_point [ mount_options ]\n"
 		"\t\tunmount device mount_point\n"
 		"\t\tmonitor\n", app);
+}
+
+void client_print_partition(const dtmd_partition_t *partition)
+{
+	fprintf(stdout, "Path: %s\n", partition->path);
+	fprintf(stdout, "Filesystem type: %s\n", partition->type);
+
+	if (partition->label != NULL)
+	{
+		fprintf(stdout, "Label: %s\n", partition->label);
+	}
+
+	if (partition->mnt_point != NULL)
+	{
+		fprintf(stdout, "Mount point: %s\n", partition->mnt_point);
+	}
+
+	if (partition->mnt_opts != NULL)
+	{
+		fprintf(stdout, "Mount options: %s\n", partition->mnt_opts);
+	}
+
+	fprintf(stdout, "\n");
+}
+
+void client_print_device(const dtmd_device_t *device)
+{
+	unsigned int i;
+
+	fprintf(stdout, "Path: %s\n", device->path);
+	fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(device->type));
+	fprintf(stdout, "Partitions: %u\n\n", device->partitions_count);
+
+	for (i = 0; i < device->partitions_count; ++i)
+	{
+		fprintf(stdout, "Partition %u:\n", i);
+		client_print_partition(device->partition[i]);
+	}
 }
 
 int client_enumerate(void)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, i, j;
+	unsigned int count, i;
 	dtmd_device_t **devices;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
@@ -119,36 +159,82 @@ int client_enumerate(void)
 	for (i = 0; i < count; ++i)
 	{
 		fprintf(stdout, "Device %u:\n", i);
-		fprintf(stdout, "Path: %s\n", devices[i]->path);
-		fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(devices[i]->type));
-		fprintf(stdout, "Partitions: %u\n\n", devices[i]->partitions_count);
-
-		for (j = 0; j < devices[i]->partitions_count; ++j)
-		{
-			fprintf(stdout, "Partition %u:\n", j);
-			fprintf(stdout, "Path: %s\n", devices[i]->partition[j]->path);
-			fprintf(stdout, "Filesystem type: %s\n", devices[i]->partition[j]->type);
-
-			if (devices[i]->partition[j]->label != NULL)
-			{
-				fprintf(stdout, "Label: %s\n", devices[i]->partition[j]->label);
-			}
-
-			if (devices[i]->partition[j]->mnt_point != NULL)
-			{
-				fprintf(stdout, "Mount point: %s\n", devices[i]->partition[j]->mnt_point);
-			}
-
-			if (devices[i]->partition[j]->mnt_opts != NULL)
-			{
-				fprintf(stdout, "Mount options: %s\n", devices[i]->partition[j]->mnt_opts);
-			}
-
-			fprintf(stdout, "\n");
-		}
+		client_print_device(devices[i]);
 	}
 
 	dtmd_free_devices_array(lib, count, devices);
+	dtmd_deinit(lib);
+
+	return 0;
+}
+
+int client_list_device(const char *path)
+{
+	dtmd_t *lib;
+	dtmd_result_t result;
+	dtmd_device_t *device;
+
+	lib = dtmd_init(&client_callback, (void*)0, &result);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
+		return -1;
+	}
+
+	result = dtmd_list_device(lib, -1, path, &device);
+	if (result != dtmd_ok)
+	{
+		fprintf(stderr, "Couldn't list device, error code %d\n", result);
+		dtmd_deinit(lib);
+		return -1;
+	}
+
+	if (device != NULL)
+	{
+		client_print_device(device);
+		dtmd_free_device(lib, device);
+	}
+	else
+	{
+		fprintf(stdout, "Didn't find device with specified path!\n");
+	}
+
+	dtmd_deinit(lib);
+
+	return 0;
+}
+
+int client_list_partition(const char *path)
+{
+	dtmd_t *lib;
+	dtmd_result_t result;
+	dtmd_partition_t *partition;
+
+	lib = dtmd_init(&client_callback, (void*)0, &result);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
+		return -1;
+	}
+
+	result = dtmd_list_partition(lib, -1, path, &partition);
+	if (result != dtmd_ok)
+	{
+		fprintf(stderr, "Couldn't list partition, error code %d\n", result);
+		dtmd_deinit(lib);
+		return -1;
+	}
+
+	if (partition != NULL)
+	{
+		client_print_partition(partition);
+		dtmd_free_partition(lib, partition);
+	}
+	else
+	{
+		fprintf(stdout, "Didn't find partition with specified path!\n");
+	}
+
 	dtmd_deinit(lib);
 
 	return 0;
@@ -249,6 +335,14 @@ int main(int argc, char **argv)
 	if ((argc == 2) && (strcmp(argv[1], "enumerate") == 0))
 	{
 		return client_enumerate();
+	}
+	else if ((argc == 3) && (strcmp(argv[1], "list_device") == 0))
+	{
+		return client_list_device(argv[2]);
+	}
+	else if ((argc == 3) && (strcmp(argv[1], "list_partition") == 0))
+	{
+		return client_list_partition(argv[2]);
 	}
 	else if (((argc == 4) || (argc == 5)) && (strcmp(argv[1], "mount") == 0))
 	{

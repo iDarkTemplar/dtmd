@@ -64,7 +64,7 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 
 		if (i < media_count)
 		{
-			dprintf(clients[client_number]->clientfd, "started(\"list_devices\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, "started(\"list_device\", \"%s\")\n", cmd->args[0]);
 
 			print_device(client_number, i);
 
@@ -73,16 +73,50 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 				print_partition(client_number, i, j);
 			}
 
-			dprintf(clients[client_number]->clientfd, "finished(\"list_devices\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, "finished(\"list_device\", \"%s\")\n", cmd->args[0]);
 		}
 		else
 		{
-			dprintf(clients[client_number]->clientfd, "failed(\"list_devices\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, "failed(\"list_device\", \"%s\")\n", cmd->args[0]);
+		}
+	}
+	else if ((strcmp(cmd->cmd, "list_partition") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	{
+		for (i = 0; i < media_count; ++i)
+		{
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				if (strcmp(media[i]->partition[j]->path, cmd->args[0]) == 0)
+				{
+					goto invoke_command_print_partition_exit_loop;
+				}
+			}
+		}
+
+		invoke_command_print_partition_exit_loop:
+
+		if (i < media_count)
+		{
+			dprintf(clients[client_number]->clientfd, "started(\"list_partition\", \"%s\")\n", cmd->args[0]);
+			print_partition(client_number, i, j);
+			dprintf(clients[client_number]->clientfd, "finished(\"list_partition\", \"%s\")\n", cmd->args[0]);
+		}
+		else
+		{
+			dprintf(clients[client_number]->clientfd, "failed(\"list_partition\", \"%s\")\n", cmd->args[0]);
 		}
 	}
 	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 	{
-		dprintf(clients[client_number]->clientfd, "started(\"mount\", \"%s\", \"%s\", %s%s%s)\n",
+
+		dprintf(clients[client_number]->clientfd, "failed(\"mount\", \"%s\", \"%s\", %s%s%s)\n",
+			cmd->args[0],
+			cmd->args[1],
+			((cmd->args[2] != NULL) ? ("\"") : ("")),
+			((cmd->args[2] != NULL) ? (cmd->args[2]) : ("nil")),
+			((cmd->args[2] != NULL) ? ("\"") : ("")));
+
+		dprintf(clients[client_number]->clientfd, "succeeded(\"mount\", \"%s\", \"%s\", %s%s%s)\n",
 			cmd->args[0],
 			cmd->args[1],
 			((cmd->args[2] != NULL) ? ("\"") : ("")),
@@ -93,7 +127,8 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 	{
-		dprintf(clients[client_number]->clientfd, "started(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
+		dprintf(clients[client_number]->clientfd, "failed(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
+		dprintf(clients[client_number]->clientfd, "succeeded(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
 
 		// TODO: implement unmount and notifications
 	}
