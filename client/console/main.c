@@ -84,8 +84,12 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 
 void printUsage(char *app)
 {
-	fprintf(stderr, "USAGE: %s [ enumerate | mount device mount_point [ mount_options ]\n"
-		"\t| unmount device mount_point | monitor\n", app);
+	fprintf(stderr, "USAGE: %s command\n"
+		"\twhere command is one of following:\n"
+		"\t\tenumerate\n"
+		"\t\tmount device mount_point [ mount_options ]\n"
+		"\t\tunmount device mount_point\n"
+		"\t\tmonitor\n", app);
 }
 
 int client_enumerate(void)
@@ -139,6 +143,8 @@ int client_enumerate(void)
 			{
 				fprintf(stdout, "Mount options: %s\n", devices[i]->partition[j]->mnt_opts);
 			}
+
+			fprintf(stdout, "\n");
 		}
 	}
 

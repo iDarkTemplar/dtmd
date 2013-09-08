@@ -720,8 +720,9 @@ int main(int argc, char **argv)
 						break;
 					}
 
-					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used);
+					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
+					clients[j]->buf[clients[j]->buf_used] = 0;
 				}
 
 				if (clients[j]->buf_used == dtmd_command_max_length)
