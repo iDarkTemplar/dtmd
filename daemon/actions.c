@@ -269,7 +269,7 @@ static int print_device(unsigned int client_number, unsigned int device)
 
 	if (dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\", \"%d\")\n",
 		media[device]->path,
-		removable_type_to_string(media[device]->type),
+		dtmd_device_type_to_string(media[device]->type),
 		media[device]->partitions_count) < 0)
 	{
 		return -1;

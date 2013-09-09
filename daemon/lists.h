@@ -69,8 +69,6 @@ int add_client(int client);
 int remove_client(int client);
 void remove_all_clients(void);
 
-const char* removable_type_to_string(dtmd_removable_media_type_t removable_type);
-
 #ifdef __cplusplus
 }
 #endif

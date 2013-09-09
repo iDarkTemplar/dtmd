@@ -251,7 +251,7 @@ dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
 	\xdd – Hexadecimal representation
 */
 
-const char* dtmd_decode_label(const char *label)
+char* dtmd_decode_label(const char *label)
 {
 	char *result;
 	char *cur_result;
@@ -282,50 +282,38 @@ const char* dtmd_decode_label(const char *label)
 			{
 			case 'a':
 				*cur_result = '\a';
-				++cur_result;
-				++label;
 				break;
 
 			case 'b':
 				*cur_result = '\b';
-				++cur_result;
-				++label;
+				break;
+
+			case 'f':
+				*cur_result = '\f';
 				break;
 
 			case 'n':
 				*cur_result = '\n';
-				++cur_result;
-				++label;
 				break;
 
 			case 'r':
 				*cur_result = '\r';
-				++cur_result;
-				++label;
 				break;
 
 			case 't':
 				*cur_result = '\t';
-				++cur_result;
-				++label;
 				break;
 
 			case '\\':
 				*cur_result = '\\';
-				++cur_result;
-				++label;
 				break;
 
 			case '\'':
 				*cur_result = '\'';
-				++cur_result;
-				++label;
 				break;
 
 			case '\"':
 				*cur_result = '\"';
-				++cur_result;
-				++label;
 				break;
 
 			case 'x':
@@ -350,6 +338,9 @@ const char* dtmd_decode_label(const char *label)
 						k += tolower(label[i]) - 'a' + 10;
 					}
 				}
+
+				*cur_result = k;
+				label += 2;
 				break;
 
 			case '0':
@@ -362,7 +353,7 @@ const char* dtmd_decode_label(const char *label)
 			case '7':
 				k = 0;
 
-				for (i = 1; i < 4; ++i)
+				for (i = 0; i < 3; ++i)
 				{
 					if ((label[i] < '0') || (label[i] > '7'))
 					{
@@ -370,21 +361,18 @@ const char* dtmd_decode_label(const char *label)
 						return NULL;
 					}
 
-					k *= 7;
+					k *= 8;
 					k += label[i] - '0';
 				}
 
 				*cur_result = k;
-				++cur_result;
-				label += 3;
+				label += 2;
 				break;
 
 			default:
 				*cur_result = '\\';
 				++cur_result;
 				*cur_result = *label;
-				++cur_result;
-				++label;
 			}
 		}
 		else
@@ -401,10 +389,10 @@ const char* dtmd_decode_label(const char *label)
 	return result;
 }
 
-void dtmd_free_decoded_label(const char *label)
+void dtmd_free_decoded_label(char *label)
 {
 	if (label != NULL)
 	{
-		free((char*)label);
+		free(label);
 	}
 }

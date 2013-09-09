@@ -104,7 +104,10 @@ ENABLE_TESTING()
 set (TEST_SOURCES_commands tests/commands_test.c tests/dt_tests.h)
 set (TEST_LIBS_commands dtmd-misc)
 
-set (ALL_TESTS commands)
+set (TEST_SOURCES_decode_label tests/decode_label_test.c tests/dt_tests.h)
+set (TEST_LIBS_decode_label dtmd-misc)
+
+set (ALL_TESTS commands decode_label)
 foreach (CURRENT_TEST ${ALL_TESTS})
 	add_executable( ${CURRENT_TEST}_test ${TEST_SOURCES_${CURRENT_TEST}})
 	target_link_libraries( ${CURRENT_TEST}_test ${TEST_LIBS_${CURRENT_TEST}} )

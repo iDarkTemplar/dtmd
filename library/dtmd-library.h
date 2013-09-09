@@ -45,7 +45,8 @@ typedef enum dtmd_result
 	dtmd_time_error = -7,
 	dtmd_memory_error = -8,
 	dtmd_internal_initialization_error = -9,
-	dtmd_daemon_not_responding_error = -10
+	dtmd_daemon_not_responding_error = -10,
+	dtmd_label_decoding_error = -11
 } dtmd_result_t;
 
 typedef struct dtmd_partition

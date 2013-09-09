@@ -31,11 +31,6 @@ unsigned int media_count = 0;
 struct client **clients = NULL;
 unsigned int clients_count = 0;
 
-static const char *str_unknown_or_persistent = dtmd_string_device_unknown_or_persistent;
-static const char *str_cdrom                 = dtmd_string_device_cdrom;
-static const char *str_removable_disk        = dtmd_string_device_removable_disk;
-static const char *str_sd_card               = dtmd_string_device_sd_card;
-
 int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 {
 	unsigned int i;
@@ -447,21 +442,5 @@ void remove_all_clients(void)
 
 		clients_count = 0;
 		clients = NULL;
-	}
-}
-
-const char* removable_type_to_string(dtmd_removable_media_type_t removable_type)
-{
-	switch (removable_type)
-	{
-	case cdrom:
-		return str_cdrom;
-	case removable_disk:
-		return str_removable_disk;
-	case sd_card:
-		return str_sd_card;
-	case unknown_or_persistent:
-	default:
-		return str_unknown_or_persistent;
 	}
 }

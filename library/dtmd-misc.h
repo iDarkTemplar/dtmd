@@ -40,8 +40,8 @@ void dtmd_free_command(dtmd_command_t *cmd);
 const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
 dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);
 
-const char* dtmd_decode_label(const char *label);
-void dtmd_free_decoded_label(const char *label);
+char* dtmd_decode_label(const char *label);
+void dtmd_free_decoded_label(char *label);
 
 #ifdef __cplusplus
 }
