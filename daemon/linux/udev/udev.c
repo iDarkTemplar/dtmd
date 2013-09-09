@@ -18,9 +18,9 @@
  *
  */
 
-#include "udev.h"
+#include "daemon/linux/udev/udev.h"
 
-#include "../../lists.h"
+#include "daemon/lists.h"
 
 #include <libudev.h>
 #include <stdlib.h>

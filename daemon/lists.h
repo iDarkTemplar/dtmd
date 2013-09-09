@@ -21,7 +21,7 @@
 #ifndef DTMD_LISTS_H
 #define DTMD_LISTS_H
 
-#include "dtmd.h"
+#include <dtmd.h>
 
 #ifdef __cplusplus
 extern "C" {

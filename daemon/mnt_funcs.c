@@ -20,9 +20,8 @@
 
 #include "daemon/mnt_funcs.h"
 
-#include "lists.h"
-
-#include "actions.h"
+#include "daemon/lists.h"
+#include "daemon/actions.h"
 
 #include <mntent.h>
 #include <stdlib.h>

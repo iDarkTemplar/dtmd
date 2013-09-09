@@ -24,6 +24,10 @@
 #define dtmd_daemon_socket_addr "/var/run/dtmd.socket"
 #define dtmd_command_max_length 4096
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum dtmd_removable_media_type
 {
 	unknown_or_persistent = 0,
@@ -31,6 +35,10 @@ typedef enum dtmd_removable_media_type
 	removable_disk        = 2,
 	sd_card               = 3
 } dtmd_removable_media_type_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #define dtmd_string_device_unknown_or_persistent "unknown"
 #define dtmd_string_device_cdrom                 "cdrom"
