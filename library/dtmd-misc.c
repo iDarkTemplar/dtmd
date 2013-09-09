@@ -237,10 +237,168 @@ dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
 	}
 }
 
-const char* dtmd_decode_label(const char *string)
+/*
+	\a – Bell (beep)
+	\b – Backspace
+	\f – Formfeed
+	\n – New line
+	\r – Carriage return
+	\t – Horizontal tab
+	\\ – Backslash
+	\' – Single quotation mark
+	\" – Double quotation mark
+	\ooo – Octal representation
+	\xdd – Hexadecimal representation
+*/
+
+const char* dtmd_decode_label(const char *label)
 {
-	// TODO: implement
-	return NULL;
+	char *result;
+	char *cur_result;
+	int i;
+	int k;
+
+	result = malloc(strlen(label)+1);
+	if (result == NULL)
+	{
+		return NULL;
+	}
+
+	cur_result = result;
+
+	while (*label)
+	{
+		if ((*label) == '\\')
+		{
+			++label;
+
+			if ((*label) == 0)
+			{
+				free(result);
+				return NULL;
+			}
+
+			switch (*label)
+			{
+			case 'a':
+				*cur_result = '\a';
+				++cur_result;
+				++label;
+				break;
+
+			case 'b':
+				*cur_result = '\b';
+				++cur_result;
+				++label;
+				break;
+
+			case 'n':
+				*cur_result = '\n';
+				++cur_result;
+				++label;
+				break;
+
+			case 'r':
+				*cur_result = '\r';
+				++cur_result;
+				++label;
+				break;
+
+			case 't':
+				*cur_result = '\t';
+				++cur_result;
+				++label;
+				break;
+
+			case '\\':
+				*cur_result = '\\';
+				++cur_result;
+				++label;
+				break;
+
+			case '\'':
+				*cur_result = '\'';
+				++cur_result;
+				++label;
+				break;
+
+			case '\"':
+				*cur_result = '\"';
+				++cur_result;
+				++label;
+				break;
+
+			case 'x':
+				k = 0;
+
+				for (i = 1; i < 3; ++i)
+				{
+					if (!isxdigit(label[i]))
+					{
+						free(result);
+						return NULL;
+					}
+
+					k *= 16;
+
+					if ((label[i] >= '0') && (label[i] <= '9'))
+					{
+						k += label[i] - '0';
+					}
+					else
+					{
+						k += tolower(label[i]) - 'a' + 10;
+					}
+				}
+				break;
+
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+				k = 0;
+
+				for (i = 1; i < 4; ++i)
+				{
+					if ((label[i] < '0') || (label[i] > '7'))
+					{
+						free(result);
+						return NULL;
+					}
+
+					k *= 7;
+					k += label[i] - '0';
+				}
+
+				*cur_result = k;
+				++cur_result;
+				label += 3;
+				break;
+
+			default:
+				*cur_result = '\\';
+				++cur_result;
+				*cur_result = *label;
+				++cur_result;
+				++label;
+			}
+		}
+		else
+		{
+			*cur_result = *label;
+		}
+
+		++cur_result;
+		++label;
+	}
+
+	*cur_result = 0;
+
+	return result;
 }
 
 void dtmd_free_decoded_label(const char *label)

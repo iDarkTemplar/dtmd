@@ -68,8 +68,8 @@ if (UNIX AND NOT APPLE)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
 endif (UNIX AND NOT APPLE)
 
-set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label_funcs.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label_funcs.h daemon/lists.h daemon/mnt_funcs.h )
+set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/lists.c daemon/mnt_funcs.c )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/lists.h daemon/mnt_funcs.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
