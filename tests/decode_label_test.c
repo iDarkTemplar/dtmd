@@ -82,7 +82,11 @@ int main(int argc, char **argv)
 	char *label_result3;
 	char *label_result4;
 
+#ifdef DTMD_MISC_DECODE_CONTROL_CHARS
 	char *label_expected_result1 = "test\a\b\f\n\r\t\\'\"\123\x20";
+#else /* DTMD_MISC_DECODE_CONTROL_CHARS */
+	char *label_expected_result1 = NULL;
+#endif /* DTMD_MISC_DECODE_CONTROL_CHARS */
 	char *label_expected_result2 = "test  label";
 	char *label_expected_result3 = NULL;
 	char *label_expected_result4 = NULL;
@@ -92,7 +96,7 @@ int main(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 
-	test_compare(((label_result1 = dtmd_decode_label(label_test1)) != NULL) && (strcmp(label_result1, label_expected_result1) == 0));
+	test_compare((label_result1 = dtmd_decode_label(label_test1)) == NULL);
 	test_compare(((label_result2 = dtmd_decode_label(label_test2)) != NULL) && (strcmp(label_result2, label_expected_result2) == 0));
 	test_compare((label_result3 = dtmd_decode_label(label_test3)) == NULL);
 	test_compare((label_result4 = dtmd_decode_label(label_test4)) == NULL);

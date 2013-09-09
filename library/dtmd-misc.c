@@ -280,6 +280,7 @@ char* dtmd_decode_label(const char *label)
 
 			switch (*label)
 			{
+#ifdef DTMD_MISC_DECODE_CONTROL_CHARS
 			case 'a':
 				*cur_result = '\a';
 				break;
@@ -315,6 +316,7 @@ char* dtmd_decode_label(const char *label)
 			case '\"':
 				*cur_result = '\"';
 				break;
+#endif /* DTMD_MISC_DECODE_CONTROL_CHARS */
 
 			case 'x':
 				k = 0;
@@ -370,9 +372,14 @@ char* dtmd_decode_label(const char *label)
 				break;
 
 			default:
+#ifdef DTMD_MISC_DECODE_CONTROL_CHARS
 				*cur_result = '\\';
 				++cur_result;
 				*cur_result = *label;
+#else /* DTMD_MISC_DECODE_CONTROL_CHARS */
+				free(result);
+				return NULL;
+#endif /* DTMD_MISC_DECODE_CONTROL_CHARS */
 			}
 		}
 		else
