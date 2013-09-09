@@ -22,9 +22,14 @@
 
 #include "lists.h"
 
+#include "actions.h"
+
 #include <mntent.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define is_mounted_now 1
+#define is_mounted_last 2
 
 /*
 int get_mount_params(const char *device, char **mount_point, char **mount_opts)
@@ -92,18 +97,18 @@ int check_mount_changes(void)
 	FILE *mntfile;
 	struct mntent *ent;
 
+	mntfile = setmntent("/proc/mounts", "r");
+	if (mntfile == NULL)
+	{
+		goto check_mount_changes_error_1;
+	}
+
 	for (i = 0; i < media_count; ++i)
 	{
 		for (j = 0; j < media[i]->partitions_count; ++j)
 		{
-			media[i]->partition[j]->is_mounted = 0;
+			media[i]->partition[j]->is_mounted <<= 1;
 		}
-	}
-
-	mntfile = setmntent("/proc/mounts", "r");
-	if (mntfile == NULL)
-	{
-		return -1;
 	}
 
 	while ((ent = getmntent(mntfile)) != NULL)
@@ -115,11 +120,11 @@ int check_mount_changes(void)
 				if (strcmp(media[i]->partition[j]->path, ent->mnt_fsname) == 0)
 				{
 					// skip devices mounted multiple times
-					if (media[i]->partition[j]->is_mounted == 0)
+					if (!(media[i]->partition[j]->is_mounted & is_mounted_now))
 					{
 						if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
 						{
-							media[i]->partition[j]->is_mounted = 1;
+							media[i]->partition[j]->is_mounted |= is_mounted_now;
 
 							if ((media[i]->partition[j]->mnt_point == NULL) || (strcmp(media[i]->partition[j]->mnt_point, ent->mnt_dir) != 0))
 							{
@@ -131,8 +136,7 @@ int check_mount_changes(void)
 								media[i]->partition[j]->mnt_point = strdup(ent->mnt_dir);
 								if (media[i]->partition[j]->mnt_point == NULL)
 								{
-									endmntent(mntfile);
-									return -1;
+									goto check_mount_changes_error_2;
 								}
 							}
 
@@ -146,14 +150,13 @@ int check_mount_changes(void)
 								media[i]->partition[j]->mnt_opts = strdup(ent->mnt_opts);
 								if (media[i]->partition[j]->mnt_opts == NULL)
 								{
-									endmntent(mntfile);
-									return -1;
+									goto check_mount_changes_error_2;
 								}
 							}
 						}
 						else
 						{
-							media[i]->partition[j]->is_mounted = 0;
+							media[i]->partition[j]->is_mounted &= ~is_mounted_now;
 						}
 					}
 
@@ -171,22 +174,42 @@ int check_mount_changes(void)
 	{
 		for (j = 0; j < media[i]->partitions_count; ++j)
 		{
-			if (media[i]->partition[j]->is_mounted == 0)
+			if (media[i]->partition[j]->is_mounted & is_mounted_now)
 			{
-				if (media[i]->partition[j]->mnt_point != NULL)
+				if (!(media[i]->partition[j]->is_mounted & is_mounted_last))
 				{
-					free(media[i]->partition[j]->mnt_point);
-					media[i]->partition[j]->mnt_point = NULL;
+					notify_mount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point, media[i]->partition[j]->mnt_opts);
+					media[i]->partition[j]->is_mounted = is_mounted_now;
 				}
-
-				if (media[i]->partition[j]->mnt_opts != NULL)
+			}
+			else
+			{
+				if (media[i]->partition[j]->is_mounted & is_mounted_last)
 				{
-					free(media[i]->partition[j]->mnt_opts);
-					media[i]->partition[j]->mnt_opts = NULL;
+					notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
+					media[i]->partition[j]->is_mounted = 0;
+
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						free(media[i]->partition[j]->mnt_point);
+						media[i]->partition[j]->mnt_point = NULL;
+					}
+
+					if (media[i]->partition[j]->mnt_opts != NULL)
+					{
+						free(media[i]->partition[j]->mnt_opts);
+						media[i]->partition[j]->mnt_opts = NULL;
+					}
 				}
 			}
 		}
 	}
 
 	return 0;
+
+check_mount_changes_error_2:
+	endmntent(mntfile);
+
+check_mount_changes_error_1:
+	return -1;
 }

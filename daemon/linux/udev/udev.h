@@ -23,11 +23,13 @@
 
 #include <libudev.h>
 
+#include <dtmd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int get_device_type(struct udev_device *device);
+dtmd_removable_media_type_t get_device_type(struct udev_device *device);
 
 #ifdef __cplusplus
 }

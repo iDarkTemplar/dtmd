@@ -431,7 +431,7 @@ void remove_all_clients(void)
 
 	if (clients != NULL)
 	{
-		for (i = 0; i < media_count; ++i)
+		for (i = 0; i < clients_count; ++i)
 		{
 			shutdown(clients[i]->clientfd, SHUT_RDWR);
 			close(clients[i]->clientfd);

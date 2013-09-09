@@ -123,21 +123,20 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 			((cmd->args[2] != NULL) ? (cmd->args[2]) : ("nil")),
 			((cmd->args[2] != NULL) ? ("\"") : ("")));
 
-		// TODO: implement mount and notifications
+		// TODO: implement mount
 	}
 	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 	{
 		dprintf(clients[client_number]->clientfd, "failed(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
 		dprintf(clients[client_number]->clientfd, "succeeded(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
 
-		// TODO: implement unmount and notifications
+		// TODO: implement unmount
 	}
 	else
 	{
 		return -1;
 	}
 
-	// TODO: issue command
 	return 0;
 }
 
@@ -171,7 +170,7 @@ int notify_add_partition(const char *path, const char *fstype, const char *label
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "add_partition(\"%s\"), \"%s\", %s%s%s, \"%s\"\n",
+		dprintf(clients[i]->clientfd, "add_partition(\"%s\", \"%s\", %s%s%s, \"%s\")\n",
 			path,
 			fstype,
 			(label != NULL) ? ("\"") : (""),

@@ -34,7 +34,7 @@ typedef enum dtmd_removable_media_type
 
 #define dtmd_string_device_unknown_or_persistent "unknown"
 #define dtmd_string_device_cdrom                 "cdrom"
-#define dtmd_string_device_removable_disk        "disk"
+#define dtmd_string_device_removable_disk        "removable disk"
 #define dtmd_string_device_sd_card               "sdcard"
 
 #endif /* DTMD_H */

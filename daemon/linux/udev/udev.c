@@ -26,9 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int get_device_type(struct udev_device *device)
+dtmd_removable_media_type_t get_device_type(struct udev_device *device)
 {
-	unsigned char media_type;
 	const char *removable;
 	const char *id_bus;
 	const char *is_cdrom;
@@ -48,22 +47,20 @@ int get_device_type(struct udev_device *device)
 	{
 		if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
 		{
-			media_type = cdrom;
+			return cdrom;
 		}
 		else if (((id_drive_flash_sd != NULL) && (strcmp(id_drive_flash_sd, "1") == 0))
 			|| ((id_drive_media_flash_sd != NULL) && (strcmp(id_drive_media_flash_sd, "1") == 0)))
 		{
-			media_type = sd_card;
+			return sd_card;
 		}
 		else
 		{
-			media_type = removable_disk;
+			return removable_disk;
 		}
 	}
 	else
 	{
-		media_type = unknown_or_persistent;
+		return unknown_or_persistent;
 	}
-
-	return media_type;
 }

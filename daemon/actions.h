@@ -30,9 +30,6 @@ extern "C" {
 #endif
 
 /*
-
-	TODO: remake strings to include their lengths first?
-
 	Notification types:
 	"add_disk(path, type)"
 	"remove_disk(path)"

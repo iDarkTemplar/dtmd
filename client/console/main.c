@@ -32,6 +32,18 @@ void client_sighandler(int signum)
 	run = 0;
 }
 
+int first = 1;
+
+#define print_first(var) \
+	if (var) \
+	{ \
+		var = 0; \
+	} \
+	else \
+	{ \
+		fprintf(stdout, "\n"); \
+	}
+
 void client_callback(void *arg, const dtmd_command_t *cmd)
 {
 	if (arg == (void*)1)
@@ -41,17 +53,20 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 			if ((strcmp(cmd->cmd, "add_disk") == 0) && (cmd->args_count == 2)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 			{
+				print_first(first);
 				fprintf(stdout, "Disk added\nPath: %s\nType: %s\n", cmd->args[0], cmd->args[1]);
 			}
 			else if ((strcmp(cmd->cmd, "remove_disk") == 0) && (cmd->args_count == 1)
 				&& (cmd->args[0] != NULL))
 			{
+				print_first(first);
 				fprintf(stdout, "Disk removed\nPath: %s\n", cmd->args[0]);
 			}
 			else if ((strcmp(cmd->cmd, "add_partition") == 0) && (cmd->args_count == 4)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[3] != NULL))
 			{
-				fprintf(stdout, "Partition added\nParent device: %s\nPath: %s\n Filesystem type: %s\n", cmd->args[3], cmd->args[0], cmd->args[1]);
+				print_first(first);
+				fprintf(stdout, "Partition added\nParent device: %s\nPath: %s\nFilesystem type: %s\n", cmd->args[3], cmd->args[0], cmd->args[1]);
 
 				if (cmd->args[2] != NULL)
 				{
@@ -61,16 +76,19 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 			else if ((strcmp(cmd->cmd, "remove_partition") == 0) && (cmd->args_count == 1)
 				&& (cmd->args[0] != NULL))
 			{
+				print_first(first);
 				fprintf(stdout, "Partition removed\nPath: %s\n", cmd->args[0]);
 			}
 			else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
 			{
+				print_first(first);
 				fprintf(stdout, "Partition mounted\nPath: %s\nMount point: %s\nMount options: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
 			}
 			else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 			{
+				print_first(first);
 				fprintf(stdout, "Partition unmounted\nPath: %s\nMount point: %s\n", cmd->args[0], cmd->args[1]);
 			}
 		}
@@ -154,7 +172,7 @@ int client_enumerate(void)
 		return -1;
 	}
 
-	fprintf(stdout, "Found %u devices\n", count);
+	fprintf(stdout, "Found %u devices\n\n", count);
 
 	for (i = 0; i < count; ++i)
 	{
