@@ -240,9 +240,8 @@ static void* dtmd_worker_function(void *arg)
 		{
 			cmd = dtmd_parse_command(handle->buffer);
 
-			memmove(handle->buffer, eol+1, handle->cur_pos);
 			handle->cur_pos -= (eol + 1 - handle->buffer);
-			handle->buffer[handle->cur_pos] = 0;
+			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
 
 			if (cmd == NULL)
 			{
@@ -383,9 +382,8 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count
 		{
 			cmd = dtmd_parse_command(handle->buffer);
 
-			memmove(handle->buffer, eol+1, handle->cur_pos);
 			handle->cur_pos -= (eol + 1 - handle->buffer);
-			handle->buffer[handle->cur_pos] = 0;
+			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
 
 			if (cmd == NULL)
 			{
@@ -418,7 +416,7 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count
 						goto dtmd_enum_all_error_1;
 					}
 
-					result_devices = (dtmd_device_t**) malloc(sizeof(dtmd_device_t*)*(result_count+1));
+					result_devices = (dtmd_device_t**) malloc(sizeof(dtmd_device_t*)*expected_devices_count);
 					if (result_devices == NULL)
 					{
 						dtmd_free_command(cmd);
@@ -734,9 +732,8 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 		{
 			cmd = dtmd_parse_command(handle->buffer);
 
-			memmove(handle->buffer, eol+1, handle->cur_pos);
 			handle->cur_pos -= (eol + 1 - handle->buffer);
-			handle->buffer[handle->cur_pos] = 0;
+			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
 
 			if (cmd == NULL)
 			{
@@ -1020,9 +1017,8 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 		{
 			cmd = dtmd_parse_command(handle->buffer);
 
-			memmove(handle->buffer, eol+1, handle->cur_pos);
 			handle->cur_pos -= (eol + 1 - handle->buffer);
-			handle->buffer[handle->cur_pos] = 0;
+			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
 
 			if (cmd == NULL)
 			{
@@ -1234,9 +1230,8 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 		{
 			cmd = dtmd_parse_command(handle->buffer);
 
-			memmove(handle->buffer, eol+1, handle->cur_pos);
 			handle->cur_pos -= (eol + 1 - handle->buffer);
-			handle->buffer[handle->cur_pos] = 0;
+			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
 
 			if (cmd == NULL)
 			{
@@ -1365,9 +1360,8 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const 
 		{
 			cmd = dtmd_parse_command(handle->buffer);
 
-			memmove(handle->buffer, eol+1, handle->cur_pos);
 			handle->cur_pos -= (eol + 1 - handle->buffer);
-			handle->buffer[handle->cur_pos] = 0;
+			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
 
 			if (cmd == NULL)
 			{
