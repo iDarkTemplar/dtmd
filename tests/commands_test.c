@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "library/dtmd-commands.h"
+#include <dtmd-misc.h>
 #include "tests/dt_tests.h"
 
 void print_command(dtmd_command_t *cmd)

@@ -57,8 +57,8 @@ set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
 set ( LINUX_UDEV_LIBS udev )
 
-set ( COMMANDS_LIBRARY_SOURCES library/dtmd-commands.c )
-set ( COMMANDS_LIBRARY_HEADERS library/dtmd-commands.h )
+set ( MISC_LIBRARY_SOURCES library/dtmd-misc.c )
+set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
 
 set ( LIBRARY_SOURCES library/dtmd-library.c )
 set ( LIBRARY_HEADERS library/dtmd-library.h dtmd.h )
@@ -87,14 +87,14 @@ set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
 set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
 add_definitions(-DSUBSYSTEM_LINUX_UDEV)
 
-add_library( dtmd-commands SHARED ${COMMANDS_LIBRARY_SOURCES} ${COMMANDS_LIBRARY_HEADERS} )
-target_link_libraries( dtmd-commands )
+add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
+target_link_libraries( dtmd-misc )
 
 add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
-target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-commands )
+target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
-target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-commands )
+target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
 
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
@@ -102,7 +102,7 @@ target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
 ENABLE_TESTING()
 
 set (TEST_SOURCES_commands tests/commands_test.c tests/dt_tests.h)
-set (TEST_LIBS_commands dtmd-commands)
+set (TEST_LIBS_commands dtmd-misc)
 
 set (ALL_TESTS commands)
 foreach (CURRENT_TEST ${ALL_TESTS})

@@ -23,7 +23,7 @@
 
 #include "daemon/lists.h"
 
-#include "library/dtmd-commands.h"
+#include <dtmd-misc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +38,7 @@ extern "C" {
 	"remove_disk(path)"
 	"add_partition(path, fstype, label (optional, may be NULL), parent_path)"
 	"remove_partition(path)"
-	"mount(path, mount_point, mount_options?)"
+	"mount(path, mount_point, mount_options)"
 	"unmount(path, mount_point)"
 
 	command responses start with "started" or "failed" or "succeeded"
@@ -66,7 +66,7 @@ extern "C" {
 		or "failed" on fail
 	"mount"
 		input:
-		"path, mount_point, mount_options?"
+		"path, mount_point, mount_options"
 		returns:
 		"succeeded" or "failed"
 	"unmount"
@@ -78,7 +78,12 @@ extern "C" {
 
 int invoke_command(unsigned int client_number, dtmd_command_t *cmd);
 
-int send_notification(const char *type, const char *device);
+int notify_add_disk(const char *path, dtmd_removable_media_type_t type);
+int notify_remove_disk(const char *path);
+int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path);
+int notify_remove_partition(const char *path);
+int notify_mount(const char *path, const char *mount_point, const char *mount_options);
+int notify_unmount(const char *path, const char *mount_point);
 
 #ifdef __cplusplus
 }

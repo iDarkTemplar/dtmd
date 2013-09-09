@@ -622,7 +622,7 @@ int main(int argc, char **argv)
 					}
 					else if (strcmp(action, "change") == 0)
 					{
-						// TODO: ignore?
+						// TODO: ignore? notify remove and add
 					}
 				}
 

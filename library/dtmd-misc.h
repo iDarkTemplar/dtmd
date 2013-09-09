@@ -18,8 +18,10 @@
  *
  */
 
-#ifndef COMMANDS_H
-#define COMMANDS_H
+#ifndef DTMD_MISC_H
+#define DTMD_MISC_H
+
+#include <dtmd.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,11 +35,16 @@ typedef struct dtmd_command
 } dtmd_command_t;
 
 dtmd_command_t* dtmd_parse_command(char *buffer);
-
 void dtmd_free_command(dtmd_command_t *cmd);
+
+const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
+dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);
+
+const char* dtmd_decode_label(const char *string);
+void dtmd_free_decoded_label(const char *label);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* COMMANDS_H */
+#endif /* DTMD_MISC_H */

@@ -141,6 +141,84 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 	return 0;
 }
 
+int notify_add_disk(const char *path, dtmd_removable_media_type_t type)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, "add_disk(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
+	}
+
+	return 0;
+}
+
+int notify_remove_disk(const char *path)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, "remove_disk(\"%s\")\n", path);
+	}
+
+	return 0;
+}
+
+int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, "add_partition(\"%s\"), \"%s\", %s%s%s, \"%s\"\n",
+			path,
+			fstype,
+			(label != NULL) ? ("\"") : (""),
+			(label != NULL) ? (label) : ("nil"),
+			(label != NULL) ? ("\"") : (""),
+			parent_path);
+	}
+
+	return 0;
+}
+
+int notify_remove_partition(const char *path)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, "remove_partition(\"%s\")\n", path);
+	}
+
+	return 0;
+}
+
+int notify_mount(const char *path, const char *mount_point, const char *mount_options)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, "mount(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
+	}
+
+	return 0;
+}
+
+int notify_unmount(const char *path, const char *mount_point)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, "unmount(\"%s\", \"%s\")\n", path, mount_point);
+	}
+
+	return 0;
+}
+
 // TODO: send UID/GID with SCM_CREDENTIALS
 
 //struct ucred credentials;
@@ -168,11 +246,6 @@ return 1;
    database, after a reverse lookup on the UID to get the account name.
    We can take this opportunity to check to see if this is a legit account.
 */
-
-int send_notification(const char *type, const char *device)
-{
-	return 0;
-}
 
 static int print_devices_count(unsigned int client_number)
 {

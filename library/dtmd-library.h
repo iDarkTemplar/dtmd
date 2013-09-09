@@ -22,7 +22,7 @@
 #define DTMD_LIBRARY_H
 
 #include <dtmd.h>
-#include <dtmd-commands.h>
+#include <dtmd-misc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,8 +75,6 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_point, const char *mount_options);
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const char *mount_point);
 int dtmd_is_state_invalid(dtmd_t *handle);
-
-const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
 
 void dtmd_free_devices_array(dtmd_t *handle, unsigned int count, dtmd_device_t **devices);
 void dtmd_free_device(dtmd_t *handle, dtmd_device_t *device);

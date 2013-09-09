@@ -18,11 +18,16 @@
  *
  */
 
-#include "dtmd-commands.h"
+#include <dtmd-misc.h>
 
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+
+static const char *str_unknown_or_persistent = dtmd_string_device_unknown_or_persistent;
+static const char *str_cdrom                 = dtmd_string_device_cdrom;
+static const char *str_removable_disk        = dtmd_string_device_removable_disk;
+static const char *str_sd_card               = dtmd_string_device_sd_card;
 
 dtmd_command_t* dtmd_parse_command(char *buffer)
 {
@@ -190,5 +195,58 @@ void dtmd_free_command(dtmd_command_t *cmd)
 		}
 
 		free(cmd);
+	}
+}
+
+const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type)
+{
+	switch (type)
+	{
+	case cdrom:
+		return str_cdrom;
+
+	case removable_disk:
+		return str_removable_disk;
+
+	case sd_card:
+		return str_sd_card;
+
+	case unknown_or_persistent:
+	default:
+		return str_unknown_or_persistent;
+	}
+}
+
+dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
+{
+	if (strcmp(string, str_cdrom) == 0)
+	{
+		return cdrom;
+	}
+	else if (strcmp(string, str_removable_disk) == 0)
+	{
+		return removable_disk;
+	}
+	else if (strcmp(string, str_sd_card) == 0)
+	{
+		return sd_card;
+	}
+	else
+	{
+		return unknown_or_persistent;
+	}
+}
+
+const char* dtmd_decode_label(const char *string)
+{
+	// TODO: implement
+	return NULL;
+}
+
+void dtmd_free_decoded_label(const char *label)
+{
+	if (label != NULL)
+	{
+		free((char*)label);
 	}
 }
