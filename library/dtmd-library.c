@@ -1198,7 +1198,7 @@ dtmd_list_partition_error_1:
 	return handle->result_state;
 }
 
-dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_point, const char *mount_options)
+dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_options)
 {
 	char data = 1;
 	dtmd_command_t *cmd;
@@ -1216,7 +1216,7 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 		return dtmd_invalid_state;
 	}
 
-	if ((path == NULL) || (*path == 0) || (mount_point == NULL) || (*mount_point == 0))
+	if ((path == NULL) || (*path == 0))
 	{
 		return dtmd_input_error;
 	}
@@ -1236,7 +1236,7 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 		}
 	}
 
-	if (dprintf(handle->socket_fd, "mount(\"%s\", \"%s\", %s%s%s)\n", path, mount_point,
+	if (dprintf(handle->socket_fd, "mount(\"%s\", %s%s%s)\n", path,
 		(mount_options != NULL) ? ("\"") : (""),
 		(mount_options != NULL) ? (mount_options) : ("nil"),
 		(mount_options != NULL) ? ("\"") : ("")
@@ -1264,9 +1264,8 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 			if ((handle->library_state == dtmd_state_default)
 			    && (dtmd_helper_is_helper_mount(cmd))
 			    && (strcmp(cmd->args[1], path) == 0)
-			    && (strcmp(cmd->args[2], mount_point) == 0)
-			    && (((cmd->args[3] != NULL) && (strcmp(cmd->args[3], mount_options) == 0))
-			        || ((cmd->args[3] == NULL) && (cmd->args[3] == NULL))))
+			    && (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], mount_options) == 0))
+			        || ((cmd->args[2] == NULL) && (cmd->args[2] == NULL))))
 			{
 				if (strcmp(cmd->cmd, "succeeded") == 0)
 				{
@@ -1332,7 +1331,7 @@ dtmd_mount_error_1:
 	return handle->result_state;
 }
 
-dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const char *mount_point)
+dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 {
 	char data = 1;
 	dtmd_command_t *cmd;
@@ -1350,7 +1349,7 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const 
 		return dtmd_invalid_state;
 	}
 
-	if ((path == NULL) || (*path == 0) || (mount_point == NULL) || (*mount_point == 0))
+	if ((path == NULL) || (*path == 0))
 	{
 		return dtmd_input_error;
 	}
@@ -1370,7 +1369,7 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const 
 		}
 	}
 
-	if (dprintf(handle->socket_fd, "unmount(\"%s\", \"%s\")\n", path, mount_point) < 0)
+	if (dprintf(handle->socket_fd, "unmount(\"%s\")\n", path) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_unmount_error_1;
@@ -1393,8 +1392,7 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const 
 
 			if ((handle->library_state == dtmd_state_default)
 			    && (dtmd_helper_is_helper_unmount(cmd))
-			    && (strcmp(cmd->args[1], path) == 0)
-			    && (strcmp(cmd->args[2], mount_point) == 0))
+			    && (strcmp(cmd->args[1], path) == 0))
 			{
 				if (strcmp(cmd->cmd, "succeeded") == 0)
 				{
@@ -1676,12 +1674,12 @@ static int dtmd_helper_is_helper_list_partition(dtmd_command_t *cmd)
 
 static int dtmd_helper_is_helper_mount(dtmd_command_t *cmd)
 {
-	return (cmd->args_count == 4) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL) && (strcmp(cmd->args[0], "mount") == 0);
+	return (cmd->args_count == 3) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (strcmp(cmd->args[0], "mount") == 0);
 }
 
 static int dtmd_helper_is_helper_unmount(dtmd_command_t *cmd)
 {
-	return (cmd->args_count == 3) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL) && (strcmp(cmd->args[0], "unmount") == 0);
+	return (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (strcmp(cmd->args[0], "unmount") == 0);
 }
 
 static int dtmd_helper_cmd_check_device(dtmd_command_t *cmd)

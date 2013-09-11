@@ -63,12 +63,12 @@ extern "C" {
 		or "failed" on fail
 	"mount"
 		input:
-		"path, mount_point, mount_options"
+		"path, mount_options"
 		returns:
 		"succeeded" or "failed"
 	"unmount"
 		input:
-		"path, mount_point"
+		"path"
 		returns:
 		"succeeded" or "failed"
 */

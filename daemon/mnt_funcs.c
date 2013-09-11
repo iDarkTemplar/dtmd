@@ -30,65 +30,6 @@
 #define is_mounted_now 1
 #define is_mounted_last 2
 
-/*
-int get_mount_params(const char *device, char **mount_point, char **mount_opts)
-{
-	FILE *mntfile;
-	struct mntent *ent;
-
-	*mount_point = NULL;
-	*mount_opts  = NULL;
-
-	mntfile = setmntent("/proc/mounts", "r");
-	if (mntfile == NULL)
-	{
-		return -1;
-	}
-
-	while ((ent = getmntent(mntfile)) != NULL)
-	{
-		if (strcmp(device, ent->mnt_fsname) == 0)
-		{
-			if (ent->mnt_dir != NULL)
-			{
-				*mount_point = strdup(ent->mnt_dir);
-				if ((*mount_point) == NULL)
-				{
-					endmntent(mntfile);
-
-					return -1;
-				}
-			}
-
-			if (ent->mnt_opts != NULL)
-			{
-				*mount_opts = strdup(ent->mnt_opts);
-				if ((*mount_opts) == NULL)
-				{
-					if ((*mount_point) != NULL)
-					{
-						free(*mount_point);
-						*mount_point = NULL;
-					}
-
-					endmntent(mntfile);
-
-					return -1;
-				}
-			}
-
-			endmntent(mntfile);
-
-			return 1;
-		}
-	}
-
-	endmntent(mntfile);
-
-	return 0;
-}
-*/
-
 int check_mount_changes(void)
 {
 	unsigned int i;

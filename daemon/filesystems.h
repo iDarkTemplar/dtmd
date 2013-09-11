@@ -27,6 +27,9 @@ extern "C" {
 
 int is_option_allowed(const char *fstype, const char *option);
 
+int invoke_mount(const char *path, const char *mount_options);
+int invoke_unmount(const char *path);
+
 #ifdef __cplusplus
 }
 #endif

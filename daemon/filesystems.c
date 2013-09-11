@@ -22,6 +22,17 @@
 
 #include <string.h>
 
+#include <sys/types.h>
+#include <dirent.h>
+#include <unistd.h>
+
+typedef enum dir_state
+{
+	dir_state_not_dir = 0,
+	dir_state_empty,
+	dir_state_not_empty
+} dir_state_t;
+
 struct mount_option
 {
 	const char * const option;
@@ -181,7 +192,7 @@ static const struct filesystem_options filesystem_mount_options[] =
 	}
 };
 
-const struct mount_option any_fs_allowed_list[] =
+static const struct mount_option any_fs_allowed_list[] =
 {
 	{ "exec",       0 },
 	{ "noexec",     0 },
@@ -258,6 +269,65 @@ int is_option_allowed(const char *fstype, const char *option)
 			}
 		}
 	}
+
+	return 0;
+}
+
+static dir_state_t get_dir_state(const char *dirname)
+{
+	int n = 0;
+	struct dirent *d;
+	DIR *dir;
+
+	dir = opendir(dirname);
+	if (dir == NULL)
+	{
+		return dir_state_not_dir;
+	}
+
+	while ((d = readdir(dir)) != NULL)
+	{
+		if(++n > 2)
+		{
+			break;
+		}
+	}
+
+	closedir(dir);
+
+	if (n <= 2)
+	{
+		return dir_state_empty;
+	}
+	else
+	{
+		return dir_state_not_empty;
+	}
+}
+
+int invoke_mount(const char *path, const char *mount_options)
+{
+	// TODO: implement
+	// check if there is nothing mounted in mount point
+	// check that mount options are ok
+	// check that directory is empty or create it if it doesn't exist
+	return 0;
+}
+
+int invoke_unmount(const char *path)
+{
+	//char *mount_point;
+	// TODO: implement
+
+
+
+	// check that there is exatcly one mount on mount point and it's our device
+	// check that directory is empty and remove it
+
+	//if (get_dir_state(mount_point) == dir_state_empty)
+	//{
+	//	rmdir(mount_point);
+	//}
 
 	return 0;
 }

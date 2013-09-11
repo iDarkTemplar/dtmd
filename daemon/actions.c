@@ -20,6 +20,8 @@
 
 #include "daemon/actions.h"
 
+#include "daemon/filesystems.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -33,6 +35,7 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 {
 	unsigned int i;
 	unsigned int j;
+	int rc;
 
 	if ((strcmp(cmd->cmd, "enum_all") == 0) && (cmd->args_count == 0))
 	{
@@ -106,31 +109,47 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 			dprintf(clients[client_number]->clientfd, "failed(\"list_partition\", \"%s\")\n", cmd->args[0]);
 		}
 	}
-	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
+	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
+		rc = invoke_mount(cmd->args[0], cmd->args[1]);
 
-		dprintf(clients[client_number]->clientfd, "failed(\"mount\", \"%s\", \"%s\", %s%s%s)\n",
-			cmd->args[0],
-			cmd->args[1],
-			((cmd->args[2] != NULL) ? ("\"") : ("")),
-			((cmd->args[2] != NULL) ? (cmd->args[2]) : ("nil")),
-			((cmd->args[2] != NULL) ? ("\"") : ("")));
-
-		dprintf(clients[client_number]->clientfd, "succeeded(\"mount\", \"%s\", \"%s\", %s%s%s)\n",
-			cmd->args[0],
-			cmd->args[1],
-			((cmd->args[2] != NULL) ? ("\"") : ("")),
-			((cmd->args[2] != NULL) ? (cmd->args[2]) : ("nil")),
-			((cmd->args[2] != NULL) ? ("\"") : ("")));
-
-		// TODO: implement mount
+		if (rc > 0)
+		{
+			dprintf(clients[client_number]->clientfd, "succeeded(\"mount\", \"%s\", %s%s%s)\n",
+				cmd->args[0],
+				((cmd->args[1] != NULL) ? ("\"") : ("")),
+				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
+				((cmd->args[1] != NULL) ? ("\"") : ("")));
+		}
+		else if (rc == 0)
+		{
+			dprintf(clients[client_number]->clientfd, "failed(\"mount\", \"%s\", %s%s%s)\n",
+				cmd->args[0],
+				((cmd->args[1] != NULL) ? ("\"") : ("")),
+				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
+				((cmd->args[1] != NULL) ? ("\"") : ("")));
+		}
+		else
+		{
+			return -1;
+		}
 	}
-	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
+	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		dprintf(clients[client_number]->clientfd, "failed(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
-		dprintf(clients[client_number]->clientfd, "succeeded(\"unmount\", \"%s\", \"%s\")\n", cmd->args[0], cmd->args[1]);
+		rc = invoke_unmount(cmd->args[0]);
 
-		// TODO: implement unmount
+		if (rc > 0)
+		{
+			dprintf(clients[client_number]->clientfd, "succeeded(\"unmount\", \"%s\")\n", cmd->args[0]);
+		}
+		else if (rc == 0)
+		{
+			dprintf(clients[client_number]->clientfd, "failed(\"unmount\", \"%s\")\n", cmd->args[0]);
+		}
+		else
+		{
+			return -1;
+		}
 	}
 	else
 	{

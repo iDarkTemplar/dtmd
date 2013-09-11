@@ -73,8 +73,8 @@ void dtmd_deinit(dtmd_t *handle);
 dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count, dtmd_device_t ***result);
 dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_path, dtmd_device_t **result);
 dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *partition_path, dtmd_partition_t **result);
-dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_point, const char *mount_options);
-dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path, const char *mount_point);
+dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_options);
+dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path);
 int dtmd_is_state_invalid(dtmd_t *handle);
 
 void dtmd_free_devices_array(dtmd_t *handle, unsigned int count, dtmd_device_t **devices);

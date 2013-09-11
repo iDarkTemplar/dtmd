@@ -107,8 +107,8 @@ void printUsage(char *app)
 		"\t\tenumerate\n"
 		"\t\tlist_device path\n"
 		"\t\tlist_partition path\n"
-		"\t\tmount device mount_point [ mount_options ]\n"
-		"\t\tunmount device mount_point\n"
+		"\t\tmount device [ mount_options ]\n"
+		"\t\tunmount device\n"
 		"\t\tmonitor\n", app);
 }
 
@@ -258,7 +258,7 @@ int client_list_partition(const char *path)
 	return 0;
 }
 
-int client_mount(char *device, char *mount_point, char *mount_opts)
+int client_mount(char *device, char *mount_opts)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
@@ -271,7 +271,7 @@ int client_mount(char *device, char *mount_point, char *mount_opts)
 		return -1;
 	}
 
-	result = dtmd_mount(lib, -1, device, mount_point, mount_opts);
+	result = dtmd_mount(lib, -1, device, mount_opts);
 	if (result == dtmd_ok)
 	{
 		fprintf(stdout, "Mount successful!\n");
@@ -287,7 +287,7 @@ int client_mount(char *device, char *mount_point, char *mount_opts)
 	return func_result;
 }
 
-int client_unmount(char *device, char *mount_point)
+int client_unmount(char *device)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
@@ -300,7 +300,7 @@ int client_unmount(char *device, char *mount_point)
 		return -1;
 	}
 
-	result = dtmd_unmount(lib, -1, device, mount_point);
+	result = dtmd_unmount(lib, -1, device);
 	if (result == dtmd_ok)
 	{
 		fprintf(stdout, "Unmount successful!\n");
@@ -362,13 +362,13 @@ int main(int argc, char **argv)
 	{
 		return client_list_partition(argv[2]);
 	}
-	else if (((argc == 4) || (argc == 5)) && (strcmp(argv[1], "mount") == 0))
+	else if (((argc == 3) || (argc == 4)) && (strcmp(argv[1], "mount") == 0))
 	{
-		return client_mount(argv[2], argv[3], (argc == 5) ? (argv[4]) : (NULL));
+		return client_mount(argv[2], (argc == 4) ? (argv[3]) : (NULL));
 	}
-	else if ((argc == 4) && (strcmp(argv[1], "unmount") == 0))
+	else if ((argc == 3) && (strcmp(argv[1], "unmount") == 0))
 	{
-		return client_unmount(argv[2], argv[3]);
+		return client_unmount(argv[2]);
 	}
 	else if ((argc == 2) && (strcmp(argv[1], "monitor") == 0))
 	{

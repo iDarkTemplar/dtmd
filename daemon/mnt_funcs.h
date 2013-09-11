@@ -25,10 +25,6 @@
 extern "C" {
 #endif
 
-/*
-int get_mount_params(const char *device, char **mount_point, char **mount_opts);
-*/
-
 int check_mount_changes(void);
 
 #ifdef __cplusplus
