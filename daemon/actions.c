@@ -111,7 +111,7 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_mount(cmd->args[0], cmd->args[1]);
+		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1]);
 
 		if (rc > 0)
 		{
@@ -136,7 +136,7 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_unmount(cmd->args[0]);
+		rc = invoke_unmount(client_number, cmd->args[0]);
 
 		if (rc > 0)
 		{
@@ -236,34 +236,6 @@ int notify_unmount(const char *path, const char *mount_point)
 
 	return 0;
 }
-
-// TODO: send UID/GID with SCM_CREDENTIALS
-
-//struct ucred credentials;
-//int ucred_length = sizeof(struct ucred);
-
-/* fill in the user data structure */
-/*
-if(getsockopt(connection_fd, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length))
-{
-printf("could obtain credentials from unix domain socket");
-return 1;
-}
-*/
-
-/* the process ID of the process on the other side of the socket */
-//credentials.pid;
-
-/* the effective UID of the process on the other side of the socket  */
-//credentials.uid;
-
-/* the effective primary GID of the process on the other side of the socket */
-//credentials.gid;
-
-/* To get supplemental groups, we will have to look them up in our account
-   database, after a reverse lookup on the UID to get the account name.
-   We can take this opportunity to check to see if this is a legit account.
-*/
 
 static int print_devices_count(unsigned int client_number)
 {

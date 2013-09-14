@@ -20,6 +20,8 @@
 
 #include "daemon/mnt_funcs.h"
 
+#include "daemon/dtmd-internal.h"
+
 #include "daemon/lists.h"
 #include "daemon/actions.h"
 
@@ -37,7 +39,7 @@ int check_mount_changes(void)
 	FILE *mntfile;
 	struct mntent *ent;
 
-	mntfile = setmntent("/proc/mounts", "r");
+	mntfile = setmntent(mounts_file, "r");
 	if (mntfile == NULL)
 	{
 		goto check_mount_changes_error_1;

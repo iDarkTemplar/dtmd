@@ -18,18 +18,10 @@
  *
  */
 
-#ifndef FILESYSTEMS_H
-#define FILESYSTEMS_H
+#ifndef DTMD_INTERNAL_H
+#define DTMD_INTERNAL_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define mounts_file "/proc/self/mounts"
+#define mount_dir "/media/"
 
-int invoke_mount(unsigned int client_number, const char *path, const char *mount_options);
-int invoke_unmount(unsigned int client_number, const char *path);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* FILESYSTEMS_H */
+#endif /* DTMD_INTERNAL_H */

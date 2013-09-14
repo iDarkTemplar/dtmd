@@ -32,6 +32,7 @@
 #include <errno.h>
 
 #include <dtmd.h>
+#include "daemon/dtmd-internal.h"
 #include "daemon/lists.h"
 #include "daemon/actions.h"
 #include "daemon/mnt_funcs.h"
@@ -415,7 +416,7 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	mountfd = open("/proc/self/mounts", O_RDONLY);
+	mountfd = open(mounts_file, O_RDONLY);
 	if (mountfd == -1)
 	{
 		udev_enumerate_unref(enumerate);

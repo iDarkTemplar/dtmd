@@ -24,6 +24,22 @@ set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to in
 
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
 
+message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	set (OS_LINUX true)
+	add_definitions(-DOS=Linux)
+endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+	set (OS_FREEBSD true)
+	add_definitions(-DOS=FreeBSD)
+endif (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+
+if (OS_LINUX)
+	message(STATUS "set LINUX_NO_UDEV to switch interface from udev to linux kernel")
+endif (OS_LINUX)
+
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
 	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra -Wno-unused-result -DNDEBUG")
@@ -57,6 +73,10 @@ set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
 set ( LINUX_UDEV_LIBS udev )
 
+set ( LINUX_KERNEL_SOURCES )
+set ( LINUX_KERNEL_HEADERS )
+set ( LINUX_KERNEL_LIBS )
+
 set ( MISC_LIBRARY_SOURCES library/dtmd-misc.c )
 set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
 
@@ -64,12 +84,12 @@ set ( LIBRARY_SOURCES library/dtmd-library.c )
 set ( LIBRARY_HEADERS library/dtmd-library.h dtmd.h )
 set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} )
 
-if (UNIX AND NOT APPLE)
+if (OS_LINUX)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
-endif (UNIX AND NOT APPLE)
+endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/lists.h daemon/mnt_funcs.h )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/lists.h daemon/mnt_funcs.h daemon/dtmd-internal.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -82,10 +102,21 @@ set ( LIBRARY_HEADERS ${LIBRARY_HEADERS} )
 set ( DAEMON_SOURCES ${DAEMON_SOURCES} )
 set ( DAEMON_HEADERS ${DAEMON_HEADERS} )
 
-set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
-set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
-set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
-add_definitions(-DSUBSYSTEM_LINUX_UDEV)
+if (OS_LINUX)
+	if (LINUX_NO_UDEV)
+		set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_KERNEL_SOURCES} )
+		set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_KERNEL_HEADERS} )
+		set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_KERNEL_LIBS} )
+		add_definitions(-DSUBSYSTEM_LINUX_KERNEL)
+		message(STATUS "Linux Subsystem: kernel")
+	else (LINUX_NO_UDEV)
+		set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
+		set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
+		set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
+		add_definitions(-DSUBSYSTEM_LINUX_UDEV)
+		message(STATUS "Linux Subsystem: udev")
+	endif (LINUX_NO_UDEV)
+endif (OS_LINUX)
 
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
 target_link_libraries( dtmd-misc )
