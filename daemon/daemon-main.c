@@ -708,6 +708,7 @@ int main(int argc, char **argv)
 
 				clients[j]->buf_used += rc;
 				clients[j]->buf[clients[j]->buf_used] = 0;
+				result = 1;
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
@@ -715,6 +716,7 @@ int main(int argc, char **argv)
 					if (cmd == NULL)
 					{
 						remove_client(pollfds[i].fd);
+						result = 0;
 						break;
 					}
 
@@ -723,6 +725,7 @@ int main(int argc, char **argv)
 					if (rc < 0)
 					{
 						remove_client(pollfds[i].fd);
+						result = 0;
 						break;
 					}
 
@@ -730,7 +733,7 @@ int main(int argc, char **argv)
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used + 1);
 				}
 
-				if (clients[j]->buf_used == dtmd_command_max_length)
+				if ((result) && (clients[j]->buf_used == dtmd_command_max_length))
 				{
 					remove_client(pollfds[i].fd);
 					continue;

@@ -28,6 +28,9 @@ extern "C" {
 int check_mount_changes(void);
 int point_mount_count(const char *path, int max);
 
+int add_to_mtab(char *path, char *mount_point, char *type, char *mount_opts);
+int remove_from_mtab(const char *path, const char *mount_point, const char *type);
+
 #ifdef __cplusplus
 }
 #endif

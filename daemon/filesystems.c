@@ -353,10 +353,15 @@ int invoke_mount(unsigned int client_number, const char *path, const char *mount
 	const struct string_to_mount_flag *mntflagslist;
 
 	unsigned long mount_flags = 0;
+	char *mount_dir = NULL;
+
 	char *mount_opts = NULL;
 	unsigned int mount_opts_len = 0;
 	unsigned int mount_opts_len_cur = 0;
-	char *mount_dir = NULL;
+
+	char *mount_all_opts = NULL;
+	unsigned int mount_all_opts_len = 0;
+	unsigned int mount_all_opts_len_cur = 0;
 
 	const char *opt_start;
 	const char *opt_end;
@@ -463,12 +468,10 @@ invoke_mount_exit_loop:
 			++mount_opts_len_cur;
 		}
 
-		opt_start = opt_end;
-	}
+		mount_all_opts_len += opt_len;
+		++mount_all_opts_len_cur;
 
-	if (mount_opts_len_cur > 1)
-	{
-		mount_opts_len += mount_opts_len_cur - 1;
+		opt_start = opt_end;
 	}
 
 	// add uid/gid
@@ -489,12 +492,11 @@ invoke_mount_exit_loop:
 				goto invoke_mount_error_1;
 			}
 
-			if (mount_opts_len != 0)
-			{
-				++mount_opts_len;
-			}
-
 			mount_opts_len += strlen(fsopts->option_uid) + result;
+			++mount_opts_len_cur;
+
+			mount_all_opts_len += strlen(fsopts->option_uid) + result;
+			++mount_all_opts_len_cur;
 		}
 
 		if (fsopts->option_gid != NULL)
@@ -506,26 +508,46 @@ invoke_mount_exit_loop:
 				goto invoke_mount_error_1;
 			}
 
-			if (mount_opts_len != 0)
-			{
-				++mount_opts_len;
-			}
-
 			mount_opts_len += strlen(fsopts->option_gid) + result;
+			++mount_opts_len_cur;
+
+			mount_all_opts_len += strlen(fsopts->option_gid) + result;
+			++mount_all_opts_len_cur;
 		}
 	}
 
-	// create flags string
-	if (mount_opts_len > 0)
+	if (mount_opts_len_cur > 1)
 	{
-		mount_opts = (char*) malloc(mount_opts_len+1);
-		if (mount_opts == NULL)
+		mount_opts_len += mount_opts_len_cur - 1;
+	}
+
+	if (mount_all_opts_len_cur > 1)
+	{
+		mount_all_opts_len += mount_all_opts_len_cur - 1;
+	}
+
+	// create flags and string
+	if (mount_all_opts_len > 0)
+	{
+		if (mount_opts_len > 0)
+		{
+			mount_opts = (char*) malloc(mount_opts_len+1);
+			if (mount_opts == NULL)
+			{
+				result = -1;
+				goto invoke_mount_error_1;
+			}
+		}
+
+		mount_all_opts = (char*) malloc(mount_all_opts_len+1);
+		if (mount_all_opts == NULL)
 		{
 			result = -1;
-			goto invoke_mount_error_1;
+			goto invoke_mount_error_2;
 		}
 
 		mount_opts_len_cur = 0;
+		mount_all_opts_len_cur = 0;
 		opt_start = mount_options;
 
 		while (opt_start != NULL)
@@ -542,19 +564,7 @@ invoke_mount_exit_loop:
 				opt_len = strlen(opt_start);
 			}
 
-			if (opt_len == 0)
-			{
-				result = 0;
-				goto invoke_mount_error_2;
-			}
-
-			// check option
-			if (!is_option_allowed(opt_start, opt_len, fsopts))
-			{
-				result = 0;
-				goto invoke_mount_error_2;
-			}
-
+			// mount options
 			mntflagslist = string_to_mount_flag_list;
 			while (mntflagslist->option != NULL)
 			{
@@ -590,12 +600,23 @@ invoke_mount_exit_loop:
 				}
 			}
 
+			// all mount options
+			if (mount_all_opts_len_cur != 0)
+			{
+				mount_all_opts[mount_all_opts_len_cur] = ',';
+				++mount_all_opts_len_cur;
+			}
+
+			memcpy(&mount_all_opts[mount_all_opts_len_cur], opt_start, opt_len);
+			mount_all_opts_len_cur += opt_len;
+
 			opt_start = opt_end;
 		}
 
 		// add uid/gid
 		if (fsopts->option_uid != NULL)
 		{
+			// mount options
 			if (mount_opts_len_cur != 0)
 			{
 				mount_opts[mount_opts_len_cur] = ',';
@@ -615,10 +636,32 @@ invoke_mount_exit_loop:
 			}
 
 			mount_opts_len_cur += result;
+
+			// all mount options
+			if (mount_all_opts_len_cur != 0)
+			{
+				mount_all_opts[mount_all_opts_len_cur] = ',';
+				++mount_all_opts_len_cur;
+			}
+
+			result = strlen(fsopts->option_uid);
+
+			memcpy(&mount_all_opts[mount_all_opts_len_cur], fsopts->option_uid, result);
+			mount_all_opts_len_cur += result;
+
+			result = snprintf(&mount_all_opts[mount_all_opts_len_cur], mount_all_opts_len + mount_all_opts_len_cur + 1, "%d", uid);
+			if (result < 1)
+			{
+				result = -1;
+				goto invoke_mount_error_2;
+			}
+
+			mount_all_opts_len_cur += result;
 		}
 
 		if (fsopts->option_gid != NULL)
 		{
+			// mount options
 			if (mount_opts_len_cur != 0)
 			{
 				mount_opts[mount_opts_len_cur] = ',';
@@ -638,9 +681,32 @@ invoke_mount_exit_loop:
 			}
 
 			mount_opts_len_cur += result;
+
+			// all mount options
+			if (mount_all_opts_len_cur != 0)
+			{
+				mount_all_opts[mount_all_opts_len_cur] = ',';
+				++mount_all_opts_len_cur;
+			}
+
+			result = strlen(fsopts->option_gid);
+
+			memcpy(&mount_all_opts[mount_all_opts_len_cur], fsopts->option_gid, result);
+			mount_all_opts_len_cur += result;
+
+			result = snprintf(&mount_all_opts[mount_all_opts_len_cur], mount_all_opts_len + mount_all_opts_len_cur + 1, "%d", gid);
+			if (result < 1)
+			{
+				result = -1;
+				goto invoke_mount_error_2;
+			}
+
+			mount_all_opts_len_cur += result;
+
 		}
 
 		mount_opts[mount_opts_len_cur] = 0;
+		mount_all_opts[mount_all_opts_len_cur] = 0;
 	}
 
 	// calculate mount point
@@ -704,6 +770,23 @@ invoke_mount_exit_loop:
 
 	result = mount(media[dev]->partition[part]->path, mount_dir, media[dev]->partition[part]->type, mount_flags, mount_opts);
 
+	if (result == 0)
+	{
+		result = add_to_mtab(media[dev]->partition[part]->path, mount_dir, media[dev]->partition[part]->type, mount_all_opts);
+		if (result == 1)
+		{
+			result = 1;
+		}
+		else
+		{
+			result = -1;
+		}
+	}
+	else
+	{
+		result = 0;
+	}
+
 	free(mount_dir);
 
 	if (mount_opts != NULL)
@@ -711,15 +794,9 @@ invoke_mount_exit_loop:
 		free(mount_opts);
 	}
 
-	// TODO: modify /etc/mtab
-
-	if (result == 0)
+	if (mount_all_opts != NULL)
 	{
-		result = 1;
-	}
-	else
-	{
-		result = 0;
+		free(mount_all_opts);
 	}
 
 	return result;
@@ -728,6 +805,11 @@ invoke_mount_error_3:
 	free(mount_dir);
 
 invoke_mount_error_2:
+	if (mount_all_opts != NULL)
+	{
+		free(mount_all_opts);
+	}
+
 	if (mount_opts != NULL)
 	{
 		free(mount_opts);
@@ -788,12 +870,16 @@ invoke_unmount_exit_loop:
 		return 0;
 	}
 
-	// TODO: modify /etc/mtab
+	result = remove_from_mtab(path, mnt_point, media[dev]->partition[part]->type);
+	if (result != 1)
+	{
+		result = -1;
+	}
 
 	if (get_dir_state(mnt_point) == dir_state_empty)
 	{
-		rmdir(media[dev]->partition[part]->mnt_point);
+		rmdir(mnt_point);
 	}
 
-	return 1;
+	return result;
 }

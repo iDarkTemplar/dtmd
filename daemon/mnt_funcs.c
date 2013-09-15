@@ -28,6 +28,9 @@
 #include <mntent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <stdio.h>
 
 #define is_mounted_now 1
 #define is_mounted_last 2
@@ -183,4 +186,103 @@ int point_mount_count(const char *path, int max)
 	endmntent(mntfile);
 
 	return result;
+}
+
+int add_to_mtab(char *path, char *mount_point, char *type, char *mount_opts)
+{
+	int result;
+	FILE *mntfile;
+	struct mntent ent;
+
+	mntfile = setmntent(dtmd_internal_mtab_file, "a");
+	if (mntfile == NULL)
+	{
+		return -1;
+	}
+
+	ent.mnt_dir    = mount_point;
+	ent.mnt_fsname = path;
+	ent.mnt_type   = type;
+	ent.mnt_opts   = mount_opts;
+	ent.mnt_freq   = 0;
+	ent.mnt_passno = 0;
+
+	result = addmntent(mntfile, &ent);
+
+	endmntent(mntfile);
+
+	if (result == 0)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+int remove_from_mtab(const char *path, const char *mount_point, const char *type)
+{
+	FILE *mntfile_old;
+	FILE *mntfile_new;
+	struct mntent *ent;
+	struct stat stats;
+
+	mntfile_old = setmntent(dtmd_internal_mtab_file, "r");
+	if (mntfile_old == NULL)
+	{
+		return -1;
+	}
+
+	mntfile_new = setmntent(dtmd_internal_mtab_temporary, "w");
+	if (mntfile_new == NULL)
+	{
+		endmntent(mntfile_old);
+		return -1;
+	}
+
+	while ((ent = getmntent(mntfile_old)) != NULL)
+	{
+		if ((strcmp(ent->mnt_dir, mount_point) != 0)
+			|| (strcmp(ent->mnt_fsname, path) != 0)
+			|| (strcmp(ent->mnt_type, type) != 0))
+		{
+			if (addmntent(mntfile_new, ent) != 0)
+			{
+				endmntent(mntfile_old);
+				endmntent(mntfile_new);
+				unlink(dtmd_internal_mtab_temporary);
+				return -1;
+			}
+		}
+	}
+
+	endmntent(mntfile_old);
+	endmntent(mntfile_new);
+
+	if (stat(dtmd_internal_mtab_file, &stats) != 0)
+	{
+		unlink(dtmd_internal_mtab_temporary);
+		return -1;
+	}
+
+	if (chmod(dtmd_internal_mtab_temporary, stats.st_mode) != 0)
+	{
+		unlink(dtmd_internal_mtab_temporary);
+		return -1;
+	}
+
+	if (chown(dtmd_internal_mtab_temporary, stats.st_uid, stats.st_gid) != 0)
+	{
+		unlink(dtmd_internal_mtab_temporary);
+		return -1;
+	}
+
+	if (rename(dtmd_internal_mtab_temporary, dtmd_internal_mtab_file) != 0)
+	{
+		unlink(dtmd_internal_mtab_temporary);
+		return -1;
+	}
+
+	return 1;
 }

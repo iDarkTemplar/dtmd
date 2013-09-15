@@ -22,6 +22,8 @@
 #define DTMD_INTERNAL_H
 
 #define dtmd_internal_mounts_file "/proc/self/mounts"
-#define dtmd_internal_mount_dir "/media/"
+#define dtmd_internal_mount_dir "/media"
+#define dtmd_internal_mtab_file "/etc/mtab"
+#define dtmd_internal_mtab_temporary "/etc/.mtab.dtmd"
 
 #endif /* DTMD_INTERNAL_H */
