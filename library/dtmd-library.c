@@ -532,25 +532,15 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count
 
 					result_devices[result_count-1]->partition[partition]->path      = cmd->args[0];
 					result_devices[result_count-1]->partition[partition]->type      = cmd->args[1];
-					result_devices[result_count-1]->partition[partition]->label     = NULL;
+					result_devices[result_count-1]->partition[partition]->label     = cmd->args[2];
 					result_devices[result_count-1]->partition[partition]->mnt_point = cmd->args[4];
 					result_devices[result_count-1]->partition[partition]->mnt_opts  = cmd->args[5];
 
 					cmd->args[0] = NULL;
 					cmd->args[1] = NULL;
+					cmd->args[2] = NULL;
 					cmd->args[4] = NULL;
 					cmd->args[5] = NULL;
-
-					if (cmd->args[2] != NULL)
-					{
-						result_devices[result_count-1]->partition[partition]->label = dtmd_decode_label(cmd->args[2]);
-						if (result_devices[result_count-1]->partition[partition]->label == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_label_decoding_error;
-							goto dtmd_enum_all_error_1;
-						}
-					}
 				}
 				else
 				{
@@ -853,25 +843,15 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 
 					result_device->partition[partition]->path      = cmd->args[0];
 					result_device->partition[partition]->type      = cmd->args[1];
-					result_device->partition[partition]->label     = NULL;
+					result_device->partition[partition]->label     = cmd->args[2];
 					result_device->partition[partition]->mnt_point = cmd->args[4];
 					result_device->partition[partition]->mnt_opts  = cmd->args[5];
 
 					cmd->args[0] = NULL;
 					cmd->args[1] = NULL;
+					cmd->args[2] = NULL;
 					cmd->args[4] = NULL;
 					cmd->args[5] = NULL;
-
-					if (cmd->args[2] != NULL)
-					{
-						result_device->partition[partition]->label = dtmd_decode_label(cmd->args[2]);
-						if (result_device->partition[partition]->label == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_label_decoding_error;
-							goto dtmd_list_device_error_1;
-						}
-					}
 				}
 				else
 				{
@@ -1074,25 +1054,15 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 
 					result_partition->path      = cmd->args[0];
 					result_partition->type      = cmd->args[1];
-					result_partition->label     = NULL;
+					result_partition->label     = cmd->args[2];
 					result_partition->mnt_point = cmd->args[4];
 					result_partition->mnt_opts  = cmd->args[5];
 
 					cmd->args[0] = NULL;
 					cmd->args[1] = NULL;
+					cmd->args[2] = NULL;
 					cmd->args[4] = NULL;
 					cmd->args[5] = NULL;
-
-					if (cmd->args[2] != NULL)
-					{
-						result_partition->label = dtmd_decode_label(cmd->args[2]);
-						if (result_partition->label == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_label_decoding_error;
-							goto dtmd_list_partition_error_1;
-						}
-					}
 				}
 				else
 				{
@@ -1731,7 +1701,7 @@ static void dtmd_helper_free_partition(dtmd_partition_t *partition)
 
 	if (partition->label != NULL)
 	{
-		dtmd_free_decoded_label(partition->label);
+		free(partition->label);
 	}
 
 	if (partition->mnt_point != NULL)

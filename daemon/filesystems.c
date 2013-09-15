@@ -20,7 +20,9 @@
 
 #include "daemon/filesystems.h"
 
+#include "daemon/dtmd-internal.h"
 #include "daemon/lists.h"
+#include "daemon/mnt_funcs.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -29,6 +31,7 @@
 #include <unistd.h>
 #include <sys/mount.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 #if OS == Linux
 #define __USE_GNU
@@ -353,11 +356,13 @@ int invoke_mount(unsigned int client_number, const char *path, const char *mount
 	char *mount_opts = NULL;
 	unsigned int mount_opts_len = 0;
 	unsigned int mount_opts_len_cur = 0;
+	char *mount_dir = NULL;
 
 	const char *opt_start;
 	const char *opt_end;
 	unsigned int opt_len;
 	int result;
+
 #if OS == Linux
 	uid_t uid;
 	gid_t gid;
@@ -376,6 +381,12 @@ int invoke_mount(unsigned int client_number, const char *path, const char *mount
 
 invoke_mount_exit_loop:
 	if (dev >= media_count)
+	{
+		result = 0;
+		goto invoke_mount_error_1;
+	}
+
+	if (media[dev]->partition[part]->mnt_point != NULL)
 	{
 		result = 0;
 		goto invoke_mount_error_1;
@@ -449,15 +460,15 @@ invoke_mount_exit_loop:
 		if (mntflagslist->option == NULL)
 		{
 			mount_opts_len += opt_len;
-			++mount_flags;
+			++mount_opts_len_cur;
 		}
 
 		opt_start = opt_end;
 	}
 
-	if (mount_flags > 1)
+	if (mount_opts_len_cur > 1)
 	{
-		mount_opts_len += mount_flags - 1;
+		mount_opts_len += mount_opts_len_cur - 1;
 	}
 
 	// add uid/gid
@@ -514,7 +525,7 @@ invoke_mount_exit_loop:
 			goto invoke_mount_error_1;
 		}
 
-		mount_flags = 0;
+		mount_opts_len_cur = 0;
 		opt_start = mount_options;
 
 		while (opt_start != NULL)
@@ -630,21 +641,97 @@ invoke_mount_exit_loop:
 		}
 
 		mount_opts[mount_opts_len_cur] = 0;
+	}
 
-		printf("flags: %lu\nopts: %s\ndefs: %s\n", mount_flags, mount_opts, fsopts->defaults);
+	// calculate mount point
+	opt_start = strrchr(media[dev]->partition[part]->path, '/');
+	if (opt_start == NULL)
+	{
+		result = -1;
+		goto invoke_mount_error_2;
+	}
+
+	++opt_start;
+	mount_opts_len = strlen(opt_start);
+
+	if (mount_opts_len == 0)
+	{
+		result = -1;
+		goto invoke_mount_error_2;
+	}
+
+	mount_opts_len_cur = strlen(dtmd_internal_mount_dir);
+	mount_opts_len += mount_opts_len_cur + 1;
+
+
+	mount_dir = (char*) malloc(mount_opts_len + 1);
+	if (mount_dir == NULL)
+	{
+		result = -1;
+		goto invoke_mount_error_2;
+	}
+
+	memcpy(mount_dir, dtmd_internal_mount_dir, mount_opts_len_cur);
+	mount_dir[mount_opts_len_cur] = '/';
+	memcpy(&mount_dir[mount_opts_len_cur + 1], opt_start, mount_opts_len - mount_opts_len_cur - 1);
+	mount_dir[mount_opts_len] = 0;
+
+	// check mount point
+	result = point_mount_count(mount_dir, 1);
+	if (result != 0)
+	{
+		if (result < 0)
+		{
+			result = -1;
+		}
+		else
+		{
+			result = 0;
+		}
+
+		goto invoke_mount_error_3;
+	}
+
+	if (get_dir_state(mount_dir) == dir_state_not_dir)
+	{
+		result = mkdir(mount_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+		if (result != 0)
+		{
+			result = 0;
+			goto invoke_mount_error_3;
+		}
+	}
+
+	result = mount(media[dev]->partition[part]->path, mount_dir, media[dev]->partition[part]->type, mount_flags, mount_opts);
+
+	free(mount_dir);
+
+	if (mount_opts != NULL)
+	{
 		free(mount_opts);
 	}
 
-	return 0;
+	// TODO: modify /etc/mtab
 
-	// check that it's not already mounted
-	// check if there is nothing mounted in mount point
-	// check that directory is empty or create it if it doesn't exist
+	if (result == 0)
+	{
+		result = 1;
+	}
+	else
+	{
+		result = 0;
+	}
 
-	return 1;
+	return result;
+
+invoke_mount_error_3:
+	free(mount_dir);
 
 invoke_mount_error_2:
-	free(mount_opts);
+	if (mount_opts != NULL)
+	{
+		free(mount_opts);
+	}
 
 invoke_mount_error_1:
 	return result;
@@ -652,18 +739,61 @@ invoke_mount_error_1:
 
 int invoke_unmount(unsigned int client_number, const char *path)
 {
-	//char *mount_point;
-	// TODO: implement
+	unsigned int dev, part;
+	int result;
+	char *mnt_point;
 
+	for (dev = 0; dev < media_count; ++dev)
+	{
+		for (part = 0; part < media[dev]->partitions_count; ++part)
+		{
+			if (strcmp(media[dev]->partition[part]->path, path) == 0)
+			{
+				goto invoke_unmount_exit_loop;
+			}
+		}
+	}
 
+invoke_unmount_exit_loop:
+	if (dev >= media_count)
+	{
+		return 0;
+	}
 
-	// check that there is exactly one mount on mount point and it's our device
-	// check that directory is empty and remove it
+	mnt_point = media[dev]->partition[part]->mnt_point;
 
-	//if (get_dir_state(mount_point) == dir_state_empty)
-	//{
-	//	rmdir(mount_point);
-	//}
+	if (mnt_point == NULL)
+	{
+		return 0;
+	}
 
-	return 0;
+	result = point_mount_count(mnt_point, 2);
+	if (result != 1)
+	{
+		if (result < 0)
+		{
+			return -1;
+		}
+		else
+		{
+			return 0;
+		}
+	}
+
+	// TODO: check that it's original mounter who requests unmount or root?
+
+	result = umount(mnt_point);
+	if (result != 0)
+	{
+		return 0;
+	}
+
+	// TODO: modify /etc/mtab
+
+	if (get_dir_state(mnt_point) == dir_state_empty)
+	{
+		rmdir(media[dev]->partition[part]->mnt_point);
+	}
+
+	return 1;
 }

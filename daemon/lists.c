@@ -20,6 +20,8 @@
 
 #include "daemon/lists.h"
 
+#include "daemon/label.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -186,7 +188,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 
 			if (label != NULL)
 			{
-				cur_partition->label = strdup(label);
+				cur_partition->label = decode_label(label);
 				if (cur_partition->label == NULL)
 				{
 					free(cur_partition->type);

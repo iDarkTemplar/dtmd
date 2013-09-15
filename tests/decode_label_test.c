@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <dtmd-misc.h>
+#include "daemon/label.h"
 #include "tests/dt_tests.h"
 
 void print_and_free(char *orig, char *label, char *expected)
@@ -62,7 +62,7 @@ void print_and_free(char *orig, char *label, char *expected)
 
 		printf("\n");
 
-		dtmd_free_decoded_label(label);
+		free(label);
 	}
 	else
 	{
@@ -96,10 +96,10 @@ int main(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 
-	test_compare((label_result1 = dtmd_decode_label(label_test1)) == NULL);
-	test_compare(((label_result2 = dtmd_decode_label(label_test2)) != NULL) && (strcmp(label_result2, label_expected_result2) == 0));
-	test_compare((label_result3 = dtmd_decode_label(label_test3)) == NULL);
-	test_compare((label_result4 = dtmd_decode_label(label_test4)) == NULL);
+	test_compare((label_result1 = decode_label(label_test1)) == NULL);
+	test_compare(((label_result2 = decode_label(label_test2)) != NULL) && (strcmp(label_result2, label_expected_result2) == 0));
+	test_compare((label_result3 = decode_label(label_test3)) == NULL);
+	test_compare((label_result4 = decode_label(label_test4)) == NULL);
 
 	print_and_free(label_test1, label_result1, label_expected_result1);
 	print_and_free(label_test2, label_result2, label_expected_result2);

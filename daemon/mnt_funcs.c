@@ -39,7 +39,7 @@ int check_mount_changes(void)
 	FILE *mntfile;
 	struct mntent *ent;
 
-	mntfile = setmntent(mounts_file, "r");
+	mntfile = setmntent(dtmd_internal_mounts_file, "r");
 	if (mntfile == NULL)
 	{
 		goto check_mount_changes_error_1;
@@ -154,4 +154,33 @@ check_mount_changes_error_2:
 
 check_mount_changes_error_1:
 	return -1;
+}
+
+int point_mount_count(const char *path, int max)
+{
+	int result = 0;
+	FILE *mntfile;
+	struct mntent *ent;
+
+	mntfile = setmntent(dtmd_internal_mounts_file, "r");
+	if (mntfile == NULL)
+	{
+		return -1;
+	}
+
+	while ((ent = getmntent(mntfile)) != NULL)
+	{
+		if (strcmp(ent->mnt_dir, path) == 0)
+		{
+			++result;
+			if ((max > 0) && (result == max))
+			{
+				break;
+			}
+		}
+	}
+
+	endmntent(mntfile);
+
+	return result;
 }

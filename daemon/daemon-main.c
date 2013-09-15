@@ -43,27 +43,10 @@
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
+#define DTMD_INVERTED_SOCKET_MASK 0
+
 /*
-	partitions = enumerate partitions + parent
-
-	listen to partitions and check if they have removable parent?
-
-	removable media = removable parent + partitions
-		type = SUBSYSTEM / DEVTYPE
-		removable media = block/disk + ATTRS{removable}=="1"
-		partition = block/partition + removable media parent
-
 	ATTR{events}=="media_change eject_request"
-
-	ID_FS_LABEL=BEAST_MODE
-	ID_FS_LABEL_ENC=BEAST\x20MODE
-	ID_FS_TYPE=vfat
-
-	LABEL_ENC decoding
-
-	monitor:
-		device add/remove
-		partition mount/unmount
 */
 
 /*
@@ -267,7 +250,7 @@ int main(int argc, char **argv)
 
 	check_lock_file();
 
-	lockfd = open(dtmd_daemon_lock, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+	lockfd = open(dtmd_daemon_lock, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	if (lockfd == -1)
 	{
 		fprintf(stderr, "Error obtaining lock file\n");
@@ -276,7 +259,7 @@ int main(int argc, char **argv)
 	}
 
 	unlink(sockaddr.sun_path);
-	def_mask = umask(S_IRWXG | S_IRWXO);
+	def_mask = umask(DTMD_INVERTED_SOCKET_MASK);
 	rc = bind(socketfd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un));
 	umask(def_mask);
 
@@ -416,7 +399,7 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	mountfd = open(mounts_file, O_RDONLY);
+	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
 	if (mountfd == -1)
 	{
 		udev_enumerate_unref(enumerate);
@@ -770,6 +753,7 @@ int main(int argc, char **argv)
 	}
 
 exit_8:
+	// TODO: unmount all media on exit?
 	free(pollfds);
 
 exit_7:

@@ -88,8 +88,8 @@ if (OS_LINUX)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
 endif (OS_LINUX)
 
-set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/lists.h daemon/mnt_funcs.h daemon/dtmd-internal.h )
+set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/dtmd-internal.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -135,8 +135,8 @@ ENABLE_TESTING()
 set (TEST_SOURCES_commands tests/commands_test.c tests/dt_tests.h)
 set (TEST_LIBS_commands dtmd-misc)
 
-set (TEST_SOURCES_decode_label tests/decode_label_test.c tests/dt_tests.h)
-set (TEST_LIBS_decode_label dtmd-misc)
+set (TEST_SOURCES_decode_label daemon/label.c tests/decode_label_test.c tests/dt_tests.h)
+set (TEST_LIBS_decode_label )
 
 set (ALL_TESTS commands decode_label)
 foreach (CURRENT_TEST ${ALL_TESTS})

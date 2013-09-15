@@ -26,6 +26,7 @@ extern "C" {
 #endif
 
 int check_mount_changes(void);
+int point_mount_count(const char *path, int max);
 
 #ifdef __cplusplus
 }

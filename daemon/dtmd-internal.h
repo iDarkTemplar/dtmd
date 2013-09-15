@@ -21,7 +21,7 @@
 #ifndef DTMD_INTERNAL_H
 #define DTMD_INTERNAL_H
 
-#define mounts_file "/proc/self/mounts"
-#define mount_dir "/media/"
+#define dtmd_internal_mounts_file "/proc/self/mounts"
+#define dtmd_internal_mount_dir "/media/"
 
 #endif /* DTMD_INTERNAL_H */
