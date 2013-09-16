@@ -729,7 +729,6 @@ invoke_mount_exit_loop:
 	mount_opts_len_cur = strlen(dtmd_internal_mount_dir);
 	mount_opts_len += mount_opts_len_cur + 1;
 
-
 	mount_dir = (char*) malloc(mount_opts_len + 1);
 	if (mount_dir == NULL)
 	{
@@ -763,6 +762,7 @@ invoke_mount_exit_loop:
 		result = mkdir(mount_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 		if (result != 0)
 		{
+			// NOTE: failing to create directory is non-fatal error
 			result = 0;
 			goto invoke_mount_error_3;
 		}
@@ -779,7 +779,8 @@ invoke_mount_exit_loop:
 		}
 		else
 		{
-			result = -1;
+			// NOTE: failing to modify /etc/mtab is non-fatal error
+			result = 0;
 		}
 	}
 	else
@@ -873,7 +874,8 @@ invoke_unmount_exit_loop:
 	result = remove_from_mtab(path, mnt_point, media[dev]->partition[part]->type);
 	if (result != 1)
 	{
-		result = -1;
+		// NOTE: failing to modify /etc/mtab is non-fatal error
+		result = 0;
 	}
 
 	if (get_dir_state(mnt_point) == dir_state_empty)

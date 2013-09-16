@@ -54,6 +54,8 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 		}
 
 		dprintf(clients[client_number]->clientfd, "finished(\"enum_all\")\n");
+
+		return 1;
 	}
 	else if ((strcmp(cmd->cmd, "list_device") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
@@ -77,10 +79,14 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 			}
 
 			dprintf(clients[client_number]->clientfd, "finished(\"list_device\", \"%s\")\n", cmd->args[0]);
+
+			return 1;
 		}
 		else
 		{
 			dprintf(clients[client_number]->clientfd, "failed(\"list_device\", \"%s\")\n", cmd->args[0]);
+
+			return 0;
 		}
 	}
 	else if ((strcmp(cmd->cmd, "list_partition") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
@@ -103,10 +109,14 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 			dprintf(clients[client_number]->clientfd, "started(\"list_partition\", \"%s\")\n", cmd->args[0]);
 			print_partition(client_number, i, j);
 			dprintf(clients[client_number]->clientfd, "finished(\"list_partition\", \"%s\")\n", cmd->args[0]);
+
+			return 1;
 		}
 		else
 		{
 			dprintf(clients[client_number]->clientfd, "failed(\"list_partition\", \"%s\")\n", cmd->args[0]);
+
+			return 0;
 		}
 	}
 	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
@@ -129,10 +139,8 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
 				((cmd->args[1] != NULL) ? ("\"") : ("")));
 		}
-		else
-		{
-			return -1;
-		}
+
+		return rc;
 	}
 	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
@@ -146,17 +154,13 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 		{
 			dprintf(clients[client_number]->clientfd, "failed(\"unmount\", \"%s\")\n", cmd->args[0]);
 		}
-		else
-		{
-			return -1;
-		}
+
+		return rc;
 	}
 	else
 	{
-		return -1;
+		return 0;
 	}
-
-	return 0;
 }
 
 int notify_add_disk(const char *path, dtmd_removable_media_type_t type)

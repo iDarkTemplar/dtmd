@@ -29,6 +29,87 @@ static const char *str_cdrom                 = dtmd_string_device_cdrom;
 static const char *str_removable_disk        = dtmd_string_device_removable_disk;
 static const char *str_sd_card               = dtmd_string_device_sd_card;
 
+int dtmd_validate_command(char *buffer)
+{
+	char *cur;
+	int i;
+
+	cur = buffer;
+	i   = 0;
+
+	for (;;)
+	{
+		if ((!isalnum(*cur)) && ((*cur) != '_'))
+		{
+			if (((*cur) == '(') && (i != 0))
+			{
+				break;
+			}
+			else
+			{
+				return 0;
+			}
+		}
+
+		++i;
+		++cur;
+	}
+
+	++cur;
+
+	if (((*cur) == ')') && ((*(cur+1)) == '\n'))
+	{
+		return 1;
+	}
+
+	for (;;)
+	{
+		if ((*cur) == '\"')
+		{
+			++cur;
+
+			for (;;)
+			{
+				if (((*cur) == '\n') || ((*cur) == 0))
+				{
+					return 0;
+				}
+
+				if ((*cur) == '\"')
+				{
+					break;
+				}
+
+				++cur;
+			}
+
+			++cur;
+		}
+		else if (((*cur) == 'n') && ((*(cur+1)) == 'i') && ((*(cur+2)) == 'l'))
+		{
+			cur += 3;
+		}
+		else
+		{
+			return 0;
+		}
+
+		if (((*cur) != ',') || ((*(cur+1)) != ' '))
+		{
+			break;
+		}
+
+		cur += 2;
+	}
+
+	if (((*cur) == ')') && ((*(cur+1)) == '\n'))
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
 dtmd_command_t* dtmd_parse_command(char *buffer)
 {
 	char *cur;

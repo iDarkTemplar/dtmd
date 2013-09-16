@@ -712,21 +712,27 @@ int main(int argc, char **argv)
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
-					cmd = dtmd_parse_command(clients[j]->buf);
-					if (cmd == NULL)
+					rc = dtmd_validate_command(clients[j]->buf);
+					if (!rc)
 					{
 						remove_client(pollfds[i].fd);
 						result = 0;
 						break;
 					}
 
+					cmd = dtmd_parse_command(clients[j]->buf);
+					if (cmd == NULL)
+					{
+						result = -1;
+						goto exit_8;
+					}
+
 					rc = invoke_command(j, cmd);
 					dtmd_free_command(cmd);
 					if (rc < 0)
 					{
-						remove_client(pollfds[i].fd);
-						result = 0;
-						break;
+						result = -1;
+						goto exit_8;
 					}
 
 					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);

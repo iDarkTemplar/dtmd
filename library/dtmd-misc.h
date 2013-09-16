@@ -34,6 +34,7 @@ typedef struct dtmd_command
 	char **args;
 } dtmd_command_t;
 
+int dtmd_validate_command(char *buffer);
 dtmd_command_t* dtmd_parse_command(char *buffer);
 void dtmd_free_command(dtmd_command_t *cmd);
 
