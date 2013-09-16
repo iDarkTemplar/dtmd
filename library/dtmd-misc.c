@@ -253,7 +253,7 @@ parse_command_error_1:
 
 void dtmd_free_command(dtmd_command_t *cmd)
 {
-	int i;
+	unsigned int i;
 
 	if (cmd != NULL)
 	{

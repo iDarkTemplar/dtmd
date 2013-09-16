@@ -30,7 +30,7 @@ extern "C" {
 typedef struct dtmd_command
 {
 	char *cmd;
-	int args_count;
+	unsigned int args_count;
 	char **args;
 } dtmd_command_t;
 

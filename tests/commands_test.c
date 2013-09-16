@@ -25,7 +25,7 @@
 
 void print_command(dtmd_command_t *cmd)
 {
-	int i;
+	unsigned int i;
 
 	printf("command: %s\n", cmd->cmd);
 

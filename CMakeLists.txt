@@ -40,6 +40,8 @@ if (OS_LINUX)
 	message(STATUS "set LINUX_NO_UDEV to switch interface from udev to linux kernel")
 endif (OS_LINUX)
 
+message(STATUS "set DISABLE_CXX to disable dtmd-library++ library")
+
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
 	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra -Wno-unused-result -DNDEBUG")
@@ -84,6 +86,10 @@ set ( LIBRARY_SOURCES library/dtmd-library.c )
 set ( LIBRARY_HEADERS library/dtmd-library.h dtmd.h )
 set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} )
 
+set ( LIBRARY_CXX_SOURCES library/dtmd-library++.cpp )
+set ( LIBRARY_CXX_HEADERS library/dtmd-library++.hpp )
+set ( LIBRARY_CXX_LIBS ${CMAKE_THREAD_LIBS_INIT} )
+
 if (OS_LINUX)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
 endif (OS_LINUX)
@@ -96,11 +102,6 @@ set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS dtmd.h )
 set ( CONSOLE_CLIENT_LIBS )
 
-set ( LIBRARY_SOURCES ${LIBRARY_SOURCES} )
-set ( LIBRARY_HEADERS ${LIBRARY_HEADERS} )
-
-set ( DAEMON_SOURCES ${DAEMON_SOURCES} )
-set ( DAEMON_HEADERS ${DAEMON_HEADERS} )
 
 if (OS_LINUX)
 	if (LINUX_NO_UDEV)
@@ -129,6 +130,12 @@ target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
 
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
+
+if (DISABLE_CXX)
+else (DISABLE_CXX)
+	add_library( dtmd-library++ SHARED ${LIBRARY_CXX_SOURCES} ${LIBRARY_CXX_HEADERS} )
+	target_link_libraries( dtmd-library++ ${LIBRARY_CXX_LIBS} dtmd-library dtmd-misc )
+endif (DISABLE_CXX)
 
 ENABLE_TESTING()
 
