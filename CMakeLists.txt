@@ -25,6 +25,13 @@ set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to in
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
 
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
+if (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
+	message(STATUS "OS: 64 bit")
+	set (INSTALL_DIR_LIB "./lib64")
+else (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
+	message(STATUS "OS: 32 bit")
+	set (INSTALL_DIR_LIB "./lib32")
+endif (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 	set (OS_LINUX true)
@@ -153,5 +160,12 @@ foreach (CURRENT_TEST ${ALL_TESTS})
 endforeach (CURRENT_TEST)
 
 # installation config
-install(TARGETS dtmd-daemon RUNTIME DESTINATION ./sbin)
-install(TARGETS dtmd        RUNTIME DESTINATION ./bin)
+install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-daemon  RUNTIME DESTINATION ./sbin)
+install(TARGETS dtmd         RUNTIME DESTINATION ./bin)
+
+if (DISABLE_CXX)
+else (DISABLE_CXX)
+	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+endif (DISABLE_CXX)
