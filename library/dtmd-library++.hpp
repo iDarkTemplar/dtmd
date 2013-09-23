@@ -30,10 +30,14 @@
 
 namespace dtmd {
 
+const int timeout_infinite = -1;
+
 class command
 {
 public:
+	command();
 	command(const dtmd_command_t *cmd);
+	virtual ~command();
 
 	void fillFromCmd(const dtmd_command_t *cmd);
 	void clear();
@@ -47,7 +51,15 @@ public:
 class partition
 {
 public:
+	partition();
 	partition(const dtmd_partition_t *part);
+	partition(const std::string &l_path,
+		const std::string &l_type,
+		const std::string &l_label = std::string(),
+		const std::string &l_mnt_point = std::string(),
+		const std::string &l_mnt_opts = std::string());
+
+	virtual ~partition();
 
 	void fillFromPartition(const dtmd_partition_t *part);
 	void clear();
@@ -64,7 +76,11 @@ public:
 class device
 {
 public:
+	device();
 	device(const dtmd_device_t *dev);
+	device(const std::string &l_path, dtmd_removable_media_type_t l_type);
+
+	virtual ~device();
 
 	void fillFromDevice(const dtmd_device_t *dev);
 	void clear();
@@ -82,7 +98,7 @@ class library
 {
 public:
 	library(callback cb, void *arg);
-	~library();
+	virtual ~library();
 
 	dtmd_result_t enum_devices(int timeout, std::vector<device> &devices);
 	dtmd_result_t list_device(int timeout, const std::string &device_path, device &result_device);
@@ -93,8 +109,10 @@ public:
 	bool isStateInvalid() const;
 
 private:
-	// delete default constructor
+	// delete default constructor, copy constructor and assign operator
 	library();
+	library(const library &other);
+	library& operator=(const library &other);
 
 	static void local_callback(void *arg, const dtmd_command_t *cmd);
 

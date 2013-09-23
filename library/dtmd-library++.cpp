@@ -24,6 +24,10 @@
 
 namespace dtmd {
 
+command::command()
+{
+}
+
 command::command(const dtmd_command_t *cmd)
 {
 	if (cmd != NULL)
@@ -32,8 +36,14 @@ command::command(const dtmd_command_t *cmd)
 	}
 }
 
+command::~command()
+{
+}
+
 void command::fillFromCmd(const dtmd_command_t *cmd)
 {
+	this->clear();
+
 	if (cmd != NULL)
 	{
 		this->cmd = cmd->cmd;
@@ -55,10 +65,6 @@ void command::fillFromCmd(const dtmd_command_t *cmd)
 			}
 		}
 	}
-	else
-	{
-		this->clear();
-	}
 }
 
 void command::clear()
@@ -72,6 +78,10 @@ bool command::isEmpty() const
 	return (this->cmd.empty() && this->args.empty());
 }
 
+partition::partition()
+{
+}
+
 partition::partition(const dtmd_partition_t *part)
 {
 	if (part != NULL)
@@ -80,19 +90,53 @@ partition::partition(const dtmd_partition_t *part)
 	}
 }
 
+partition::partition(const std::string &l_path,
+	const std::string &l_type,
+	const std::string &l_label,
+	const std::string &l_mnt_point,
+	const std::string &l_mnt_opts)
+	: path(l_path),
+	type(l_type),
+	label(l_label),
+	mnt_point(l_mnt_point),
+	mnt_opts(l_mnt_opts)
+{
+}
+
+partition::~partition()
+{
+}
+
 void partition::fillFromPartition(const dtmd_partition_t *part)
 {
+	this->clear();
+
 	if (part != NULL)
 	{
-		this->path      = part->path;
-		this->type      = part->type;
-		this->label     = part->label;
-		this->mnt_point = part->mnt_point;
-		this->mnt_opts  = part->mnt_opts;
-	}
-	else
-	{
-		this->clear();
+		if (part->path != NULL)
+		{
+			this->path = part->path;
+		}
+
+		if (part->type != NULL)
+		{
+			this->type = part->type;
+		}
+
+		if (part->label != NULL)
+		{
+			this->label = part->label;
+		}
+
+		if (part->mnt_point != NULL)
+		{
+			this->mnt_point = part->mnt_point;
+		}
+
+		if (part->mnt_opts != NULL)
+		{
+			this->mnt_opts = part->mnt_opts;
+		}
 	}
 }
 
@@ -114,6 +158,10 @@ bool partition::isEmpty() const
 		&& this->mnt_opts.empty());
 }
 
+device::device()
+{
+}
+
 device::device(const dtmd_device_t *dev)
 {
 	if (dev != NULL)
@@ -122,11 +170,27 @@ device::device(const dtmd_device_t *dev)
 	}
 }
 
+device::device(const std::string &l_path, dtmd_removable_media_type_t l_type)
+	: path(l_path),
+	type(l_type)
+{
+}
+
+device::~device()
+{
+}
+
 void device::fillFromDevice(const dtmd_device_t *dev)
 {
+	this->clear();
+
 	if (dev != NULL)
 	{
-		this->path = dev->path;
+		if (dev->path != NULL)
+		{
+			this->path = dev->path;
+		}
+
 		this->type = dev->type;
 
 		if (dev->partition != NULL)
@@ -138,10 +202,6 @@ void device::fillFromDevice(const dtmd_device_t *dev)
 				this->partitions.push_back(partition(dev->partition[i]));
 			}
 		}
-	}
-	else
-	{
-		this->clear();
 	}
 }
 
@@ -157,13 +217,6 @@ bool device::isEmpty() const
 	return (this->path.empty()
 		&& (this->type == unknown_or_persistent)
 		&& partitions.empty());
-}
-
-library::library()
-	: m_handle(NULL),
-	m_cb(NULL),
-	m_arg(NULL)
-{
 }
 
 library::library(callback cb, void *arg)
@@ -268,7 +321,7 @@ dtmd_result_t library::list_partition(int timeout, const std::string &partition_
 
 dtmd_result_t library::mount(int timeout, const std::string &path, const std::string &mount_options)
 {
-	return dtmd_mount(this->m_handle, timeout, path.c_str(), mount_options.c_str());
+	return dtmd_mount(this->m_handle, timeout, path.c_str(), (mount_options.empty() ? NULL : mount_options.c_str()));
 }
 
 dtmd_result_t library::unmount(int timeout, const std::string &path)

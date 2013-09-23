@@ -195,7 +195,7 @@ static const struct filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,blksize=4096,dmask=0077"
+		"rw,nodev,nosuid,allow_other,dmask=0077"
 	},
 	{
 		"iso9660",
@@ -768,6 +768,7 @@ invoke_mount_exit_loop:
 		}
 	}
 
+	// TODO: fuse for ntfs-3g
 	result = mount(media[dev]->partition[part]->path, mount_dir, media[dev]->partition[part]->type, mount_flags, mount_opts);
 
 	if (result == 0)
@@ -786,6 +787,7 @@ invoke_mount_exit_loop:
 	else
 	{
 		result = 0;
+		rmdir(mount_dir);
 	}
 
 	free(mount_dir);

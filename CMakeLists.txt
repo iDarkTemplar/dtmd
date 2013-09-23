@@ -20,17 +20,21 @@ include(CPack)
 
 # installation directory configuration
 set(INST_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories")
+set(DATA_PREFIX "${INST_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories")
 set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
+message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
+
+add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
 if (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 	message(STATUS "OS: 64 bit")
-	set (INSTALL_DIR_LIB "./lib64")
+	set (INSTALL_DIR_LIB "lib64")
 else (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 	message(STATUS "OS: 32 bit")
-	set (INSTALL_DIR_LIB "./lib32")
+	set (INSTALL_DIR_LIB "lib32")
 endif (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
@@ -48,6 +52,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 message(STATUS "set DISABLE_CXX to disable dtmd-library++ library")
+message(STATUS "set CLIENT_QT to force enable or disable Qt client")
 
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
@@ -69,6 +74,18 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
+if (DEFINED CLIENT_QT)
+	set (FORCE_QT 1)
+
+	if ("${CLIENT_QT}" EQUAL 1)
+		if (DEFINED DISABLE_CXX)
+			message(FATAL_ERROR "Qt Client requires c++ library being enabled")
+		endif (DEFINED DISABLE_CXX)
+
+		set (BUILD_QT_CLIENT 1)
+	endif ("${CLIENT_QT}" EQUAL 1)
+endif (DEFINED CLIENT_QT)
+
 if (UNIX)
 	set( CMAKE_THREAD_PREFER_PTHREAD 1 )
 endif (UNIX)
@@ -77,6 +94,17 @@ find_package (Threads REQUIRED)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/library )
+
+if (DEFINED FORCE_QT)
+	if (DEFINED BUILD_QT_CLIENT)
+		find_package(Qt4 REQUIRED COMPONENTS QtCore QtGui)
+	endif (DEFINED BUILD_QT_CLIENT)
+else (DEFINED FORCE_QT)
+	find_package(Qt4 COMPONENTS QtCore QtGui)
+	if (${QT_QTCORE_FOUND} AND ${QT_QTGUI_FOUND})
+		set (BUILD_QT_CLIENT 1)
+	endif (${QT_QTCORE_FOUND} AND ${QT_QTGUI_FOUND})
+endif (DEFINED FORCE_QT)
 
 set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
 set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
@@ -109,6 +137,25 @@ set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS dtmd.h )
 set ( CONSOLE_CLIENT_LIBS )
 
+set ( QT_CLIENT_SOURCES client/qt/main.cpp client/qt/control.cpp client/qt/qcustomaction.cpp)
+set ( QT_CLIENT_QT_HEADERS client/qt/control.hpp client/qt/qcustomaction.hpp)
+set ( QT_CLIENT_HEADERS )
+set ( QT_CLIENT_UI )
+set ( QT_CLIENT_RES )
+set ( QT_CLIENT_LIBS )
+set ( QT_IMAGES
+	client/qt/images/disc.mounted.png
+	client/qt/images/disc.png
+	client/qt/images/fail.png
+	client/qt/images/normal.png
+	client/qt/images/notify.png
+	client/qt/images/removable_disk.mounted.png
+	client/qt/images/removable_disk.png
+	client/qt/images/sdcard.mounted.png
+	client/qt/images/sdcard.png
+	client/qt/images/success.png
+	client/qt/images/working.png
+)
 
 if (OS_LINUX)
 	if (LINUX_NO_UDEV)
@@ -138,11 +185,20 @@ target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
 
-if (DISABLE_CXX)
-else (DISABLE_CXX)
+if (NOT DEFINED DISABLE_CXX)
 	add_library( dtmd-library++ SHARED ${LIBRARY_CXX_SOURCES} ${LIBRARY_CXX_HEADERS} )
 	target_link_libraries( dtmd-library++ ${LIBRARY_CXX_LIBS} dtmd-library dtmd-misc )
-endif (DISABLE_CXX)
+endif (NOT DEFINED DISABLE_CXX)
+
+if (DEFINED BUILD_QT_CLIENT)
+	include_directories (${QT_INCLUDE_DIR} ${QT_QTCORE_INCLUDE_DIR} ${QT_QTGUI_INCLUDE_DIR})
+	QT4_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
+	QT4_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
+	QT4_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
+
+	add_executable (dtmd-qt ${QT_CLIENT_SOURCES} ${QT_CLIENT_QT_HEADERS} ${QT_CLIENT_HEADERS} ${QT_CLIENT_MOC_SOURCES} ${QT_CLIENT_UI_SOURCES} ${QT_CLIENT_RESOURCES})
+	target_link_libraries (dtmd-qt dtmd-library++ ${QT_CLIENT_LIBS} ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY} )
+endif (DEFINED BUILD_QT_CLIENT)
 
 ENABLE_TESTING()
 
@@ -162,10 +218,14 @@ endforeach (CURRENT_TEST)
 # installation config
 install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-install(TARGETS dtmd-daemon  RUNTIME DESTINATION ./sbin)
-install(TARGETS dtmd         RUNTIME DESTINATION ./bin)
+install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
+install(TARGETS dtmd         RUNTIME DESTINATION bin)
 
-if (DISABLE_CXX)
-else (DISABLE_CXX)
+if (NOT DEFINED DISABLE_CXX)
 	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-endif (DISABLE_CXX)
+endif (NOT DEFINED DISABLE_CXX)
+
+if (DEFINED BUILD_QT_CLIENT)
+	install(TARGETS dtmd-qt      RUNTIME DESTINATION bin)
+	install(FILES ${QT_IMAGES} DESTINATION "${DATA_PREFIX}/dtmd" )
+endif (DEFINED BUILD_QT_CLIENT)
