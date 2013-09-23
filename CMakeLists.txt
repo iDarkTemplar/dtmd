@@ -21,6 +21,7 @@ include(CPack)
 # installation directory configuration
 set(INST_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories")
 set(DATA_PREFIX "${INST_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories")
+set(HEADERS_PREFIX "${INST_PREFIX}/include" CACHE PATH "Prefix prepended to headers install directories")
 set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
@@ -221,8 +222,13 @@ install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
 install(TARGETS dtmd         RUNTIME DESTINATION bin)
 
+install(FILES "dtmd.h" DESTINATION "${HEADERS_PREFIX}")
+install(FILES "library/dtmd-misc.h" DESTINATION "${HEADERS_PREFIX}")
+install(FILES "library/dtmd-library.h" DESTINATION "${HEADERS_PREFIX}")
+
 if (NOT DEFINED DISABLE_CXX)
 	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+	install(FILES "library/dtmd-library++.hpp" DESTINATION "${HEADERS_PREFIX}")
 endif (NOT DEFINED DISABLE_CXX)
 
 if (DEFINED BUILD_QT_CLIENT)
