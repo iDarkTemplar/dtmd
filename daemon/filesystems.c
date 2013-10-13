@@ -118,6 +118,9 @@ struct mount_option
 
 struct filesystem_options
 {
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	const unsigned char external;
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	const char * const fstype;
 	const struct mount_option * const options;
 	const char * const option_uid;
@@ -146,6 +149,7 @@ static const struct mount_option vfat_allow[] =
 	{ NULL,           0 }
 };
 
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 static const struct mount_option ntfs3g_allow[] =
 {
 	{ "umask=",        1 },
@@ -157,6 +161,7 @@ static const struct mount_option ntfs3g_allow[] =
 	{ "allow_other",   0 },
 	{ NULL,            0 }
 };
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 static const struct mount_option iso9660_allow[] =
 {
@@ -184,20 +189,29 @@ static const struct mount_option udf_allow[] =
 static const struct filesystem_options filesystem_mount_options[] =
 {
 	{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		0, /* NOT EXTERNAL MOUNT */
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"vfat",
 		vfat_allow,
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
 	},
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	{
+		1, /* EXTERNAL MOUNT */
 		"ntfs-3g",
 		ntfs3g_allow,
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,allow_other,dmask=0077"
 	},
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		0, /* NOT EXTERNAL MOUNT */
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"iso9660",
 		iso9660_allow,
 		"uid=",
@@ -205,6 +219,9 @@ static const struct filesystem_options filesystem_mount_options[] =
 		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
 	},
 	{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		0, /* NOT EXTERNAL MOUNT */
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"udf",
 		udf_allow,
 		"uid=",
@@ -212,6 +229,9 @@ static const struct filesystem_options filesystem_mount_options[] =
 		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
 	},
 	{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		0,
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		NULL,
 		NULL,
 		NULL,
@@ -235,6 +255,11 @@ static const struct mount_option any_fs_allowed_list[] =
 	{ "dirsync",    0 },
 	{ NULL,         0 }
 };
+
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+static const char * const mount_ext_cmd = "/bin/mount";
+static const char * const unmount_ext_cmd = "/bin/umount";
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 static int is_option_allowed(const char *option, unsigned int option_len, const struct filesystem_options *filesystem_list)
 {
@@ -346,20 +371,9 @@ static dir_state_t get_dir_state(const char *dirname)
 	}
 }
 
-int invoke_mount(unsigned int client_number, const char *path, const char *mount_options)
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+static int invoke_mount_external(unsigned int client_number, unsigned int dev, unsigned int part, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
 {
-	unsigned int dev, part;
-	const struct filesystem_options *fsopts;
-	const struct string_to_mount_flag *mntflagslist;
-
-	unsigned long mount_flags = 0;
-	char *mount_dir = NULL;
-
-	char *mount_opts = NULL;
-	unsigned int mount_opts_len = 0;
-	unsigned int mount_opts_len_cur = 0;
-
-	char *mount_all_opts = NULL;
 	unsigned int mount_all_opts_len = 0;
 	unsigned int mount_all_opts_len_cur = 0;
 
@@ -368,57 +382,14 @@ int invoke_mount(unsigned int client_number, const char *path, const char *mount
 	unsigned int opt_len;
 	int result;
 
+	int total_len;
+	int mount_flags_start;
+	char *mount_cmd = NULL;
+
 #if OS == Linux
 	uid_t uid;
 	gid_t gid;
 #endif /* OS == Linux */
-
-	for (dev = 0; dev < media_count; ++dev)
-	{
-		for (part = 0; part < media[dev]->partitions_count; ++part)
-		{
-			if (strcmp(media[dev]->partition[part]->path, path) == 0)
-			{
-				goto invoke_mount_exit_loop;
-			}
-		}
-	}
-
-invoke_mount_exit_loop:
-	if (dev >= media_count)
-	{
-		result = 0;
-		goto invoke_mount_error_1;
-	}
-
-	if (media[dev]->partition[part]->mnt_point != NULL)
-	{
-		result = 0;
-		goto invoke_mount_error_1;
-	}
-
-	fsopts = filesystem_mount_options;
-
-	for (;;)
-	{
-		if (fsopts->fstype == NULL)
-		{
-			result = 0;
-			goto invoke_mount_error_1;
-		}
-
-		if (strcmp(fsopts->fstype, media[dev]->partition[part]->type) == 0)
-		{
-			break;
-		}
-
-		++fsopts;
-	}
-
-	if (mount_options == NULL)
-	{
-		mount_options = fsopts->defaults;
-	}
 
 	// check flags
 	opt_start = mount_options;
@@ -440,14 +411,257 @@ invoke_mount_exit_loop:
 		if (opt_len == 0)
 		{
 			result = 0;
-			goto invoke_mount_error_1;
+			goto invoke_mount_external_error_1;
 		}
 
 		// check option
 		if (!is_option_allowed(opt_start, opt_len, fsopts))
 		{
 			result = 0;
-			goto invoke_mount_error_1;
+			goto invoke_mount_external_error_1;
+		}
+
+		mount_all_opts_len += opt_len;
+		++mount_all_opts_len_cur;
+
+		opt_start = opt_end;
+	}
+
+	// add uid/gid
+	if ((fsopts->option_uid != NULL) || (fsopts->option_gid != NULL))
+	{
+		if (get_credentials(clients[client_number]->clientfd, &uid, &gid) != 1)
+		{
+			result = -1;
+			goto invoke_mount_external_error_1;
+		}
+
+		if (fsopts->option_uid != NULL)
+		{
+			result = snprintf(NULL, 0, "%d", uid);
+			if (result < 1)
+			{
+				result = -1;
+				goto invoke_mount_external_error_1;
+			}
+
+			mount_all_opts_len += strlen(fsopts->option_uid) + result;
+			++mount_all_opts_len_cur;
+		}
+
+		if (fsopts->option_gid != NULL)
+		{
+			result = snprintf(NULL, 0, "%d", gid);
+			if (result < 1)
+			{
+				result = -1;
+				goto invoke_mount_external_error_1;
+			}
+
+			mount_all_opts_len += strlen(fsopts->option_gid) + result;
+			++mount_all_opts_len_cur;
+		}
+	}
+
+	if (mount_all_opts_len_cur > 1)
+	{
+		mount_all_opts_len += mount_all_opts_len_cur - 1;
+	}
+
+	// calculate total length
+	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->type) + 1 + strlen(media[dev]->partition[part]->path) + 1 + strlen(mount_path);
+
+	if (mount_all_opts_len > 0)
+	{
+		mount_flags_start += strlen(" -o ");
+	}
+
+	total_len = mount_flags_start + mount_all_opts_len;
+
+	mount_cmd = (char*) malloc(total_len + 1);
+	if (mount_cmd == NULL)
+	{
+		result = -1;
+		goto invoke_mount_external_error_1;
+	}
+
+	strcpy(mount_cmd, mount_ext_cmd);
+	strcat(mount_cmd, " -t ");
+	strcat(mount_cmd, media[dev]->partition[part]->type);
+	strcat(mount_cmd, " ");
+	strcat(mount_cmd, media[dev]->partition[part]->path);
+	strcat(mount_cmd, " ");
+	strcat(mount_cmd, mount_path);
+
+	mount_all_opts_len_cur = 0;
+
+	// create flags and string
+	if (mount_all_opts_len > 0)
+	{
+		strcat(mount_cmd, " -o ");
+
+		opt_start = mount_options;
+
+		while (opt_start != NULL)
+		{
+			opt_end = strchr(opt_start, ',');
+
+			if (opt_end != NULL)
+			{
+				opt_len = opt_end - opt_start;
+				++opt_end;
+			}
+			else
+			{
+				opt_len = strlen(opt_start);
+			}
+
+			// all mount options
+			if (mount_all_opts_len_cur != 0)
+			{
+				mount_cmd[mount_flags_start + mount_all_opts_len_cur] = ',';
+				++mount_all_opts_len_cur;
+			}
+
+			memcpy(&mount_cmd[mount_flags_start + mount_all_opts_len_cur], opt_start, opt_len);
+			mount_all_opts_len_cur += opt_len;
+
+			opt_start = opt_end;
+		}
+
+		// add uid/gid
+		if (fsopts->option_uid != NULL)
+		{
+			// all mount options
+			if (mount_all_opts_len_cur != 0)
+			{
+				mount_cmd[mount_flags_start + mount_all_opts_len_cur] = ',';
+				++mount_all_opts_len_cur;
+			}
+
+			result = strlen(fsopts->option_uid);
+
+			memcpy(&mount_cmd[mount_flags_start + mount_all_opts_len_cur], fsopts->option_uid, result);
+			mount_all_opts_len_cur += result;
+
+			result = snprintf(&mount_cmd[mount_flags_start + mount_all_opts_len_cur], mount_all_opts_len - mount_all_opts_len_cur + 1, "%d", uid);
+			if (result < 1)
+			{
+				result = -1;
+				goto invoke_mount_external_error_2;
+			}
+
+			mount_all_opts_len_cur += result;
+		}
+
+		if (fsopts->option_gid != NULL)
+		{
+			// all mount options
+			if (mount_all_opts_len_cur != 0)
+			{
+				mount_cmd[mount_flags_start + mount_all_opts_len_cur] = ',';
+				++mount_all_opts_len_cur;
+			}
+
+			result = strlen(fsopts->option_gid);
+
+			memcpy(&mount_cmd[mount_flags_start + mount_all_opts_len_cur], fsopts->option_gid, result);
+			mount_all_opts_len_cur += result;
+
+			result = snprintf(&mount_cmd[mount_flags_start + mount_all_opts_len_cur], mount_all_opts_len - mount_all_opts_len_cur + 1, "%d", gid);
+			if (result < 1)
+			{
+				result = -1;
+				goto invoke_mount_external_error_2;
+			}
+
+			mount_all_opts_len_cur += result;
+		}
+	}
+
+	mount_cmd[mount_flags_start+mount_all_opts_len_cur] = 0;
+
+	result = system(mount_cmd);
+
+	if (mount_cmd != NULL)
+	{
+		free(mount_cmd);
+	}
+
+	switch (result)
+	{
+	case 0:  /* success */
+	case 16: /* problems writing or locking /etc/mtab */
+		return 1;
+	case -1:
+		return -1;
+	default:
+		return 0;
+	}
+
+invoke_mount_external_error_2:
+	if (mount_cmd != NULL)
+	{
+		free(mount_cmd);
+	}
+
+invoke_mount_external_error_1:
+	return result;
+}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+
+static int invoke_mount_internal(unsigned int client_number, unsigned int dev, unsigned int part, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
+{
+	const struct string_to_mount_flag *mntflagslist;
+
+	unsigned long mount_flags = 0;
+
+	char *mount_opts = NULL;
+	unsigned int mount_opts_len = 0;
+	unsigned int mount_opts_len_cur = 0;
+
+	char *mount_all_opts = NULL;
+	unsigned int mount_all_opts_len = 0;
+	unsigned int mount_all_opts_len_cur = 0;
+
+	const char *opt_start;
+	const char *opt_end;
+	unsigned int opt_len;
+	int result;
+
+#if OS == Linux
+	uid_t uid;
+	gid_t gid;
+#endif /* OS == Linux */
+
+	// check flags
+	opt_start = mount_options;
+
+	while (opt_start != NULL)
+	{
+		opt_end = strchr(opt_start, ',');
+
+		if (opt_end != NULL)
+		{
+			opt_len = opt_end - opt_start;
+			++opt_end;
+		}
+		else
+		{
+			opt_len = strlen(opt_start);
+		}
+
+		if (opt_len == 0)
+		{
+			result = 0;
+			goto invoke_mount_internal_error_1;
+		}
+
+		// check option
+		if (!is_option_allowed(opt_start, opt_len, fsopts))
+		{
+			result = 0;
+			goto invoke_mount_internal_error_1;
 		}
 
 		mntflagslist = string_to_mount_flag_list;
@@ -480,7 +694,7 @@ invoke_mount_exit_loop:
 		if (get_credentials(clients[client_number]->clientfd, &uid, &gid) != 1)
 		{
 			result = -1;
-			goto invoke_mount_error_1;
+			goto invoke_mount_internal_error_1;
 		}
 
 		if (fsopts->option_uid != NULL)
@@ -489,7 +703,7 @@ invoke_mount_exit_loop:
 			if (result < 1)
 			{
 				result = -1;
-				goto invoke_mount_error_1;
+				goto invoke_mount_internal_error_1;
 			}
 
 			mount_opts_len += strlen(fsopts->option_uid) + result;
@@ -505,7 +719,7 @@ invoke_mount_exit_loop:
 			if (result < 1)
 			{
 				result = -1;
-				goto invoke_mount_error_1;
+				goto invoke_mount_internal_error_1;
 			}
 
 			mount_opts_len += strlen(fsopts->option_gid) + result;
@@ -535,7 +749,7 @@ invoke_mount_exit_loop:
 			if (mount_opts == NULL)
 			{
 				result = -1;
-				goto invoke_mount_error_1;
+				goto invoke_mount_internal_error_1;
 			}
 		}
 
@@ -543,7 +757,7 @@ invoke_mount_exit_loop:
 		if (mount_all_opts == NULL)
 		{
 			result = -1;
-			goto invoke_mount_error_2;
+			goto invoke_mount_internal_error_2;
 		}
 
 		mount_opts_len_cur = 0;
@@ -628,11 +842,11 @@ invoke_mount_exit_loop:
 			memcpy(&mount_opts[mount_opts_len_cur], fsopts->option_uid, result);
 			mount_opts_len_cur += result;
 
-			result = snprintf(&mount_opts[mount_opts_len_cur], mount_opts_len + mount_opts_len_cur + 1, "%d", uid);
+			result = snprintf(&mount_opts[mount_opts_len_cur], mount_opts_len - mount_opts_len_cur + 1, "%d", uid);
 			if (result < 1)
 			{
 				result = -1;
-				goto invoke_mount_error_2;
+				goto invoke_mount_internal_error_2;
 			}
 
 			mount_opts_len_cur += result;
@@ -649,11 +863,11 @@ invoke_mount_exit_loop:
 			memcpy(&mount_all_opts[mount_all_opts_len_cur], fsopts->option_uid, result);
 			mount_all_opts_len_cur += result;
 
-			result = snprintf(&mount_all_opts[mount_all_opts_len_cur], mount_all_opts_len + mount_all_opts_len_cur + 1, "%d", uid);
+			result = snprintf(&mount_all_opts[mount_all_opts_len_cur], mount_all_opts_len - mount_all_opts_len_cur + 1, "%d", uid);
 			if (result < 1)
 			{
 				result = -1;
-				goto invoke_mount_error_2;
+				goto invoke_mount_internal_error_2;
 			}
 
 			mount_all_opts_len_cur += result;
@@ -673,11 +887,11 @@ invoke_mount_exit_loop:
 			memcpy(&mount_opts[mount_opts_len_cur], fsopts->option_gid, result);
 			mount_opts_len_cur += result;
 
-			result = snprintf(&mount_opts[mount_opts_len_cur], mount_opts_len + mount_opts_len_cur + 1, "%d", gid);
+			result = snprintf(&mount_opts[mount_opts_len_cur], mount_opts_len - mount_opts_len_cur + 1, "%d", gid);
 			if (result < 1)
 			{
 				result = -1;
-				goto invoke_mount_error_2;
+				goto invoke_mount_internal_error_2;
 			}
 
 			mount_opts_len_cur += result;
@@ -694,86 +908,25 @@ invoke_mount_exit_loop:
 			memcpy(&mount_all_opts[mount_all_opts_len_cur], fsopts->option_gid, result);
 			mount_all_opts_len_cur += result;
 
-			result = snprintf(&mount_all_opts[mount_all_opts_len_cur], mount_all_opts_len + mount_all_opts_len_cur + 1, "%d", gid);
+			result = snprintf(&mount_all_opts[mount_all_opts_len_cur], mount_all_opts_len - mount_all_opts_len_cur + 1, "%d", gid);
 			if (result < 1)
 			{
 				result = -1;
-				goto invoke_mount_error_2;
+				goto invoke_mount_internal_error_2;
 			}
 
 			mount_all_opts_len_cur += result;
-
 		}
 
 		mount_opts[mount_opts_len_cur] = 0;
 		mount_all_opts[mount_all_opts_len_cur] = 0;
 	}
 
-	// calculate mount point
-	opt_start = strrchr(media[dev]->partition[part]->path, '/');
-	if (opt_start == NULL)
-	{
-		result = -1;
-		goto invoke_mount_error_2;
-	}
-
-	++opt_start;
-	mount_opts_len = strlen(opt_start);
-
-	if (mount_opts_len == 0)
-	{
-		result = -1;
-		goto invoke_mount_error_2;
-	}
-
-	mount_opts_len_cur = strlen(dtmd_internal_mount_dir);
-	mount_opts_len += mount_opts_len_cur + 1;
-
-	mount_dir = (char*) malloc(mount_opts_len + 1);
-	if (mount_dir == NULL)
-	{
-		result = -1;
-		goto invoke_mount_error_2;
-	}
-
-	memcpy(mount_dir, dtmd_internal_mount_dir, mount_opts_len_cur);
-	mount_dir[mount_opts_len_cur] = '/';
-	memcpy(&mount_dir[mount_opts_len_cur + 1], opt_start, mount_opts_len - mount_opts_len_cur - 1);
-	mount_dir[mount_opts_len] = 0;
-
-	// check mount point
-	result = point_mount_count(mount_dir, 1);
-	if (result != 0)
-	{
-		if (result < 0)
-		{
-			result = -1;
-		}
-		else
-		{
-			result = 0;
-		}
-
-		goto invoke_mount_error_3;
-	}
-
-	if (get_dir_state(mount_dir) == dir_state_not_dir)
-	{
-		result = mkdir(mount_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-		if (result != 0)
-		{
-			// NOTE: failing to create directory is non-fatal error
-			result = 0;
-			goto invoke_mount_error_3;
-		}
-	}
-
-	// TODO: fuse for ntfs-3g
-	result = mount(media[dev]->partition[part]->path, mount_dir, media[dev]->partition[part]->type, mount_flags, mount_opts);
+	result = mount(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->type, mount_flags, mount_opts);
 
 	if (result == 0)
 	{
-		result = add_to_mtab(media[dev]->partition[part]->path, mount_dir, media[dev]->partition[part]->type, mount_all_opts);
+		result = add_to_mtab(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->type, mount_all_opts);
 		if (result == 1)
 		{
 			result = 1;
@@ -787,10 +940,8 @@ invoke_mount_exit_loop:
 	else
 	{
 		result = 0;
-		rmdir(mount_dir);
+		rmdir(mount_path);
 	}
-
-	free(mount_dir);
 
 	if (mount_opts != NULL)
 	{
@@ -804,10 +955,7 @@ invoke_mount_exit_loop:
 
 	return result;
 
-invoke_mount_error_3:
-	free(mount_dir);
-
-invoke_mount_error_2:
+invoke_mount_internal_error_2:
 	if (mount_all_opts != NULL)
 	{
 		free(mount_all_opts);
@@ -818,7 +966,221 @@ invoke_mount_error_2:
 		free(mount_opts);
 	}
 
+invoke_mount_internal_error_1:
+	return result;
+}
+
+int invoke_mount(unsigned int client_number, const char *path, const char *mount_options)
+{
+	int result;
+	unsigned int dev, part;
+	const struct filesystem_options *fsopts;
+	const char *mount_dev_start;
+	int mount_dev_len;
+
+	char *mount_path;
+	int mount_path_len;
+
+	for (dev = 0; dev < media_count; ++dev)
+	{
+		for (part = 0; part < media[dev]->partitions_count; ++part)
+		{
+			if (strcmp(media[dev]->partition[part]->path, path) == 0)
+			{
+				goto invoke_mount_exit_loop;
+			}
+		}
+	}
+
+invoke_mount_exit_loop:
+	if (dev >= media_count)
+	{
+		result = 0;
+		goto invoke_mount_error_1;
+	}
+
+	if (media[dev]->partition[part]->mnt_point != NULL)
+	{
+		result = 0;
+		goto invoke_mount_error_1;
+	}
+
+	fsopts = filesystem_mount_options;
+
+	for (;;)
+	{
+		if (fsopts->fstype == NULL)
+		{
+			result = 0;
+			goto invoke_mount_error_1;
+		}
+
+		if (strcmp(fsopts->fstype, media[dev]->partition[part]->type) == 0)
+		{
+			break;
+		}
+
+		++fsopts;
+	}
+
+	if (mount_options == NULL)
+	{
+		mount_options = fsopts->defaults;
+	}
+
+	// calculate mount point
+	mount_dev_start = strrchr(media[dev]->partition[part]->path, '/');
+	if (mount_dev_start == NULL)
+	{
+		result = -1;
+		goto invoke_mount_error_1;
+	}
+
+	++mount_dev_start;
+	mount_dev_len = strlen(mount_dev_start);
+
+	if (mount_dev_len == 0)
+	{
+		result = -1;
+		goto invoke_mount_error_1;
+	}
+
+	mount_path_len = strlen(dtmd_internal_mount_dir);
+	mount_dev_len += mount_path_len + 1;
+
+	mount_path = (char*) malloc(mount_dev_len + 1);
+	if (mount_path == NULL)
+	{
+		result = -1;
+		goto invoke_mount_error_1;
+	}
+
+	memcpy(mount_path, dtmd_internal_mount_dir, mount_path_len);
+	mount_path[mount_path_len] = '/';
+	memcpy(&mount_path[mount_path_len + 1], mount_dev_start, mount_dev_len - mount_path_len - 1);
+	mount_path[mount_dev_len] = 0;
+
+	// check mount point
+	result = point_mount_count(mount_path, 1);
+	if (result != 0)
+	{
+		if (result < 0)
+		{
+			result = -1;
+		}
+		else
+		{
+			result = 0;
+		}
+
+		goto invoke_mount_error_2;
+	}
+
+	if (get_dir_state(mount_path) == dir_state_not_dir)
+	{
+		// TODO: create directory permissions with DMASK in mind?
+		result = mkdir(mount_path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+		if (result != 0)
+		{
+			// NOTE: failing to create directory is non-fatal error
+			result = 0;
+			goto invoke_mount_error_2;
+		}
+	}
+
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	if (fsopts->external)
+	{
+		result = invoke_mount_external(client_number, dev, part, mount_options, mount_path, fsopts);
+	}
+	else
+	{
+		result = invoke_mount_internal(client_number, dev, part, mount_options, mount_path, fsopts);
+	}
+#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	result = invoke_mount_internal(client_number, dev, part, mount_options, mount_path, fsopts);
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+
+	free(mount_path);
+
+	return result;
+
+invoke_mount_error_2:
+	free(mount_path);
+
 invoke_mount_error_1:
+	return result;
+}
+
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+static int invoke_unmount_external(unsigned int client_number, unsigned int dev, unsigned int part)
+{
+	int result;
+	int unmount_cmd_len;
+	char *unmount_cmd;
+
+	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->type) + 1 + strlen(media[dev]->partition[part]->mnt_point);
+
+	unmount_cmd = (char*) malloc(unmount_cmd_len + 1);
+	if (unmount_cmd == NULL)
+	{
+		return -1;
+	}
+
+	strcpy(unmount_cmd, unmount_ext_cmd);
+	strcat(unmount_cmd, " -t ");
+	strcat(unmount_cmd, media[dev]->partition[part]->type);
+	strcat(unmount_cmd, " ");
+	strcat(unmount_cmd, media[dev]->partition[part]->mnt_point);
+
+	result = system(unmount_cmd);
+
+	free(unmount_cmd);
+
+	switch (result)
+	{
+	case 0:
+		return 1;
+	case -1:
+		return -1;
+	default:
+		return 0;
+	}
+}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+
+static int invoke_unmount_internal(unsigned int client_number, unsigned int dev, unsigned int part)
+{
+	int result;
+
+	result = point_mount_count(media[dev]->partition[part]->mnt_point, 2);
+	if (result != 1)
+	{
+		if (result < 0)
+		{
+			return -1;
+		}
+		else
+		{
+			return 0;
+		}
+	}
+
+	// TODO: check that it's original mounter who requests unmount or root?
+
+	result = umount(media[dev]->partition[part]->mnt_point);
+	if (result != 0)
+	{
+		return 0;
+	}
+
+	result = remove_from_mtab(media[dev]->partition[part]->path, media[dev]->partition[part]->mnt_point, media[dev]->partition[part]->type);
+	if (result != 1)
+	{
+		// NOTE: failing to modify /etc/mtab is non-fatal error
+		result = 0;
+	}
+
 	return result;
 }
 
@@ -826,7 +1188,9 @@ int invoke_unmount(unsigned int client_number, const char *path)
 {
 	unsigned int dev, part;
 	int result;
-	char *mnt_point;
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	const struct filesystem_options *fsopts;
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	for (dev = 0; dev < media_count; ++dev)
 	{
@@ -845,44 +1209,47 @@ invoke_unmount_exit_loop:
 		return 0;
 	}
 
-	mnt_point = media[dev]->partition[part]->mnt_point;
-
-	if (mnt_point == NULL)
+	if (media[dev]->partition[part]->mnt_point == NULL)
 	{
 		return 0;
 	}
 
-	result = point_mount_count(mnt_point, 2);
-	if (result != 1)
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	fsopts = filesystem_mount_options;
+
+	for (;;)
 	{
-		if (result < 0)
-		{
-			return -1;
-		}
-		else
+		if (fsopts->fstype == NULL)
 		{
 			return 0;
 		}
+
+		if (strcmp(fsopts->fstype, media[dev]->partition[part]->type) == 0)
+		{
+			break;
+		}
+
+		++fsopts;
 	}
 
-	// TODO: check that it's original mounter who requests unmount or root?
-
-	result = umount(mnt_point);
-	if (result != 0)
+	if (fsopts->external)
 	{
-		return 0;
+		result = invoke_unmount_external(client_number, dev, part);
 	}
-
-	result = remove_from_mtab(path, mnt_point, media[dev]->partition[part]->type);
-	if (result != 1)
+	else
 	{
-		// NOTE: failing to modify /etc/mtab is non-fatal error
-		result = 0;
+		result = invoke_unmount_internal(client_number, dev, part);
 	}
+#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	result = invoke_unmount_internal(client_number, dev, part);
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-	if (get_dir_state(mnt_point) == dir_state_empty)
+	if (result == 1)
 	{
-		rmdir(mnt_point);
+		if (get_dir_state(media[dev]->partition[part]->mnt_point) == dir_state_empty)
+		{
+			rmdir(media[dev]->partition[part]->mnt_point);
+		}
 	}
 
 	return result;

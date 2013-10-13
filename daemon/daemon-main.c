@@ -763,6 +763,7 @@ int main(int argc, char **argv)
 
 exit_8:
 	// TODO: unmount all media on exit?
+	// TODO: remove all empty non-mounted directories on exit under /media?
 	free(pollfds);
 
 exit_7:

@@ -3,7 +3,7 @@ project(Dark-Templar-Mount-Daemon)
 cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 0)
-set(DTMD_VERSION_MINOR 1)
+set(DTMD_VERSION_MINOR 2)
 set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
@@ -29,6 +29,10 @@ message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
 
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT")
+endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
 if (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 	message(STATUS "OS: 64 bit")
@@ -41,6 +45,11 @@ endif (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 	set (OS_LINUX true)
 	add_definitions(-DOS=Linux)
+
+	if (DEFINED DISABLE_EXT_MOUNT)
+		add_definitions(-DDISABLE_EXT_MOUNT)
+	endif (DEFINED DISABLE_EXT_MOUNT)
+
 endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")

@@ -188,7 +188,7 @@ int point_mount_count(const char *path, int max)
 	return result;
 }
 
-int add_to_mtab(char *path, char *mount_point, char *type, char *mount_opts)
+int add_to_mtab(const char *path, const char *mount_point, const char *type, const char *mount_opts)
 {
 	int result;
 	FILE *mntfile;
@@ -200,10 +200,10 @@ int add_to_mtab(char *path, char *mount_point, char *type, char *mount_opts)
 		return -1;
 	}
 
-	ent.mnt_dir    = mount_point;
-	ent.mnt_fsname = path;
-	ent.mnt_type   = type;
-	ent.mnt_opts   = mount_opts;
+	ent.mnt_dir    = (char*) mount_point;
+	ent.mnt_fsname = (char*) path;
+	ent.mnt_type   = (char*) type;
+	ent.mnt_opts   = (char*) mount_opts;
 	ent.mnt_freq   = 0;
 	ent.mnt_passno = 0;
 
