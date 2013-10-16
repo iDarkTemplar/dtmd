@@ -30,6 +30,7 @@
 #include <string.h>
 #include <poll.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include <dtmd.h>
 #include "daemon/dtmd-internal.h"
@@ -184,6 +185,56 @@ void check_lock_file(void)
 			fclose(lockpidfile);
 		}
 	}
+}
+
+void remove_empty_dirs(const char *dirname)
+{
+	DIR *dir;
+	struct dirent *d;
+	char *fulldirname = NULL;
+	int fulldirname_len = 0;
+	int fulldirname_maxlen = 0;
+
+	dir = opendir(dirname);
+	if (dir == NULL)
+	{
+		return;
+	}
+
+	while ((d = readdir(dir)) != NULL)
+	{
+		if ((d->d_type == DT_DIR)
+			&& (strcmp(d->d_name, ".") != 0)
+			&& (strcmp(d->d_name, "..") != 0))
+		{
+			fulldirname_len = strlen(dirname) + strlen(d->d_name) + 1;
+
+			if (fulldirname_len > fulldirname_maxlen)
+			{
+				fulldirname_maxlen = fulldirname_len;
+				fulldirname = (char*) realloc(fulldirname, fulldirname_maxlen + 1);
+				if (fulldirname == NULL)
+				{
+					goto remove_empty_dirs_error_1;
+				}
+			}
+
+			strcpy(fulldirname, dirname);
+			strcat(fulldirname, "/");
+			strcat(fulldirname, d->d_name);
+
+			/* next line will remove only empty and not mounted directories */
+			rmdir(fulldirname);
+		}
+	}
+
+remove_empty_dirs_error_1:
+	if (fulldirname != NULL)
+	{
+		free(fulldirname);
+	}
+
+	closedir(dir);
 }
 
 int main(int argc, char **argv)
@@ -763,7 +814,9 @@ int main(int argc, char **argv)
 
 exit_8:
 	// TODO: unmount all media on exit?
-	// TODO: remove all empty non-mounted directories on exit under /media?
+	remove_empty_dirs(dtmd_internal_mount_dir);
+	unlink(dtmd_internal_mtab_temporary);
+
 	free(pollfds);
 
 exit_7:
