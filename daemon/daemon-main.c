@@ -18,7 +18,6 @@
  *
  */
 
-#include <libudev.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
@@ -31,16 +30,14 @@
 #include <poll.h>
 #include <errno.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 #include <dtmd.h>
 #include "daemon/dtmd-internal.h"
 #include "daemon/lists.h"
 #include "daemon/actions.h"
 #include "daemon/mnt_funcs.h"
-
-#ifdef SUBSYSTEM_LINUX_UDEV
-#include "daemon/linux/udev/udev.h"
-#endif
+#include "daemon/system_module.h"
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
@@ -48,17 +45,6 @@
 
 /*
 	ATTR{events}=="media_change eject_request"
-*/
-
-/*
-daemon:
-	1) Daemonize
-	2a) enable monitoring
-	2) enum all devices
-	3) wait for events or commands
-	4) on exit try to unmount everything mounted?
-
-	client: make library
 */
 
 static unsigned char continue_working = 1;
@@ -251,19 +237,12 @@ int main(int argc, char **argv)
 	unsigned int i;
 	unsigned int j;
 
-	struct udev *udev;
-	struct udev_monitor *mon;
-	struct udev_enumerate *enumerate;
-	struct udev_list_entry *devices, *dev_list_entry;
-	struct udev_device *dev;
-	struct udev_device *dev_parent;
-	const char *path;
-	const char *path_parent;
-	const char *action;
-	const char *devtype;
-	const char *fstype;
-	const char *label;
-	dtmd_removable_media_type_t media_type;
+	dtmd_device_system_t *dtmd_dev_system;
+	dtmd_device_enumeration_t *dtmd_dev_enum;
+	dtmd_device_monitor_t *dtmd_dev_mon;
+	dtmd_info_t *dtmd_dev_device;
+	dtmd_device_action_type_t dtmd_dev_action;
+
 	int monfd;
 	int mountfd;
 	void *tmp;
@@ -413,132 +392,115 @@ int main(int argc, char **argv)
 		goto exit_4;
 	}
 
-	udev = udev_new();
-	if (udev == NULL)
+	dtmd_dev_system = device_system_init();
+	if (dtmd_dev_system == NULL)
 	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error opening device system\n");
+		}
+
 		result = -1;
 		goto exit_4;
 	}
 
-	mon = udev_monitor_new_from_netlink(udev, "udev");
-	if (mon == NULL)
+	dtmd_dev_mon = device_system_start_monitoring(dtmd_dev_system);
+	if (dtmd_dev_mon == NULL)
 	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error opening device monitor\n");
+		}
+
 		result = -1;
 		goto exit_5;
 	}
 
-	rc = udev_monitor_filter_add_match_subsystem_devtype(mon, "block", NULL);
-	if (rc < 0)
+	monfd = device_system_get_monitor_fd(dtmd_dev_mon);
+	if (monfd < 0)
 	{
-		result = -1;
-		goto exit_6;
-	}
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error getting device monitor file descriptor\n");
+		}
 
-	rc = udev_monitor_enable_receiving(mon);
-	if (rc < 0)
-	{
-		result = -1;
-		goto exit_6;
-	}
-
-	monfd = udev_monitor_get_fd(mon);
-
-	enumerate = udev_enumerate_new(udev);
-	if (enumerate == NULL)
-	{
 		result = -1;
 		goto exit_6;
 	}
 
 	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
-	if (mountfd == -1)
+	if (mountfd < 0)
 	{
-		udev_enumerate_unref(enumerate);
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error opening mounts file descriptor\n");
+		}
+
 		result = -1;
 		goto exit_6;
 	}
 
-	rc = udev_enumerate_add_match_subsystem(enumerate, "block");
-	if (rc < 0)
+	dtmd_dev_enum = device_system_enumerate_devices(dtmd_dev_system);
+	if (dtmd_dev_enum == NULL)
 	{
-		udev_enumerate_unref(enumerate);
-		result = -1;
-		goto exit_mountfd;
-	}
-
-	rc = udev_enumerate_scan_devices(enumerate);
-	if (rc < 0)
-	{
-		udev_enumerate_unref(enumerate);
-		result = -1;
-		goto exit_mountfd;
-	}
-
-	devices = udev_enumerate_get_list_entry(enumerate);
-
-	udev_list_entry_foreach(dev_list_entry, devices)
-	{
-		path = udev_list_entry_get_name(dev_list_entry);
-		dev = udev_device_new_from_syspath(udev, path);
-		if (dev == NULL)
+		if (!daemonize)
 		{
-			udev_enumerate_unref(enumerate);
-			result = -1;
-			goto exit_7;
+			fprintf(stderr, "Error querying device enumeration\n");
 		}
 
-		path = udev_device_get_devnode(dev);
-		if (path == NULL)
-		{
-			udev_device_unref(dev);
-			udev_enumerate_unref(enumerate);
-			result = -1;
-			goto exit_7;
-		}
+		result = -1;
+		goto exit_6;
+	}
 
-		devtype = udev_device_get_devtype(dev);
-		if (strcmp(devtype, "disk") == 0)
+	while ((rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)) > 0)
+	{
+		switch (dtmd_dev_device->type)
 		{
-			media_type = get_device_type(dev);
-
-			if (media_type != unknown_or_persistent)
+		case dtmd_info_device:
+			if ((dtmd_dev_device->device.path != NULL)
+				&& (dtmd_dev_device->device.media_type != unknown_or_persistent))
 			{
-				if (add_media_block(path, media_type) < 0)
+				if (add_media_block(dtmd_dev_device->device.path, dtmd_dev_device->device.media_type) < 0)
 				{
-					udev_device_unref(dev);
-					udev_enumerate_unref(enumerate);
+					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
+					device_system_finish_enumerate_devices(dtmd_dev_enum);
 					result = -1;
 					goto exit_7;
 				}
 			}
-		}
-		else if (strcmp(devtype, "partition") == 0)
-		{
-			dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
-			if (dev_parent != NULL)
-			{
-				path_parent = udev_device_get_devnode(dev_parent);
-				fstype      = udev_device_get_property_value(dev, "ID_FS_TYPE");
-				label       = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-				media_type  = get_device_type(dev_parent);
+			break;
 
-				if ((media_type != unknown_or_persistent) && (fstype != NULL))
+		case dtmd_info_partition:
+			if ((dtmd_dev_device->partition.path != NULL)
+				&& (dtmd_dev_device->partition.media_type != unknown_or_persistent)
+				&& (dtmd_dev_device->partition.fstype != NULL)
+				&& (dtmd_dev_device->partition.path_parent != NULL))
+			{
+				if (add_media_partition(dtmd_dev_device->partition.path_parent,
+					dtmd_dev_device->partition.media_type,
+					dtmd_dev_device->partition.path,
+					dtmd_dev_device->partition.fstype,
+					dtmd_dev_device->partition.label) < 0)
 				{
-					if (add_media_partition(path_parent, media_type, path, fstype, label) < 0)
-					{
-						udev_device_unref(dev);
-						udev_enumerate_unref(enumerate);
-						result = -1;
-						goto exit_7;
-					}
+					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
+					device_system_finish_enumerate_devices(dtmd_dev_enum);
+					result = -1;
+					goto exit_7;
 				}
 			}
+			break;
 		}
 
-		udev_device_unref(dev);
+		device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
 	}
 
-	udev_enumerate_unref(enumerate);
+	device_system_finish_enumerate_devices(dtmd_dev_enum);
+
+	if (rc < 0)
+	{
+		result = -1;
+		goto exit_7;
+	}
 
 	if (check_mount_changes() < 0)
 	{
@@ -591,101 +553,111 @@ int main(int argc, char **argv)
 		}
 		else if (pollfds[0].revents & POLLIN)
 		{
-			dev = udev_monitor_receive_device(mon);
-			if (dev != NULL)
+			rc = device_system_monitor_get_device(dtmd_dev_mon, &dtmd_dev_device, &dtmd_dev_action);
+			if (rc > 0)
 			{
-				path    = udev_device_get_devnode(dev);
-				action  = udev_device_get_action(dev);
-				devtype = udev_device_get_devtype(dev);
-
-				if ((action != NULL) && (path != NULL))
+				switch (dtmd_dev_action)
 				{
-					if ((strcmp(action, "add") == 0) || (strcmp(action, "online") == 0))
+				case dtmd_device_action_add:
+				case dtmd_device_action_online:
+					rc = 0;
+
+					switch (dtmd_dev_device->type)
 					{
-						rc = 0;
-
-						if (strcmp(devtype, "disk") == 0)
- 						{
-							media_type = get_device_type(dev);
-
-							if (media_type != unknown_or_persistent)
- 							{
-								rc = add_media_block(path, media_type);
-
-								if (rc > 0)
-								{
-									notify_add_disk(path, media_type);
-								}
- 							}
-						}
-						else if (strcmp(devtype, "partition") == 0)
+					case dtmd_info_device:
+						if ((dtmd_dev_device->device.path != NULL)
+							&& (dtmd_dev_device->device.media_type != unknown_or_persistent))
 						{
-							dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
-							if (dev_parent != NULL)
- 							{
-								path_parent = udev_device_get_devnode(dev_parent);
-								fstype      = udev_device_get_property_value(dev, "ID_FS_TYPE");
-								label       = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-								media_type  = get_device_type(dev_parent);
-
-								if ((media_type != unknown_or_persistent) && (fstype != NULL))
-								{
-									rc = add_media_partition(path_parent, media_type, path, fstype, label);
-
-									if (rc > 0)
-									{
-										notify_add_partition(path, fstype, label, path_parent);
-									}
-								}
- 							}
- 						}
-
-						if (rc < 0)
-						{
-							udev_device_unref(dev);
-							result = -1;
-							goto exit_8;
-						}
-					}
-					else if ((strcmp(action, "remove") == 0) || (strcmp(action, "offline") == 0))
-					{
-						rc = 0;
-
-						if (strcmp(devtype, "disk") == 0)
- 						{
-							rc = remove_media_block(path);
+							rc = add_media_block(dtmd_dev_device->device.path, dtmd_dev_device->device.media_type);
 
 							if (rc > 0)
 							{
-								notify_remove_disk(path);
+								notify_add_disk(dtmd_dev_device->device.path, dtmd_dev_device->device.media_type);
 							}
 						}
-						else if (strcmp(devtype, "partition") == 0)
+						break;
+
+					case dtmd_info_partition:
+						if ((dtmd_dev_device->partition.path != NULL)
+							&& (dtmd_dev_device->partition.media_type != unknown_or_persistent)
+							&& (dtmd_dev_device->partition.fstype != NULL)
+							&& (dtmd_dev_device->partition.path_parent != NULL))
 						{
-							rc = remove_media_partition(NULL, path);
+							rc = add_media_partition(dtmd_dev_device->partition.path_parent,
+								dtmd_dev_device->partition.media_type,
+								dtmd_dev_device->partition.path,
+								dtmd_dev_device->partition.fstype,
+								dtmd_dev_device->partition.label);
 
 							if (rc > 0)
 							{
-								notify_remove_partition(path);
+								notify_add_partition(dtmd_dev_device->partition.path,
+									dtmd_dev_device->partition.fstype,
+									dtmd_dev_device->partition.label,
+									dtmd_dev_device->partition.path_parent);
 							}
- 						}
-
-						if (rc < 0)
- 						{
-							udev_device_unref(dev);
-							result = -1;
-							goto exit_8;
 						}
+						break;
 					}
-					/*else if (strcmp(action, "change") == 0)
+
+					if (rc < 0)
 					{
-						// TODO: ignore? notify remove and add?
-					}*/
+						device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
+						result = -1;
+						goto exit_8;
+					}
+					break;
+
+				case dtmd_device_action_remove:
+				case dtmd_device_action_offline:
+					rc = 0;
+
+					switch (dtmd_dev_device->type)
+					{
+					case dtmd_info_device:
+						if (dtmd_dev_device->device.path != NULL)
+						{
+							rc = remove_media_block(dtmd_dev_device->device.path);
+
+							if (rc > 0)
+							{
+								notify_remove_disk(dtmd_dev_device->device.path);
+							}
+						}
+						break;
+
+					case dtmd_info_partition:
+						if (dtmd_dev_device->partition.path != NULL)
+						{
+							rc = remove_media_partition(NULL, dtmd_dev_device->partition.path);
+
+							if (rc > 0)
+							{
+								notify_remove_partition(dtmd_dev_device->partition.path);
+							}
+						}
+						break;
+					}
+
+					if (rc < 0)
+					{
+						device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
+						result = -1;
+						goto exit_8;
+					}
+					break;
+
+				case dtmd_device_action_change:
+					// TODO: ignore? notify remove and add? cdroms use change
+					break;
+
+				default:
+					break;
 				}
 
-				udev_device_unref(dev);
+				device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
 			}
-			else
+			else if (rc < 0)
 			{
 				result = -1;
 				goto exit_8;
@@ -822,15 +794,13 @@ exit_8:
 exit_7:
 	remove_all_media();
 	remove_all_clients();
-
-exit_mountfd:
 	close(mountfd);
 
 exit_6:
-	udev_monitor_unref(mon);
+	device_system_stop_monitoring(dtmd_dev_mon);
 
 exit_5:
-	udev_unref(udev);
+	device_system_deinit(dtmd_dev_system);
 
 exit_4:
 	close(socketfd);

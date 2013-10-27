@@ -13,7 +13,7 @@ set(CPACK_PACKAGE_VERSION_PATCH ${DTMD_VERSION_PATCH})
 set(CPACK_GENERATOR "TBZ2")
 set(CPACK_SOURCE_GENERATOR "TBZ2")
 set(CPACK_SOURCE_IGNORE_FILES
-	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*")
+	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*;ignore;TODO")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${DTMD_VERSION}")
 # MUST be after CPACK_* variables.
 include(CPack)
@@ -117,10 +117,10 @@ else (DEFINED FORCE_QT)
 endif (DEFINED FORCE_QT)
 
 set ( LINUX_UDEV_SOURCES daemon/linux/udev/udev.c )
-set ( LINUX_UDEV_HEADERS daemon/linux/udev/udev.h )
+set ( LINUX_UDEV_HEADERS )
 set ( LINUX_UDEV_LIBS udev )
 
-set ( LINUX_KERNEL_SOURCES )
+set ( LINUX_KERNEL_SOURCES daemon/linux/kernel/kernel.c )
 set ( LINUX_KERNEL_HEADERS )
 set ( LINUX_KERNEL_LIBS )
 
@@ -140,7 +140,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/dtmd-internal.h )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/dtmd-internal.h daemon/system_module.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -169,9 +169,15 @@ set ( QT_IMAGES
 
 if (OS_LINUX)
 	if (LINUX_NO_UDEV)
+		include(FindPkgConfig)
+
+		pkg_check_modules(BLKID blkid REQUIRED)
+
+		include_directories( ${BLKID_INCLUDE_DIRS} )
+
 		set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_KERNEL_SOURCES} )
 		set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_KERNEL_HEADERS} )
-		set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_KERNEL_LIBS} )
+		set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_KERNEL_LIBS}    ${BLKID_LIBRARIES} )
 		add_definitions(-DSUBSYSTEM_LINUX_KERNEL)
 		message(STATUS "Linux Subsystem: kernel")
 	else (LINUX_NO_UDEV)

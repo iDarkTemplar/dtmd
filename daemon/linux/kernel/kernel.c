@@ -18,21 +18,4 @@
  *
  */
 
-#ifndef DTMD_LINUX_UDEV_H
-#define DTMD_LINUX_UDEV_H
-
-#include <libudev.h>
-
-#include <dtmd.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-dtmd_removable_media_type_t get_device_type(struct udev_device *device);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* DTMD_LINUX_UDEV_H */
+#include <blkid.h>
