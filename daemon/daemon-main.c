@@ -457,10 +457,10 @@ int main(int argc, char **argv)
 		switch (dtmd_dev_device->type)
 		{
 		case dtmd_info_device:
-			if ((dtmd_dev_device->device.path != NULL)
-				&& (dtmd_dev_device->device.media_type != unknown_or_persistent))
+			if ((dtmd_dev_device->path != NULL)
+				&& (dtmd_dev_device->media_type != unknown_or_persistent))
 			{
-				if (add_media_block(dtmd_dev_device->device.path, dtmd_dev_device->device.media_type) < 0)
+				if (add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type) < 0)
 				{
 					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
 					device_system_finish_enumerate_devices(dtmd_dev_enum);
@@ -471,16 +471,16 @@ int main(int argc, char **argv)
 			break;
 
 		case dtmd_info_partition:
-			if ((dtmd_dev_device->partition.path != NULL)
-				&& (dtmd_dev_device->partition.media_type != unknown_or_persistent)
-				&& (dtmd_dev_device->partition.fstype != NULL)
-				&& (dtmd_dev_device->partition.path_parent != NULL))
+			if ((dtmd_dev_device->path != NULL)
+				&& (dtmd_dev_device->media_type != unknown_or_persistent)
+				&& (dtmd_dev_device->fstype != NULL)
+				&& (dtmd_dev_device->path_parent != NULL))
 			{
-				if (add_media_partition(dtmd_dev_device->partition.path_parent,
-					dtmd_dev_device->partition.media_type,
-					dtmd_dev_device->partition.path,
-					dtmd_dev_device->partition.fstype,
-					dtmd_dev_device->partition.label) < 0)
+				if (add_media_partition(dtmd_dev_device->path_parent,
+					dtmd_dev_device->media_type,
+					dtmd_dev_device->path,
+					dtmd_dev_device->fstype,
+					dtmd_dev_device->label) < 0)
 				{
 					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
 					device_system_finish_enumerate_devices(dtmd_dev_enum);
@@ -565,36 +565,36 @@ int main(int argc, char **argv)
 					switch (dtmd_dev_device->type)
 					{
 					case dtmd_info_device:
-						if ((dtmd_dev_device->device.path != NULL)
-							&& (dtmd_dev_device->device.media_type != unknown_or_persistent))
+						if ((dtmd_dev_device->path != NULL)
+							&& (dtmd_dev_device->media_type != unknown_or_persistent))
 						{
-							rc = add_media_block(dtmd_dev_device->device.path, dtmd_dev_device->device.media_type);
+							rc = add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type);
 
 							if (rc > 0)
 							{
-								notify_add_disk(dtmd_dev_device->device.path, dtmd_dev_device->device.media_type);
+								notify_add_disk(dtmd_dev_device->path, dtmd_dev_device->media_type);
 							}
 						}
 						break;
 
 					case dtmd_info_partition:
-						if ((dtmd_dev_device->partition.path != NULL)
-							&& (dtmd_dev_device->partition.media_type != unknown_or_persistent)
-							&& (dtmd_dev_device->partition.fstype != NULL)
-							&& (dtmd_dev_device->partition.path_parent != NULL))
+						if ((dtmd_dev_device->path != NULL)
+							&& (dtmd_dev_device->media_type != unknown_or_persistent)
+							&& (dtmd_dev_device->fstype != NULL)
+							&& (dtmd_dev_device->path_parent != NULL))
 						{
-							rc = add_media_partition(dtmd_dev_device->partition.path_parent,
-								dtmd_dev_device->partition.media_type,
-								dtmd_dev_device->partition.path,
-								dtmd_dev_device->partition.fstype,
-								dtmd_dev_device->partition.label);
+							rc = add_media_partition(dtmd_dev_device->path_parent,
+								dtmd_dev_device->media_type,
+								dtmd_dev_device->path,
+								dtmd_dev_device->fstype,
+								dtmd_dev_device->label);
 
 							if (rc > 0)
 							{
-								notify_add_partition(dtmd_dev_device->partition.path,
-									dtmd_dev_device->partition.fstype,
-									dtmd_dev_device->partition.label,
-									dtmd_dev_device->partition.path_parent);
+								notify_add_partition(dtmd_dev_device->path,
+									dtmd_dev_device->fstype,
+									dtmd_dev_device->label,
+									dtmd_dev_device->path_parent);
 							}
 						}
 						break;
@@ -615,25 +615,25 @@ int main(int argc, char **argv)
 					switch (dtmd_dev_device->type)
 					{
 					case dtmd_info_device:
-						if (dtmd_dev_device->device.path != NULL)
+						if (dtmd_dev_device->path != NULL)
 						{
-							rc = remove_media_block(dtmd_dev_device->device.path);
+							rc = remove_media_block(dtmd_dev_device->path);
 
 							if (rc > 0)
 							{
-								notify_remove_disk(dtmd_dev_device->device.path);
+								notify_remove_disk(dtmd_dev_device->path);
 							}
 						}
 						break;
 
 					case dtmd_info_partition:
-						if (dtmd_dev_device->partition.path != NULL)
+						if (dtmd_dev_device->path != NULL)
 						{
-							rc = remove_media_partition(NULL, dtmd_dev_device->partition.path);
+							rc = remove_media_partition(NULL, dtmd_dev_device->path);
 
 							if (rc > 0)
 							{
-								notify_remove_partition(dtmd_dev_device->partition.path);
+								notify_remove_partition(dtmd_dev_device->path);
 							}
 						}
 						break;

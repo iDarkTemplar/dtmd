@@ -27,27 +27,6 @@
 extern "C" {
 #endif
 
-typedef struct dtmd_device_info
-{
-	const char *path;
-	dtmd_removable_media_type_t media_type;
-
-	void *private_data;
-} dtmd_device_info_t;
-
-typedef struct dtmd_partition_info
-{
-	const char *path;
-	const char *fstype;
-	const char *label;
-
-	/* struct custom_device *parent; */
-	const char *path_parent;
-	dtmd_removable_media_type_t media_type;
-
-	void *private_data;
-} dtmd_partition_info_t;
-
 typedef enum dtmd_info_type
 {
 	dtmd_info_unknown = 0,
@@ -58,11 +37,20 @@ typedef enum dtmd_info_type
 typedef struct dtmd_info
 {
 	dtmd_info_type_t type;
-	union
-	{
-		dtmd_device_info_t device;
-		dtmd_partition_info_t partition;
-	};
+
+	/* common for all media */
+	const char *path;
+	dtmd_removable_media_type_t media_type;
+
+	/* common for partition and non-empty cdroms */
+	const char *fstype;
+	const char *label;
+
+	/* for partition only */
+	const char *path_parent;
+
+	/* common for all media */
+	void *private_data;
 } dtmd_info_t;
 
 typedef enum dtmd_device_action_type

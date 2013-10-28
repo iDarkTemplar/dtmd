@@ -73,18 +73,56 @@ static dtmd_removable_media_type_t get_device_type(struct udev_device *device)
 
 static void device_system_free_device(dtmd_info_t *device)
 {
-	switch (device->type)
+	if (device->private_data != NULL)
 	{
-	case dtmd_info_device:
-		udev_device_unref(device->device.private_data);
-		break;
-
-	case dtmd_info_partition:
-		udev_device_unref(device->partition.private_data);
-		break;
+		udev_device_unref(device->private_data);
 	}
 
 	free(device);
+}
+
+static void device_system_fill_device(struct udev_device *dev, const char *path, dtmd_info_t *device_info)
+{
+	device_info->type         = dtmd_info_device;
+	device_info->path         = path;
+	device_info->media_type   = get_device_type(dev);
+	device_info->private_data = dev;
+
+	if (device_info->media_type == cdrom)
+	{
+		device_info->fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
+		device_info->label  = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+	}
+	else
+	{
+		device_info->fstype = NULL;
+		device_info->label  = NULL;
+	}
+
+	device_info->path_parent = NULL;
+}
+
+static void device_system_fill_partition(struct udev_device *dev, const char *path, dtmd_info_t *device_info)
+{
+	struct udev_device *dev_parent;
+
+	dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
+	if (dev_parent != NULL)
+	{
+		device_info->path_parent = udev_device_get_devnode(dev_parent);
+		device_info->media_type  = get_device_type(dev_parent);
+	}
+	else
+	{
+		device_info->path_parent = NULL;
+		device_info->media_type  = unknown_or_persistent;
+	}
+
+	device_info->type         = dtmd_info_partition;
+	device_info->path         = path;
+	device_info->fstype       = udev_device_get_property_value(dev, "ID_FS_TYPE");
+	device_info->label        = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+	device_info->private_data = dev;
 }
 
 dtmd_device_system_t* device_system_init()
@@ -157,17 +195,11 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t **device)
 {
 	const char *path;
-	const char *path_parent;
 	const char *devtype;
-	const char *fstype;
-	const char *label;
-
-	dtmd_removable_media_type_t media_type;
 
 	struct udev_list_entry *dev_list_entry;
 
 	struct udev_device *dev;
-	struct udev_device *dev_parent;
 
 	dtmd_info_t *device_info;
 
@@ -202,57 +234,31 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 
 		if (strcmp(devtype, "disk") == 0)
 		{
-			media_type = get_device_type(dev);
-
-			if (media_type != unknown_or_persistent)
+			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
+			if (device_info == NULL)
 			{
-				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-				if (device_info == NULL)
-				{
-					udev_device_unref(dev);
-					return -1;
-				}
-
-				device_info->type                = dtmd_info_device;
-				device_info->device.path         = path;
-				device_info->device.media_type   = media_type;
-				device_info->device.private_data = dev;
-
-				*device = device_info;
-				return 1;
+				udev_device_unref(dev);
+				return -1;
 			}
+
+			device_system_fill_device(dev, path, device_info);
+
+			*device = device_info;
+			return 1;
 		}
 		else if (strcmp(devtype, "partition") == 0)
 		{
-			dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
-			if (dev_parent != NULL)
+			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
+			if (device_info == NULL)
 			{
-				path_parent = udev_device_get_devnode(dev_parent);
-				fstype      = udev_device_get_property_value(dev, "ID_FS_TYPE");
-				label       = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-				media_type  = get_device_type(dev_parent);
-
-				if ((media_type != unknown_or_persistent) && (fstype != NULL))
-				{
-					device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-					if (device_info == NULL)
-					{
-						udev_device_unref(dev);
-						return -1;
-					}
-
-					device_info->type                   = dtmd_info_partition;
-					device_info->partition.path         = path;
-					device_info->partition.fstype       = fstype;
-					device_info->partition.label        = label;
-					device_info->partition.path_parent  = path_parent;
-					device_info->partition.media_type   = media_type;
-					device_info->partition.private_data = dev;
-
-					*device = device_info;
-					return 1;
-				}
+				udev_device_unref(dev);
+				return -1;
 			}
+
+			device_system_fill_partition(dev, path, device_info);
+
+			*device = device_info;
+			return 1;
 		}
 
 		udev_device_unref(dev);
@@ -328,17 +334,12 @@ int device_system_get_monitor_fd(dtmd_device_monitor_t *monitor)
 int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t **device, dtmd_device_action_type_t *action)
 {
 	const char *path;
-	const char *path_parent;
 	const char *devtype;
-	const char *fstype;
-	const char *label;
 	const char *action_str;
 
 	dtmd_device_action_type_t act;
-	dtmd_removable_media_type_t media_type;
 
 	struct udev_device *dev;
-	struct udev_device *dev_parent;
 
 	dtmd_info_t *device_info;
 
@@ -379,8 +380,6 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 
 			if (strcmp(devtype, "disk") == 0)
 			{
-				media_type = get_device_type(dev);
-
 				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 				if (device_info == NULL)
 				{
@@ -388,10 +387,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 					return -1;
 				}
 
-				device_info->type                = dtmd_info_device;
-				device_info->device.path         = path;
-				device_info->device.media_type   = media_type;
-				device_info->device.private_data = dev;
+				device_system_fill_device(dev, path, device_info);
 
 				*device = device_info;
 				*action = act;
@@ -399,21 +395,6 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 			}
 			else if (strcmp(devtype, "partition") == 0)
 			{
-				dev_parent = udev_device_get_parent_with_subsystem_devtype(dev, "block", "disk");
-				if (dev_parent != NULL)
-				{
-					path_parent = udev_device_get_devnode(dev_parent);
-					media_type  = get_device_type(dev_parent);
-				}
-				else
-				{
-					path_parent = NULL;
-					media_type  = unknown_or_persistent;
-				}
-
-				fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
-				label  = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-
 				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 				if (device_info == NULL)
 				{
@@ -421,13 +402,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 					return -1;
 				}
 
-				device_info->type                   = dtmd_info_partition;
-				device_info->partition.path         = path;
-				device_info->partition.fstype       = fstype;
-				device_info->partition.label        = label;
-				device_info->partition.path_parent  = path_parent;
-				device_info->partition.media_type   = media_type;
-				device_info->partition.private_data = dev;
+				device_system_fill_partition(dev, path, device_info);
 
 				*device = device_info;
 				*action = act;
