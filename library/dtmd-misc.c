@@ -29,10 +29,20 @@ static const char *str_cdrom                 = dtmd_string_device_cdrom;
 static const char *str_removable_disk        = dtmd_string_device_removable_disk;
 static const char *str_sd_card               = dtmd_string_device_sd_card;
 
-int dtmd_validate_command(char *buffer)
+static const char *str_cdrom_unknown    = dtmd_string_cdrom_unknown;
+static const char *str_cdrom_empty      = dtmd_string_cdrom_empty;
+static const char *str_cdrom_clear_disc = dtmd_string_cdrom_clear_disc;
+static const char *str_cdrom_disc       = dtmd_string_cdrom_disc;
+
+int dtmd_validate_command(const char *buffer)
 {
-	char *cur;
+	const char *cur;
 	int i;
+
+	if (buffer == NULL)
+	{
+		return 0;
+	}
 
 	cur = buffer;
 	i   = 0;
@@ -110,14 +120,19 @@ int dtmd_validate_command(char *buffer)
 	return 0;
 }
 
-dtmd_command_t* dtmd_parse_command(char *buffer)
+dtmd_command_t* dtmd_parse_command(const char *buffer)
 {
-	char *cur;
-	char *start;
+	const char *cur;
+	const char *start;
 	dtmd_command_t *result;
 	int i;
 	char *tmp_str;
 	char **tmp;
+
+	if (buffer == NULL)
+	{
+		goto parse_command_error_1;
+	}
 
 	result = (dtmd_command_t*) malloc(sizeof(dtmd_command_t));
 	if (result == NULL)
@@ -283,16 +298,16 @@ const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type)
 {
 	switch (type)
 	{
-	case cdrom:
+	case dtmd_removable_media_cdrom:
 		return str_cdrom;
 
-	case removable_disk:
+	case dtmd_removable_media_removable_disk:
 		return str_removable_disk;
 
-	case sd_card:
+	case dtmd_removable_media_sd_card:
 		return str_sd_card;
 
-	case unknown_or_persistent:
+	case dtmd_removable_media_unknown_or_persistent:
 	default:
 		return str_unknown_or_persistent;
 	}
@@ -300,20 +315,61 @@ const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type)
 
 dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
 {
-	if (strcmp(string, str_cdrom) == 0)
+	if (string != NULL)
 	{
-		return cdrom;
+		if (strcmp(string, str_cdrom) == 0)
+		{
+			return dtmd_removable_media_cdrom;
+		}
+		else if (strcmp(string, str_removable_disk) == 0)
+		{
+			return dtmd_removable_media_removable_disk;
+		}
+		else if (strcmp(string, str_sd_card) == 0)
+		{
+			return dtmd_removable_media_sd_card;
+		}
 	}
-	else if (strcmp(string, str_removable_disk) == 0)
+
+	return dtmd_removable_media_unknown_or_persistent;
+}
+
+const char* dtmd_cdrom_state_to_string(dtmd_cdrom_state_t state)
+{
+	switch (state)
 	{
-		return removable_disk;
+	case dtmd_cdrom_empty:
+		return str_cdrom_empty;
+
+	case dtmd_cdrom_clear_disc:
+		return str_cdrom_clear_disc;
+
+	case dtmd_cdrom_disc:
+		return str_cdrom_disc;
+
+	case dtmd_cdrom_unknown:
+	default:
+		return str_cdrom_unknown;
 	}
-	else if (strcmp(string, str_sd_card) == 0)
+}
+
+dtmd_cdrom_state_t dtmd_string_to_cdrom_state(const char *string)
+{
+	if (string != NULL)
 	{
-		return sd_card;
+		if (strcmp(string, str_cdrom_empty) == 0)
+		{
+			return dtmd_cdrom_empty;
+		}
+		else if (strcmp(string, str_cdrom_clear_disc) == 0)
+		{
+			return dtmd_cdrom_clear_disc;
+		}
+		else if (strcmp(string, str_cdrom_disc) == 0)
+		{
+			return dtmd_cdrom_disc;
+		}
 	}
-	else
-	{
-		return unknown_or_persistent;
-	}
+
+	return dtmd_cdrom_unknown;
 }

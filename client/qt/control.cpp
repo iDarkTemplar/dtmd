@@ -260,7 +260,7 @@ QIcon Control::iconFromType(dtmd_removable_media_type_t type, bool is_mounted)
 {
 	switch (type)
 	{
-	case cdrom:
+	case dtmd_removable_media_cdrom:
 		if (is_mounted)
 		{
 			return m_icon_mounted_cdrom;
@@ -270,7 +270,7 @@ QIcon Control::iconFromType(dtmd_removable_media_type_t type, bool is_mounted)
 			return m_icon_cdrom;
 		}
 
-	case removable_disk:
+	case dtmd_removable_media_removable_disk:
 		if (is_mounted)
 		{
 			return m_icon_mounted_removable_disk;
@@ -280,7 +280,7 @@ QIcon Control::iconFromType(dtmd_removable_media_type_t type, bool is_mounted)
 			return m_icon_removable_disk;
 		}
 
-	case sd_card:
+	case dtmd_removable_media_sd_card:
 		if (is_mounted)
 		{
 			return m_icon_mounted_sd_card;

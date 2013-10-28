@@ -36,13 +36,13 @@ static dtmd_removable_media_type_t get_device_type(struct udev_device *device)
 {
 	const char *removable;
 	const char *id_bus;
-	const char *is_cdrom;
+	const char *id_cdrom;
 	const char *id_drive_flash_sd;
 	const char *id_drive_media_flash_sd;
 
 	removable               = udev_device_get_sysattr_value(device, "removable");
 	id_bus                  = udev_device_get_property_value(device, "ID_BUS");
-	is_cdrom                = udev_device_get_property_value(device, "ID_CDROM");
+	id_cdrom                = udev_device_get_property_value(device, "ID_CDROM");
 	id_drive_flash_sd       = udev_device_get_property_value(device, "ID_DRIVE_FLASH_SD");
 	id_drive_media_flash_sd = udev_device_get_property_value(device, "ID_DRIVE_MEDIA_FLASH_SD");
 
@@ -51,23 +51,23 @@ static dtmd_removable_media_type_t get_device_type(struct udev_device *device)
 		|| ((id_drive_flash_sd != NULL) && (strcmp(id_drive_flash_sd, "1") == 0))
 		|| ((id_drive_media_flash_sd != NULL) && (strcmp(id_drive_media_flash_sd, "1") == 0))))
 	{
-		if ((is_cdrom != NULL) && (strcmp(is_cdrom, "1") == 0))
+		if ((id_cdrom != NULL) && (strcmp(id_cdrom, "1") == 0))
 		{
-			return cdrom;
+			return dtmd_removable_media_cdrom;
 		}
 		else if (((id_drive_flash_sd != NULL) && (strcmp(id_drive_flash_sd, "1") == 0))
 			|| ((id_drive_media_flash_sd != NULL) && (strcmp(id_drive_media_flash_sd, "1") == 0)))
 		{
-			return sd_card;
+			return dtmd_removable_media_sd_card;
 		}
 		else
 		{
-			return removable_disk;
+			return dtmd_removable_media_removable_disk;
 		}
 	}
 	else
 	{
-		return unknown_or_persistent;
+		return dtmd_removable_media_unknown_or_persistent;
 	}
 }
 
@@ -88,7 +88,7 @@ static void device_system_fill_device(struct udev_device *dev, const char *path,
 	device_info->media_type   = get_device_type(dev);
 	device_info->private_data = dev;
 
-	if (device_info->media_type == cdrom)
+	if (device_info->media_type == dtmd_removable_media_cdrom)
 	{
 		device_info->fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
 		device_info->label  = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
@@ -115,7 +115,7 @@ static void device_system_fill_partition(struct udev_device *dev, const char *pa
 	else
 	{
 		device_info->path_parent = NULL;
-		device_info->media_type  = unknown_or_persistent;
+		device_info->media_type  = dtmd_removable_media_unknown_or_persistent;
 	}
 
 	device_info->type         = dtmd_info_partition;

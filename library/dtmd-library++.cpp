@@ -208,14 +208,14 @@ void device::fillFromDevice(const dtmd_device_t *dev)
 void device::clear()
 {
 	this->path.clear();
-	type = unknown_or_persistent;
+	type = dtmd_removable_media_unknown_or_persistent;
 	partitions.clear();
 }
 
 bool device::isEmpty() const
 {
 	return (this->path.empty()
-		&& (this->type == unknown_or_persistent)
+		&& (this->type == dtmd_removable_media_unknown_or_persistent)
 		&& partitions.empty());
 }
 

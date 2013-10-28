@@ -454,7 +454,7 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count
 					result_devices[result_count-1]->partitions_count = 0;
 
 					result_devices[result_count-1]->type = dtmd_string_to_device_type(cmd->args[1]);
-					if (result_devices[result_count-1]->type == unknown_or_persistent)
+					if (result_devices[result_count-1]->type == dtmd_removable_media_unknown_or_persistent)
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_invalid_state;
@@ -765,7 +765,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 					result_device->partitions_count = 0;
 
 					result_device->type = dtmd_string_to_device_type(cmd->args[1]);
-					if (result_device->type == unknown_or_persistent)
+					if (result_device->type == dtmd_removable_media_unknown_or_persistent)
 					{
 						dtmd_free_command(cmd);
 						handle->result_state = dtmd_invalid_state;
@@ -1749,7 +1749,7 @@ static int dtmd_helper_validate_device(dtmd_device_t *device)
 {
 	unsigned int i;
 
-	if ((device->path == NULL) || (device->type == unknown_or_persistent))
+	if ((device->path == NULL) || (device->type == dtmd_removable_media_unknown_or_persistent))
 	{
 		return 0;
 	}

@@ -458,7 +458,7 @@ int main(int argc, char **argv)
 		{
 		case dtmd_info_device:
 			if ((dtmd_dev_device->path != NULL)
-				&& (dtmd_dev_device->media_type != unknown_or_persistent))
+				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
 			{
 				if (add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type) < 0)
 				{
@@ -472,7 +472,7 @@ int main(int argc, char **argv)
 
 		case dtmd_info_partition:
 			if ((dtmd_dev_device->path != NULL)
-				&& (dtmd_dev_device->media_type != unknown_or_persistent)
+				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
 				&& (dtmd_dev_device->fstype != NULL)
 				&& (dtmd_dev_device->path_parent != NULL))
 			{
@@ -566,7 +566,7 @@ int main(int argc, char **argv)
 					{
 					case dtmd_info_device:
 						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != unknown_or_persistent))
+							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
 						{
 							rc = add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type);
 
@@ -579,7 +579,7 @@ int main(int argc, char **argv)
 
 					case dtmd_info_partition:
 						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != unknown_or_persistent)
+							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
 							&& (dtmd_dev_device->fstype != NULL)
 							&& (dtmd_dev_device->path_parent != NULL))
 						{
