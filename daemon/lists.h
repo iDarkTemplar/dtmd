@@ -30,7 +30,7 @@ extern "C" {
 struct removable_partition
 {
 	char *path;
-	char *type;
+	char *fstype;
 	char *label; // optional
 	unsigned char is_mounted;
 	char *mnt_point; // optional
@@ -46,6 +46,18 @@ struct removable_media
 	struct removable_partition **partition;
 };
 
+struct removable_stateful_media
+{
+	char *path;
+	dtmd_removable_media_type_t type;
+	dtmd_removable_media_state_t state;
+	char *fstype; // optional
+	char *label; // optional
+	unsigned char is_mounted;
+	char *mnt_point; // optional
+	char *mnt_opts; // optional
+};
+
 struct client
 {
 	int clientfd;
@@ -56,14 +68,21 @@ struct client
 extern struct removable_media **media;
 extern unsigned int media_count;
 
+extern struct removable_stateful_media **stateful_media;
+extern unsigned int stateful_media_count;
+
 extern struct client **clients;
 extern unsigned int clients_count;
 
 int add_media_block(const char *path, dtmd_removable_media_type_t media_type);
 int remove_media_block(const char *path);
-int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *type, const char *label);
+int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label);
 int remove_media_partition(const char *block, const char *partition);
 void remove_all_media(void);
+
+int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
+int remove_stateful_media(const char *path);
+void remove_all_stateful_media(void);
 
 int add_client(int client);
 int remove_client(int client);

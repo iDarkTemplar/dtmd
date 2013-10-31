@@ -49,6 +49,10 @@ typedef struct dtmd_info
 	/* for partition only */
 	const char *path_parent;
 
+	/* for cdroms only */
+	// TODO: define state of cdrom from libudev
+	dtmd_removable_media_state_t state;
+
 	/* common for all media */
 	void *private_data;
 } dtmd_info_t;

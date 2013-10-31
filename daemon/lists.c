@@ -30,6 +30,9 @@
 struct removable_media **media = NULL;
 unsigned int media_count = 0;
 
+struct removable_stateful_media **stateful_media = NULL;
+unsigned int stateful_media_count = 0;
+
 struct client **clients = NULL;
 unsigned int clients_count = 0;
 
@@ -50,26 +53,23 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 	cur_media = (struct removable_media*) malloc(sizeof(struct removable_media));
 	if (cur_media == NULL)
 	{
-		return -1;
+		goto add_media_block_error_1;
 	}
 
 	cur_media->path = strdup(path);
 	if (cur_media->path == NULL)
 	{
-		free(cur_media);
-		return -1;
+		goto add_media_block_error_2;
 	}
 
-	cur_media->partition = NULL;
+	cur_media->partition        = NULL;
 	cur_media->partitions_count = 0;
-	cur_media->type = media_type;
+	cur_media->type             = media_type;
 
 	tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*)*(media_count+1));
 	if (tmp == NULL)
 	{
-		free(cur_media->path);
-		free(cur_media);
-		return -1;
+		goto add_media_block_error_3;
 	}
 
 	++media_count;
@@ -77,6 +77,15 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 	media[media_count-1] = cur_media;
 
 	return 1;
+
+add_media_block_error_3:
+	free(cur_media->path);
+
+add_media_block_error_2:
+	free(cur_media);
+
+add_media_block_error_1:
+	return -1;
 }
 
 int remove_media_block(const char *path)
@@ -121,8 +130,18 @@ int remove_media_block(const char *path)
 						free(del->partition[j]->label);
 					}
 
+					if (del->partition[j]->mnt_point != NULL)
+					{
+						free(del->partition[j]->mnt_point);
+					}
+
+					if (del->partition[j]->mnt_opts != NULL)
+					{
+						free(del->partition[j]->mnt_opts);
+					}
+
 					free(del->partition[j]->path);
-					free(del->partition[j]->type);
+					free(del->partition[j]->fstype);
 					free(del->partition[j]);
 				}
 
@@ -139,7 +158,7 @@ int remove_media_block(const char *path)
 	return 0;
 }
 
-int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *type, const char *label)
+int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label)
 {
 	int rc;
 	unsigned int i;
@@ -168,22 +187,19 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 			cur_partition = (struct removable_partition*) malloc(sizeof(struct removable_partition));
 			if (cur_partition == NULL)
 			{
-				return -1;
+				goto add_media_partition_error_1;
 			}
 
 			cur_partition->path = strdup(partition);
 			if (cur_partition->path == NULL)
 			{
-				free(cur_partition);
-				return -1;
+				goto add_media_partition_error_2;
 			}
 
-			cur_partition->type = strdup(type);
-			if (cur_partition->type == NULL)
+			cur_partition->fstype = strdup(fstype);
+			if (cur_partition->fstype == NULL)
 			{
-				free(cur_partition->path);
-				free(cur_partition);
-				return -1;
+				goto add_media_partition_error_3;
 			}
 
 			if (label != NULL)
@@ -191,10 +207,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 				cur_partition->label = decode_label(label);
 				if (cur_partition->label == NULL)
 				{
-					free(cur_partition->type);
-					free(cur_partition->path);
-					free(cur_partition);
-					return -1;
+					goto add_media_partition_error_4;
 				}
 			}
 			else
@@ -209,15 +222,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 			tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * (media[i]->partitions_count + 1));
 			if (tmp == NULL)
 			{
-				if (cur_partition->label != NULL)
-				{
-					free(cur_partition->label);
-				}
-
-				free(cur_partition->type);
-				free(cur_partition->path);
-				free(cur_partition);
-				return -1;
+				goto add_media_partition_error_5;
 			}
 
 			++(media[i]->partitions_count);
@@ -228,7 +233,25 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 		}
 	}
 
-	return -2; // -2 means BUG
+	return -2; // -2 means bug
+
+add_media_partition_error_5:
+	if (cur_partition->label != NULL)
+	{
+		free(cur_partition->label);
+	}
+
+add_media_partition_error_4:
+	free(cur_partition->fstype);
+
+add_media_partition_error_3:
+	free(cur_partition->path);
+
+add_media_partition_error_2:
+	free(cur_partition);
+
+add_media_partition_error_1:
+	return -1;
 }
 
 int remove_media_partition(const char *block, const char *partition)
@@ -284,7 +307,7 @@ int remove_media_partition(const char *block, const char *partition)
 					}
 
 					free(del->path);
-					free(del->type);
+					free(del->fstype);
 					free(del);
 
 					return 1;
@@ -325,7 +348,7 @@ void remove_all_media(void)
 					}
 
 					free(media[i]->partition[j]->path);
-					free(media[i]->partition[j]->type);
+					free(media[i]->partition[j]->fstype);
 					free(media[i]->partition[j]);
 				}
 
@@ -340,6 +363,199 @@ void remove_all_media(void)
 
 		media_count = 0;
 		media = NULL;
+	}
+}
+
+int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
+{
+	unsigned int i;
+	struct removable_stateful_media *cur_media;
+	struct removable_stateful_media **tmp;
+
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		if (strcmp(stateful_media[i]->path, path) == 0)
+		{
+			return 0;
+		}
+	}
+
+	cur_media = (struct removable_stateful_media*) malloc(sizeof(struct removable_stateful_media));
+	if (cur_media == NULL)
+	{
+		goto add_stateful_media_error_1;
+	}
+
+	cur_media->path = strdup(path);
+	if (cur_media->path == NULL)
+	{
+		goto add_stateful_media_error_2;
+	}
+
+	if (fstype != NULL)
+	{
+		cur_media->fstype = strdup(fstype);
+		if (cur_media->fstype == NULL)
+		{
+			goto add_stateful_media_error_3;
+		}
+	}
+	else
+	{
+		cur_media->fstype = NULL;
+	}
+
+	if (label != NULL)
+	{
+		cur_media->label = decode_label(label);
+		if (cur_media->label == NULL)
+		{
+			goto add_stateful_media_error_4;
+		}
+	}
+	else
+	{
+		cur_media->label = NULL;
+	}
+
+	cur_media->type       = media_type;
+	cur_media->state      = state;
+	cur_media->is_mounted = 0;
+	cur_media->mnt_point  = NULL;
+	cur_media->mnt_opts   = NULL;
+
+	tmp = (struct removable_stateful_media**) realloc(stateful_media, sizeof(struct removable_stateful_media*)*(stateful_media_count+1));
+	if (tmp == NULL)
+	{
+		goto add_stateful_media_error_5;
+	}
+
+	++stateful_media_count;
+	stateful_media = tmp;
+	stateful_media[stateful_media_count-1] = cur_media;
+
+	return 1;
+
+add_stateful_media_error_5:
+	if (cur_media->label != NULL)
+	{
+		free(cur_media->label);
+	}
+
+add_stateful_media_error_4:
+	if (cur_media->fstype != NULL)
+	{
+		free(cur_media->fstype);
+	}
+
+add_stateful_media_error_3:
+	free(cur_media->path);
+
+add_stateful_media_error_2:
+	free(cur_media);
+
+add_stateful_media_error_1:
+	return -1;
+}
+
+int remove_stateful_media(const char *path)
+{
+	unsigned int i;
+	struct removable_stateful_media **tmp;
+	struct removable_stateful_media *del;
+
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		if (strcmp(stateful_media[i]->path, path) == 0)
+		{
+			del = stateful_media[i];
+			--stateful_media_count;
+
+			if (stateful_media_count > 0)
+			{
+				stateful_media[i] = stateful_media[stateful_media_count];
+				stateful_media[stateful_media_count] = del;
+
+				tmp = (struct removable_stateful_media**) realloc(stateful_media, sizeof(struct removable_stateful_media*) * stateful_media_count);
+				if (tmp == NULL)
+				{
+					return -1;
+				}
+
+				stateful_media = tmp;
+			}
+			else
+			{
+				free(stateful_media);
+				stateful_media = NULL;
+			}
+
+			if (del->fstype != NULL)
+			{
+				free(del->fstype);
+			}
+
+			if (del->label != NULL)
+			{
+				free(del->label);
+			}
+
+			if (del->mnt_point != NULL)
+			{
+				free(del->mnt_point);
+			}
+
+			if (del->mnt_opts != NULL)
+			{
+				free(del->mnt_opts);
+			}
+
+			free(del->path);
+			free(del);
+
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+void remove_all_stateful_media(void)
+{
+	unsigned int i;
+
+	if (stateful_media_count > 0)
+	{
+		for (i = 0; i < stateful_media_count; ++i)
+		{
+			if (stateful_media[i]->fstype != NULL)
+			{
+				free(stateful_media[i]->fstype);
+			}
+
+			if (stateful_media[i]->label != NULL)
+			{
+				free(stateful_media[i]->label);
+			}
+
+			if (stateful_media[i]->mnt_point != NULL)
+			{
+				free(stateful_media[i]->mnt_point);
+			}
+
+			if (stateful_media[i]->mnt_opts != NULL)
+			{
+				free(stateful_media[i]->mnt_opts);
+			}
+
+			free(stateful_media[i]->path);
+			free(stateful_media[i]);
+		}
+
+		free(stateful_media);
+
+		stateful_media_count = 0;
+		stateful_media = NULL;
 	}
 }
 
@@ -360,9 +576,7 @@ int add_client(int client)
 	cur_client = (struct client*) malloc(sizeof(struct client));
 	if (cur_client == NULL)
 	{
-		shutdown(client, SHUT_RDWR);
-		close(client);
-		return -1;
+		goto add_client_error_1;
 	}
 
 	cur_client->clientfd = client;
@@ -371,10 +585,7 @@ int add_client(int client)
 	tmp = (struct client**) realloc(clients, sizeof(struct client*)*(clients_count+1));
 	if (tmp == NULL)
 	{
-		free(cur_client);
-		shutdown(client, SHUT_RDWR);
-		close(client);
-		return -1;
+		goto add_client_error_2;
 	}
 
 	++clients_count;
@@ -382,6 +593,14 @@ int add_client(int client)
 	clients[clients_count-1] = cur_client;
 
 	return 1;
+
+add_client_error_2:
+	free(cur_client);
+
+add_client_error_1:
+	shutdown(client, SHUT_RDWR);
+	close(client);
+	return -1;
 }
 
 int remove_client(int client)

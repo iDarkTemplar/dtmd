@@ -36,13 +36,13 @@ typedef enum dtmd_removable_media_type
 	dtmd_removable_media_sd_card               = 3
 } dtmd_removable_media_type_t;
 
-typedef enum dtmd_cdrom_state
+typedef enum dtmd_removable_media_state
 {
-	dtmd_cdrom_unknown    = 0,
-	dtmd_cdrom_empty      = 1,
-	dtmd_cdrom_clear_disc = 2,
-	dtmd_cdrom_disc       = 3
-} dtmd_cdrom_state_t;
+	dtmd_removable_media_state_unknown = 0,
+	dtmd_removable_media_state_empty   = 1,
+	dtmd_removable_media_state_clear   = 2,
+	dtmd_removable_media_state_ok      = 3
+} dtmd_removable_media_state_t;
 
 #ifdef __cplusplus
 }
@@ -53,9 +53,9 @@ typedef enum dtmd_cdrom_state
 #define dtmd_string_device_removable_disk        "removable disk"
 #define dtmd_string_device_sd_card               "sdcard"
 
-#define dtmd_string_cdrom_unknown    "unknown"
-#define dtmd_string_cdrom_empty      "empty"
-#define dtmd_string_cdrom_clear_disc "clear_disc"
-#define dtmd_string_cdrom_disc       "disc"
+#define dtmd_string_state_unknown "unknown"
+#define dtmd_string_state_empty   "empty"
+#define dtmd_string_state_clear   "clear"
+#define dtmd_string_state_ok      "ok"
 
 #endif /* DTMD_H */

@@ -469,7 +469,7 @@ static int invoke_mount_external(unsigned int client_number, unsigned int dev, u
 	}
 
 	// calculate total length
-	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->type) + 1 + strlen(media[dev]->partition[part]->path) + 1 + strlen(mount_path);
+	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->fstype) + 1 + strlen(media[dev]->partition[part]->path) + 1 + strlen(mount_path);
 
 	if (mount_all_opts_len > 0)
 	{
@@ -487,7 +487,7 @@ static int invoke_mount_external(unsigned int client_number, unsigned int dev, u
 
 	strcpy(mount_cmd, mount_ext_cmd);
 	strcat(mount_cmd, " -t ");
-	strcat(mount_cmd, media[dev]->partition[part]->type);
+	strcat(mount_cmd, media[dev]->partition[part]->fstype);
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, media[dev]->partition[part]->path);
 	strcat(mount_cmd, " ");
@@ -922,11 +922,11 @@ static int invoke_mount_internal(unsigned int client_number, unsigned int dev, u
 		mount_all_opts[mount_all_opts_len_cur] = 0;
 	}
 
-	result = mount(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->type, mount_flags, mount_opts);
+	result = mount(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->fstype, mount_flags, mount_opts);
 
 	if (result == 0)
 	{
-		result = add_to_mtab(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->type, mount_all_opts);
+		result = add_to_mtab(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->fstype, mount_all_opts);
 		if (result == 1)
 		{
 			result = 1;
@@ -1015,7 +1015,7 @@ invoke_mount_exit_loop:
 			goto invoke_mount_error_1;
 		}
 
-		if (strcmp(fsopts->fstype, media[dev]->partition[part]->type) == 0)
+		if (strcmp(fsopts->fstype, media[dev]->partition[part]->fstype) == 0)
 		{
 			break;
 		}
@@ -1119,7 +1119,7 @@ static int invoke_unmount_external(unsigned int client_number, unsigned int dev,
 	int unmount_cmd_len;
 	char *unmount_cmd;
 
-	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->type) + 1 + strlen(media[dev]->partition[part]->mnt_point);
+	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->fstype) + 1 + strlen(media[dev]->partition[part]->mnt_point);
 
 	unmount_cmd = (char*) malloc(unmount_cmd_len + 1);
 	if (unmount_cmd == NULL)
@@ -1129,7 +1129,7 @@ static int invoke_unmount_external(unsigned int client_number, unsigned int dev,
 
 	strcpy(unmount_cmd, unmount_ext_cmd);
 	strcat(unmount_cmd, " -t ");
-	strcat(unmount_cmd, media[dev]->partition[part]->type);
+	strcat(unmount_cmd, media[dev]->partition[part]->fstype);
 	strcat(unmount_cmd, " ");
 	strcat(unmount_cmd, media[dev]->partition[part]->mnt_point);
 
@@ -1174,7 +1174,7 @@ static int invoke_unmount_internal(unsigned int client_number, unsigned int dev,
 		return 0;
 	}
 
-	result = remove_from_mtab(media[dev]->partition[part]->path, media[dev]->partition[part]->mnt_point, media[dev]->partition[part]->type);
+	result = remove_from_mtab(media[dev]->partition[part]->path, media[dev]->partition[part]->mnt_point, media[dev]->partition[part]->fstype);
 	if (result != 1)
 	{
 		// NOTE: failing to modify /etc/mtab is non-fatal error
@@ -1224,7 +1224,7 @@ invoke_unmount_exit_loop:
 			return 0;
 		}
 
-		if (strcmp(fsopts->fstype, media[dev]->partition[part]->type) == 0)
+		if (strcmp(fsopts->fstype, media[dev]->partition[part]->fstype) == 0)
 		{
 			break;
 		}

@@ -41,8 +41,8 @@ void dtmd_free_command(dtmd_command_t *cmd);
 const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
 dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);
 
-const char* dtmd_cdrom_state_to_string(dtmd_cdrom_state_t state);
-dtmd_cdrom_state_t dtmd_string_to_cdrom_state(const char *string);
+const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state);
+dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string);
 
 #ifdef __cplusplus
 }

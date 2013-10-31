@@ -37,6 +37,9 @@ extern "C" {
 	"remove_partition(path)"
 	"mount(path, mount_point, mount_options)"
 	"unmount(path, mount_point)"
+	"add_stateful_device(path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL))"
+	"remove_stateful_device(path)"
+	"stateful_device_changed(path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL))"
 
 	command responses start with "started" or "failed" or "succeeded"
 	and finish with "finished" if "started"
@@ -47,6 +50,8 @@ extern "C" {
 		devices: count
 		device: "path, type, partitions_count"
 		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+		stateful devices: count
+		stateful device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
 		or "failed" on fail
 	"list_device":
 		input:
@@ -60,6 +65,12 @@ extern "C" {
 		"partition path"
 		returns:
 		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+		or "failed" on fail
+	"list_stateful_device":
+		input:
+		"device path"
+		returns:
+		stateful device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
 		or "failed" on fail
 	"mount"
 		input:

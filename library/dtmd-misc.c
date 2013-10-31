@@ -29,10 +29,10 @@ static const char *str_cdrom                 = dtmd_string_device_cdrom;
 static const char *str_removable_disk        = dtmd_string_device_removable_disk;
 static const char *str_sd_card               = dtmd_string_device_sd_card;
 
-static const char *str_cdrom_unknown    = dtmd_string_cdrom_unknown;
-static const char *str_cdrom_empty      = dtmd_string_cdrom_empty;
-static const char *str_cdrom_clear_disc = dtmd_string_cdrom_clear_disc;
-static const char *str_cdrom_disc       = dtmd_string_cdrom_disc;
+static const char *str_removable_media_state_unknown = dtmd_string_state_unknown;
+static const char *str_removable_media_state_empty   = dtmd_string_state_empty;
+static const char *str_removable_media_state_clear   = dtmd_string_state_clear;
+static const char *str_removable_media_state_ok      = dtmd_string_state_ok;
 
 int dtmd_validate_command(const char *buffer)
 {
@@ -334,42 +334,42 @@ dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
 	return dtmd_removable_media_unknown_or_persistent;
 }
 
-const char* dtmd_cdrom_state_to_string(dtmd_cdrom_state_t state)
+const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state)
 {
 	switch (state)
 	{
-	case dtmd_cdrom_empty:
-		return str_cdrom_empty;
+	case dtmd_removable_media_state_empty:
+		return str_removable_media_state_empty;
 
-	case dtmd_cdrom_clear_disc:
-		return str_cdrom_clear_disc;
+	case dtmd_removable_media_state_clear:
+		return str_removable_media_state_clear;
 
-	case dtmd_cdrom_disc:
-		return str_cdrom_disc;
+	case dtmd_removable_media_state_ok:
+		return str_removable_media_state_ok;
 
-	case dtmd_cdrom_unknown:
+	case dtmd_removable_media_state_unknown:
 	default:
-		return str_cdrom_unknown;
+		return str_removable_media_state_unknown;
 	}
 }
 
-dtmd_cdrom_state_t dtmd_string_to_cdrom_state(const char *string)
+dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string)
 {
 	if (string != NULL)
 	{
-		if (strcmp(string, str_cdrom_empty) == 0)
+		if (strcmp(string, str_removable_media_state_empty) == 0)
 		{
-			return dtmd_cdrom_empty;
+			return dtmd_removable_media_state_empty;
 		}
-		else if (strcmp(string, str_cdrom_clear_disc) == 0)
+		else if (strcmp(string, str_removable_media_state_clear) == 0)
 		{
-			return dtmd_cdrom_clear_disc;
+			return dtmd_removable_media_state_ok;
 		}
-		else if (strcmp(string, str_cdrom_disc) == 0)
+		else if (strcmp(string, str_removable_media_state_ok) == 0)
 		{
-			return dtmd_cdrom_disc;
+			return dtmd_removable_media_state_ok;
 		}
 	}
 
-	return dtmd_cdrom_unknown;
+	return dtmd_removable_media_state_unknown;
 }

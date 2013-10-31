@@ -648,7 +648,14 @@ int main(int argc, char **argv)
 					break;
 
 				case dtmd_device_action_change:
-					// TODO: ignore? notify remove and add? cdroms use change
+					if ((dtmd_dev_device->type == dtmd_info_device)
+						&& (dtmd_dev_device->media_type == dtmd_removable_media_cdrom)
+						&& (dtmd_dev_device->path != NULL))
+					{
+						// TODO: notify change of cdroms
+						//ID_FS_LABEL_ENC=UDF\x20Volume
+						//ID_FS_TYPE=udf
+					}
 					break;
 
 				default:
@@ -793,6 +800,7 @@ exit_8:
 
 exit_7:
 	remove_all_media();
+	remove_all_stateful_media();
 	remove_all_clients();
 	close(mountfd);
 

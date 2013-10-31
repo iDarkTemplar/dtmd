@@ -283,7 +283,7 @@ static int print_partition(unsigned int client_number, unsigned int device, unsi
 
 	if (dprintf(clients[client_number]->clientfd, "partition(\"%s\", \"%s\", %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
 		media[device]->partition[partition]->path,
-		media[device]->partition[partition]->type,
+		media[device]->partition[partition]->fstype,
 		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
 		((media[device]->partition[partition]->label != NULL) ? (media[device]->partition[partition]->label) : ("nil")),
 		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
