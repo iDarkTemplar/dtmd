@@ -593,11 +593,6 @@ int main(int argc, char **argv)
 							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
 						{
 							rc = add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type);
-
-							if (rc > 0)
-							{
-								notify_add_disk(dtmd_dev_device->path, dtmd_dev_device->media_type);
-							}
 						}
 						break;
 
@@ -612,14 +607,6 @@ int main(int argc, char **argv)
 								dtmd_dev_device->path,
 								dtmd_dev_device->fstype,
 								dtmd_dev_device->label);
-
-							if (rc > 0)
-							{
-								notify_add_partition(dtmd_dev_device->path,
-									dtmd_dev_device->fstype,
-									dtmd_dev_device->label,
-									dtmd_dev_device->path_parent);
-							}
 						}
 						break;
 					}
@@ -642,11 +629,6 @@ int main(int argc, char **argv)
 						if (dtmd_dev_device->path != NULL)
 						{
 							rc = remove_media_block(dtmd_dev_device->path);
-
-							if (rc > 0)
-							{
-								notify_remove_disk(dtmd_dev_device->path);
-							}
 						}
 						break;
 
@@ -654,11 +636,6 @@ int main(int argc, char **argv)
 						if (dtmd_dev_device->path != NULL)
 						{
 							rc = remove_media_partition(NULL, dtmd_dev_device->path);
-
-							if (rc > 0)
-							{
-								notify_remove_partition(dtmd_dev_device->path);
-							}
 						}
 						break;
 					}
@@ -802,9 +779,10 @@ exit_8:
 	free(pollfds);
 
 exit_7:
+	// first remove clients, because remove_all_* produces notifications
+	remove_all_clients();
 	remove_all_media();
 	remove_all_stateful_media();
-	remove_all_clients();
 	close(mountfd);
 
 exit_6:

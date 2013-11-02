@@ -21,6 +21,7 @@
 #include "daemon/lists.h"
 
 #include "daemon/label.h"
+#include "daemon/actions.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -76,6 +77,8 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 	media = tmp;
 	media[media_count-1] = cur_media;
 
+	notify_add_disk(cur_media->path, cur_media->type);
+
 	return 1;
 
 add_media_block_error_3:
@@ -125,6 +128,13 @@ int remove_media_block(const char *path)
 			{
 				for (j = 0; j < del->partitions_count; ++j)
 				{
+					if (del->partition[j]->mnt_point != NULL)
+					{
+						notify_unmount(del->partition[j]->path, del->partition[j]->mnt_point);
+					}
+
+					notify_remove_partition(del->partition[j]->path);
+
 					if (del->partition[j]->label != NULL)
 					{
 						free(del->partition[j]->label);
@@ -147,6 +157,8 @@ int remove_media_block(const char *path)
 
 				free(del->partition);
 			}
+
+			notify_remove_disk(del->path);
 
 			free(del->path);
 			free(del);
@@ -229,6 +241,8 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 			media[i]->partition = tmp;
 			media[i]->partition[media[i]->partitions_count - 1] = cur_partition;
 
+			notify_add_partition(cur_partition->path, cur_partition->fstype, cur_partition->label, media[i]->path);
+
 			return 1;
 		}
 	}
@@ -291,6 +305,13 @@ int remove_media_partition(const char *block, const char *partition)
 						media[i]->partition = NULL;
 					}
 
+					if (del->mnt_point != NULL)
+					{
+						notify_unmount(del->path, del->mnt_point);
+					}
+
+					notify_remove_partition(del->path);
+
 					if (del->label != NULL)
 					{
 						free(del->label);
@@ -332,6 +353,13 @@ void remove_all_media(void)
 			{
 				for (j = 0; j < media[i]->partitions_count; ++j)
 				{
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
+					}
+
+					notify_remove_partition(media[i]->partition[j]->path);
+
 					if (media[i]->partition[j]->label != NULL)
 					{
 						free(media[i]->partition[j]->label);
@@ -354,6 +382,8 @@ void remove_all_media(void)
 
 				free(media[i]->partition);
 			}
+
+			notify_remove_disk(media[i]->path);
 
 			free(media[i]->path);
 			free(media[i]);
@@ -434,6 +464,8 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 	stateful_media = tmp;
 	stateful_media[stateful_media_count-1] = cur_media;
 
+	notify_add_stateful_device(cur_media->path, cur_media->type, cur_media->state, cur_media->fstype, cur_media->label);
+
 	return 1;
 
 add_stateful_media_error_5:
@@ -490,6 +522,13 @@ int remove_stateful_media(const char *path)
 				stateful_media = NULL;
 			}
 
+			if (del->mnt_point != NULL)
+			{
+				notify_unmount(del->path, del->mnt_point);
+			}
+
+			notify_remove_stateful_device(del->path);
+
 			if (del->fstype != NULL)
 			{
 				free(del->fstype);
@@ -528,6 +567,12 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 	{
 		if (strcmp(stateful_media[i]->path, path) == 0)
 		{
+			if (stateful_media[i]->mnt_point != NULL)
+			{
+				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);
+				stateful_media[i]->is_mounted = 0;
+			}
+
 			if (stateful_media[i]->fstype != NULL)
 			{
 				free(stateful_media[i]->fstype);
@@ -573,6 +618,12 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 				}
 			}
 
+			notify_stateful_device_changed(stateful_media[i]->path,
+				stateful_media[i]->type,
+				stateful_media[i]->state,
+				stateful_media[i]->fstype,
+				stateful_media[i]->label);
+
 			return 1;
 		}
 	}
@@ -588,6 +639,13 @@ void remove_all_stateful_media(void)
 	{
 		for (i = 0; i < stateful_media_count; ++i)
 		{
+			if (stateful_media[i]->mnt_point != NULL)
+			{
+				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);
+			}
+
+			notify_remove_stateful_device(stateful_media[i]->path);
+
 			if (stateful_media[i]->fstype != NULL)
 			{
 				free(stateful_media[i]->fstype);
