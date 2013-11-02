@@ -287,40 +287,40 @@ void Control::BuildMenu()
 					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
 						QString::fromLocal8Bit(dev->label.empty() ? dev->path.c_str() : dev->label.c_str()));
 
-					QCustomStatefulDeviceAction *action;
-					action = new QCustomStatefulDeviceAction(QObject::trUtf8("Open device"),
+					QScopedPointer<QCustomStatefulDeviceAction> action;
+					action.reset(new QCustomStatefulDeviceAction(QObject::trUtf8("Open device"),
 						menu,
 						dev - m_stateful_devices.begin(),
-						QString::fromLocal8Bit(dev->path.c_str()));
+						QString::fromLocal8Bit(dev->path.c_str())));
 
-					QObject::connect(action, SIGNAL(triggered(uint,QString)),
+					QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
 						this, SLOT(triggeredOpen(uint,QString)), Qt::DirectConnection);
 
-					menu->addAction(action);
+					menu->addAction(action.take());
 
 					if (is_mounted)
 					{
-						action = new QCustomStatefulDeviceAction(QObject::trUtf8("Unmount device"),
+						action.reset(new QCustomStatefulDeviceAction(QObject::trUtf8("Unmount device"),
 							menu,
 							dev - m_stateful_devices.begin(),
-							QString::fromLocal8Bit(dev->path.c_str()));
+							QString::fromLocal8Bit(dev->path.c_str())));
 
-						QObject::connect(action, SIGNAL(triggered(uint,QString)),
+						QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
 							this, SLOT(triggeredUnmount(uint,QString)), Qt::DirectConnection);
 
-						menu->addAction(action);
+						menu->addAction(action.take());
 					}
 					else
 					{
-						action = new QCustomStatefulDeviceAction(QObject::trUtf8("Mount device"),
+						action.reset(new QCustomStatefulDeviceAction(QObject::trUtf8("Mount device"),
 							menu,
 							dev - m_stateful_devices.begin(),
-							QString::fromLocal8Bit(dev->path.c_str()));
+							QString::fromLocal8Bit(dev->path.c_str())));
 
-						QObject::connect(action, SIGNAL(triggered(uint,QString)),
+						QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
 							this, SLOT(triggeredMount(uint,QString)), Qt::DirectConnection);
 
-						menu->addAction(action);
+						menu->addAction(action.take());
 					}
 				}
 			}
@@ -338,43 +338,43 @@ void Control::BuildMenu()
 					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
 						QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str()));
 
-					QCustomDeviceAction *action;
-					action = new QCustomDeviceAction(QObject::trUtf8("Open device"),
+					QScopedPointer<QCustomDeviceAction> action;
+					action.reset(new QCustomDeviceAction(QObject::trUtf8("Open device"),
 						menu,
 						dev - m_devices.begin(),
 						it - dev->partitions.begin(),
-						QString::fromLocal8Bit(it->path.c_str()));
+						QString::fromLocal8Bit(it->path.c_str())));
 
-					QObject::connect(action, SIGNAL(triggered(uint,uint,QString)),
+					QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
 						this, SLOT(triggeredOpen(uint,uint,QString)), Qt::DirectConnection);
 
-					menu->addAction(action);
+					menu->addAction(action.take());
 
 					if (is_mounted)
 					{
-						action = new QCustomDeviceAction(QObject::trUtf8("Unmount device"),
+						action.reset(new QCustomDeviceAction(QObject::trUtf8("Unmount device"),
 							menu,
 							dev - m_devices.begin(),
 							it - dev->partitions.begin(),
-							QString::fromLocal8Bit(it->path.c_str()));
+							QString::fromLocal8Bit(it->path.c_str())));
 
-						QObject::connect(action, SIGNAL(triggered(uint,uint,QString)),
+						QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
 							this, SLOT(triggeredUnmount(uint,uint,QString)), Qt::DirectConnection);
 
-						menu->addAction(action);
+						menu->addAction(action.take());
 					}
 					else
 					{
-						action = new QCustomDeviceAction(QObject::trUtf8("Mount device"),
+						action.reset(new QCustomDeviceAction(QObject::trUtf8("Mount device"),
 							menu,
 							dev - m_devices.begin(),
 							it - dev->partitions.begin(),
-							QString::fromLocal8Bit(it->path.c_str()));
+							QString::fromLocal8Bit(it->path.c_str())));
 
-						QObject::connect(action, SIGNAL(triggered(uint,uint,QString)),
+						QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
 							this, SLOT(triggeredMount(uint,uint,QString)), Qt::DirectConnection);
 
-						menu->addAction(action);
+						menu->addAction(action.take());
 					}
 				}
 			}

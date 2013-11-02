@@ -77,7 +77,6 @@ private:
 
 	QSystemTrayIcon m_tray;
 	QScopedPointer<dtmd::library> m_lib;
-	// TODO: implement stateful devices
 	std::vector<dtmd::stateful_device> m_stateful_devices;
 	std::vector<dtmd::device> m_devices;
 	QMutex m_devices_mutex;
