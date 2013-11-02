@@ -35,7 +35,9 @@ int notify_add_disk(const char *path, dtmd_removable_media_type_t type);
 int notify_remove_disk(const char *path);
 int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path);
 int notify_remove_partition(const char *path);
-// TODO: add stateful notifications
+int notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
+int notify_remove_stateful_device(const char *path);
+int notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
 int notify_mount(const char *path, const char *mount_point, const char *mount_options);
 int notify_unmount(const char *path, const char *mount_point);
 
