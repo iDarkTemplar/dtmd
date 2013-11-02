@@ -82,6 +82,7 @@ void remove_all_media(void);
 
 int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
 int remove_stateful_media(const char *path);
+int change_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
 void remove_all_stateful_media(void);
 
 int add_client(int client);

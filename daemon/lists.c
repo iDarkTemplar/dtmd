@@ -520,6 +520,66 @@ int remove_stateful_media(const char *path)
 	return 0;
 }
 
+int change_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
+{
+	unsigned int i;
+
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		if (strcmp(stateful_media[i]->path, path) == 0)
+		{
+			if (stateful_media[i]->fstype != NULL)
+			{
+				free(stateful_media[i]->fstype);
+				stateful_media[i]->fstype = NULL;
+			}
+
+			if (stateful_media[i]->label != NULL)
+			{
+				free(stateful_media[i]->label);
+				stateful_media[i]->label = NULL;
+			}
+
+			if (stateful_media[i]->mnt_point != NULL)
+			{
+				free(stateful_media[i]->mnt_point);
+				stateful_media[i]->mnt_point = NULL;
+			}
+
+			if (stateful_media[i]->mnt_opts != NULL)
+			{
+				free(stateful_media[i]->mnt_opts);
+				stateful_media[i]->mnt_opts = NULL;
+			}
+
+			stateful_media[i]->type  = media_type;
+			stateful_media[i]->state = state;
+
+			if (fstype != NULL)
+			{
+				stateful_media[i]->fstype = strdup(fstype);
+				if (stateful_media[i]->fstype == NULL)
+				{
+					return -1;
+				}
+			}
+
+			if (label != NULL)
+			{
+				stateful_media[i]->label = decode_label(label);
+				if (stateful_media[i]->label == NULL)
+				{
+					return -1;
+				}
+			}
+
+			return 1;
+		}
+	}
+
+	return -1;
+}
+
 void remove_all_stateful_media(void)
 {
 	unsigned int i;

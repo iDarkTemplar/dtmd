@@ -48,6 +48,7 @@ int check_mount_changes(void)
 		goto check_mount_changes_error_1;
 	}
 
+	// stateless devices
 	for (i = 0; i < media_count; ++i)
 	{
 		for (j = 0; j < media[i]->partitions_count; ++j)
@@ -56,8 +57,15 @@ int check_mount_changes(void)
 		}
 	}
 
+	// stateful devices
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		stateful_media[i]->is_mounted <<= 1;
+	}
+
 	while ((ent = getmntent(mntfile)) != NULL)
 	{
+		// stateless devices
 		for (i = 0; i < media_count; ++i)
 		{
 			for (j = 0; j < media[i]->partitions_count; ++j)
@@ -105,16 +113,68 @@ int check_mount_changes(void)
 						}
 					}
 
-					// break from both cycles
-					i = media_count;
-					break;
+					goto check_mount_changes_break_cycles;
 				}
 			}
 		}
+
+		// stateful devices
+		for (i = 0; i < stateful_media_count; ++i)
+		{
+			if (strcmp(stateful_media[i]->path, ent->mnt_fsname) == 0)
+			{
+				// skip devices mounted multiple times
+				if (!(stateful_media[i]->is_mounted & is_mounted_now))
+				{
+					if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
+					{
+						stateful_media[i]->is_mounted |= is_mounted_now;
+
+						if ((stateful_media[i]->mnt_point == NULL) || (strcmp(stateful_media[i]->mnt_point, ent->mnt_dir) != 0))
+						{
+							if (stateful_media[i]->mnt_point != NULL)
+							{
+								free(stateful_media[i]->mnt_point);
+							}
+
+							stateful_media[i]->mnt_point = strdup(ent->mnt_dir);
+							if (stateful_media[i]->mnt_point == NULL)
+							{
+								goto check_mount_changes_error_2;
+							}
+						}
+
+						if ((stateful_media[i]->mnt_opts == NULL) || (strcmp(stateful_media[i]->mnt_opts, ent->mnt_opts) != 0))
+						{
+							if (stateful_media[i]->mnt_opts != NULL)
+							{
+								free(stateful_media[i]->mnt_opts);
+							}
+
+							stateful_media[i]->mnt_opts = strdup(ent->mnt_opts);
+							if (stateful_media[i]->mnt_opts == NULL)
+							{
+								goto check_mount_changes_error_2;
+							}
+						}
+					}
+					else
+					{
+						stateful_media[i]->is_mounted &= ~is_mounted_now;
+					}
+				}
+
+				goto check_mount_changes_break_cycles;
+			}
+		}
+
+	check_mount_changes_break_cycles:
+		;
 	}
 
 	endmntent(mntfile);
 
+	// stateless devices
 	for (i = 0; i < media_count; ++i)
 	{
 		for (j = 0; j < media[i]->partitions_count; ++j)
@@ -145,6 +205,39 @@ int check_mount_changes(void)
 						free(media[i]->partition[j]->mnt_opts);
 						media[i]->partition[j]->mnt_opts = NULL;
 					}
+				}
+			}
+		}
+	}
+
+	// stateful devices
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		if (stateful_media[i]->is_mounted & is_mounted_now)
+		{
+			if (!(stateful_media[i]->is_mounted & is_mounted_last))
+			{
+				notify_mount(stateful_media[i]->path, stateful_media[i]->mnt_point, stateful_media[i]->mnt_opts);
+				stateful_media[i]->is_mounted = is_mounted_now;
+			}
+		}
+		else
+		{
+			if (stateful_media[i]->is_mounted & is_mounted_last)
+			{
+				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);
+				stateful_media[i]->is_mounted = 0;
+
+				if (stateful_media[i]->mnt_point != NULL)
+				{
+					free(stateful_media[i]->mnt_point);
+					stateful_media[i]->mnt_point = NULL;
+				}
+
+				if (stateful_media[i]->mnt_opts != NULL)
+				{
+					free(stateful_media[i]->mnt_opts);
+					stateful_media[i]->mnt_opts = NULL;
 				}
 			}
 		}
