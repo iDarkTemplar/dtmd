@@ -97,7 +97,13 @@ class stateful_device
 public:
 	stateful_device();
 	stateful_device(const dtmd_stateful_device_t *dev);
-	stateful_device(const std::string &l_path, dtmd_removable_media_type_t l_type, dtmd_removable_media_state_t l_state);
+	stateful_device(const std::string &l_path,
+		dtmd_removable_media_type_t l_type,
+		dtmd_removable_media_state_t l_state,
+		const std::string &l_fstype = std::string(),
+		const std::string &l_label = std::string(),
+		const std::string &l_mnt_point = std::string(),
+		const std::string &l_mnt_opts = std::string());
 
 	virtual ~stateful_device();
 

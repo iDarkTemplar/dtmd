@@ -37,9 +37,9 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 	unsigned int j;
 	int rc;
 
-	if ((strcmp(cmd->cmd, "enum_all") == 0) && (cmd->args_count == 0))
+	if ((strcmp(cmd->cmd, dtmd_command_enum_all) == 0) && (cmd->args_count == 0))
 	{
-		dprintf(clients[client_number]->clientfd, "started(\"enum_all\")\n");
+		dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_enum_all "\")\n");
 
 		print_devices_count(client_number);
 
@@ -53,11 +53,11 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 			}
 		}
 
-		dprintf(clients[client_number]->clientfd, "finished(\"enum_all\")\n");
+		dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_enum_all "\")\n");
 
 		return 1;
 	}
-	else if ((strcmp(cmd->cmd, "list_device") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	else if ((strcmp(cmd->cmd, dtmd_command_list_device) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
 		for (i = 0; i < media_count; ++i)
 		{
@@ -69,7 +69,7 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 
 		if (i < media_count)
 		{
-			dprintf(clients[client_number]->clientfd, "started(\"list_device\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]);
 
 			print_device(client_number, i);
 
@@ -78,18 +78,18 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 				print_partition(client_number, i, j);
 			}
 
-			dprintf(clients[client_number]->clientfd, "finished(\"list_device\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]);
 
 			return 1;
 		}
 		else
 		{
-			dprintf(clients[client_number]->clientfd, "failed(\"list_device\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]);
 
 			return 0;
 		}
 	}
-	else if ((strcmp(cmd->cmd, "list_partition") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	else if ((strcmp(cmd->cmd, dtmd_command_list_partition) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
 		for (i = 0; i < media_count; ++i)
 		{
@@ -106,26 +106,26 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 
 		if (i < media_count)
 		{
-			dprintf(clients[client_number]->clientfd, "started(\"list_partition\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]);
 			print_partition(client_number, i, j);
-			dprintf(clients[client_number]->clientfd, "finished(\"list_partition\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]);
 
 			return 1;
 		}
 		else
 		{
-			dprintf(clients[client_number]->clientfd, "failed(\"list_partition\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]);
 
 			return 0;
 		}
 	}
-	else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
+	else if ((strcmp(cmd->cmd, dtmd_command_mount) == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
 		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1]);
 
 		if (rc > 0)
 		{
-			dprintf(clients[client_number]->clientfd, "succeeded(\"mount\", \"%s\", %s%s%s)\n",
+			dprintf(clients[client_number]->clientfd, dtmd_response_succeeded "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
 				cmd->args[0],
 				((cmd->args[1] != NULL) ? ("\"") : ("")),
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
@@ -133,7 +133,7 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 		}
 		else if (rc == 0)
 		{
-			dprintf(clients[client_number]->clientfd, "failed(\"mount\", \"%s\", %s%s%s)\n",
+			dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
 				cmd->args[0],
 				((cmd->args[1] != NULL) ? ("\"") : ("")),
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
@@ -142,17 +142,17 @@ int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
 
 		return rc;
 	}
-	else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	else if ((strcmp(cmd->cmd, dtmd_command_unmount) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
 		rc = invoke_unmount(client_number, cmd->args[0]);
 
 		if (rc > 0)
 		{
-			dprintf(clients[client_number]->clientfd, "succeeded(\"unmount\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_succeeded "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]);
 		}
 		else if (rc == 0)
 		{
-			dprintf(clients[client_number]->clientfd, "failed(\"unmount\", \"%s\")\n", cmd->args[0]);
+			dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]);
 		}
 
 		return rc;
@@ -169,7 +169,7 @@ int notify_add_disk(const char *path, dtmd_removable_media_type_t type)
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "add_disk(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
+		dprintf(clients[i]->clientfd, dtmd_notification_add_disk "(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
 	}
 
 	return 0;
@@ -181,7 +181,7 @@ int notify_remove_disk(const char *path)
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "remove_disk(\"%s\")\n", path);
+		dprintf(clients[i]->clientfd, dtmd_notification_remove_disk "(\"%s\")\n", path);
 	}
 
 	return 0;
@@ -193,7 +193,7 @@ int notify_add_partition(const char *path, const char *fstype, const char *label
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "add_partition(\"%s\", \"%s\", %s%s%s, \"%s\")\n",
+		dprintf(clients[i]->clientfd, dtmd_notification_add_partition "(\"%s\", \"%s\", %s%s%s, \"%s\")\n",
 			path,
 			fstype,
 			(label != NULL) ? ("\"") : (""),
@@ -211,7 +211,7 @@ int notify_remove_partition(const char *path)
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "remove_partition(\"%s\")\n", path);
+		dprintf(clients[i]->clientfd, dtmd_notification_remove_partition "(\"%s\")\n", path);
 	}
 
 	return 0;
@@ -223,7 +223,7 @@ int notify_mount(const char *path, const char *mount_point, const char *mount_op
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "mount(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
+		dprintf(clients[i]->clientfd, dtmd_notification_mount "(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
 	}
 
 	return 0;
@@ -235,7 +235,7 @@ int notify_unmount(const char *path, const char *mount_point)
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, "unmount(\"%s\", \"%s\")\n", path, mount_point);
+		dprintf(clients[i]->clientfd, dtmd_notification_unmount "(\"%s\", \"%s\")\n", path, mount_point);
 	}
 
 	return 0;
@@ -243,7 +243,7 @@ int notify_unmount(const char *path, const char *mount_point)
 
 static int print_devices_count(unsigned int client_number)
 {
-	if (dprintf(clients[client_number]->clientfd, "devices(\"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%d\")\n",
 		media_count) < 0)
 	{
 		return -1;
@@ -261,7 +261,7 @@ static int print_device(unsigned int client_number, unsigned int device)
 	}
 #endif /* NDEBUG */
 
-	if (dprintf(clients[client_number]->clientfd, "device(\"%s\", \"%s\", \"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_device "(\"%s\", \"%s\", \"%d\")\n",
 		media[device]->path,
 		dtmd_device_type_to_string(media[device]->type),
 		media[device]->partitions_count) < 0)
@@ -281,7 +281,7 @@ static int print_partition(unsigned int client_number, unsigned int device, unsi
 	}
 #endif /* NDEBUG */
 
-	if (dprintf(clients[client_number]->clientfd, "partition(\"%s\", \"%s\", %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_partition "(\"%s\", \"%s\", %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
 		media[device]->partition[partition]->path,
 		media[device]->partition[partition]->fstype,
 		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),

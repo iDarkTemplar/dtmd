@@ -225,10 +225,20 @@ stateful_device::stateful_device(const dtmd_stateful_device_t *dev)
 	fillFromStatefulDevice(dev);
 }
 
-stateful_device::stateful_device(const std::string &l_path, dtmd_removable_media_type_t l_type, dtmd_removable_media_state_t l_state)
+stateful_device::stateful_device(const std::string &l_path,
+	dtmd_removable_media_type_t l_type,
+	dtmd_removable_media_state_t l_state,
+	const std::string &l_fstype,
+	const std::string &l_label,
+	const std::string &l_mnt_point,
+	const std::string &l_mnt_opts)
 	: path(l_path),
 	type(l_type),
-	state(l_state)
+	state(l_state),
+	fstype(l_fstype),
+	label(l_label),
+	mnt_point(l_mnt_point),
+	mnt_opts(l_mnt_opts)
 {
 }
 

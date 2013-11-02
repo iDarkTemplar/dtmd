@@ -29,62 +29,6 @@
 extern "C" {
 #endif
 
-// TODO: implement stateful devices in library/library++
-/*
-	Notification types:
-	"add_disk(path, type)"
-	"remove_disk(path)"
-	"add_partition(path, fstype, label (optional, may be NULL), parent_path)"
-	"remove_partition(path)"
-	"mount(path, mount_point, mount_options)"
-	"unmount(path, mount_point)"
-	"add_stateful_device(path, type, state, fstype (or NULL), label (or NULL))"
-	"remove_stateful_device(path)"
-	"stateful_device_changed(path, type, state, fstype (or NULL), label (or NULL))"
-
-	command responses start with "started" or "failed" or "succeeded"
-	and finish with "finished" if "started"
-
-	Commands:
-	"enum_all"
-		returns:
-		devices: count
-		device: "path, type, partitions_count"
-		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
-		stateful devices: count
-		stateful device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
-		or "failed" on fail
-	"list_device":
-		input:
-		"device path"
-		returns:
-		device: "path, type, partitions_count"
-		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
-		or "failed" on fail
-	"list_partition":
-		input:
-		"partition path"
-		returns:
-		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
-		or "failed" on fail
-	"list_stateful_device":
-		input:
-		"device path"
-		returns:
-		stateful device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
-		or "failed" on fail
-	"mount"
-		input:
-		"path, mount_options"
-		returns:
-		"succeeded" or "failed"
-	"unmount"
-		input:
-		"path"
-		returns:
-		"succeeded" or "failed"
-*/
-
 int invoke_command(unsigned int client_number, dtmd_command_t *cmd);
 
 int notify_add_disk(const char *path, dtmd_removable_media_type_t type);

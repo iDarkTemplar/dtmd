@@ -50,19 +50,19 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 	{
 		if (cmd != NULL)
 		{
-			if ((strcmp(cmd->cmd, "add_disk") == 0) && (cmd->args_count == 2)
+			if ((strcmp(cmd->cmd, dtmd_notification_add_disk) == 0) && (cmd->args_count == 2)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 			{
 				print_first(first);
 				fprintf(stdout, "Disk added\nPath: %s\nType: %s\n", cmd->args[0], cmd->args[1]);
 			}
-			else if ((strcmp(cmd->cmd, "remove_disk") == 0) && (cmd->args_count == 1)
+			else if ((strcmp(cmd->cmd, dtmd_notification_remove_disk) == 0) && (cmd->args_count == 1)
 				&& (cmd->args[0] != NULL))
 			{
 				print_first(first);
 				fprintf(stdout, "Disk removed\nPath: %s\n", cmd->args[0]);
 			}
-			else if ((strcmp(cmd->cmd, "add_partition") == 0) && (cmd->args_count == 4)
+			else if ((strcmp(cmd->cmd, dtmd_notification_add_partition) == 0) && (cmd->args_count == 4)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[3] != NULL))
 			{
 				print_first(first);
@@ -73,13 +73,13 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 					fprintf(stdout, "Label: %s\n", cmd->args[2]);
 				}
 			}
-			else if ((strcmp(cmd->cmd, "remove_partition") == 0) && (cmd->args_count == 1)
+			else if ((strcmp(cmd->cmd, dtmd_notification_remove_partition) == 0) && (cmd->args_count == 1)
 				&& (cmd->args[0] != NULL))
 			{
 				print_first(first);
 				fprintf(stdout, "Partition removed\nPath: %s\n", cmd->args[0]);
 			}
-			else if ((strcmp(cmd->cmd, "add_stateful_device") == 0) && (cmd->args_count == 5)
+			else if ((strcmp(cmd->cmd, dtmd_notification_add_stateful_device) == 0) && (cmd->args_count == 5)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
 			{
 				print_first(first);
@@ -95,13 +95,13 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 					fprintf(stdout, "Label: %s\n", cmd->args[4]);
 				}
 			}
-			else if ((strcmp(cmd->cmd, "remove_stateful_device") == 0) && (cmd->args_count == 1)
+			else if ((strcmp(cmd->cmd, dtmd_notification_remove_stateful_device) == 0) && (cmd->args_count == 1)
 				&& (cmd->args[0] != NULL))
 			{
 				print_first(first);
 				fprintf(stdout, "Stateful device removed\nPath: %s\n", cmd->args[0]);
 			}
-			else if ((strcmp(cmd->cmd, "stateful_device_changed") == 0) && (cmd->args_count == 5)
+			else if ((strcmp(cmd->cmd, dtmd_notification_stateful_device_changed) == 0) && (cmd->args_count == 5)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
 			{
 				print_first(first);
@@ -117,13 +117,13 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 					fprintf(stdout, "Label: %s\n", cmd->args[4]);
 				}
 			}
-			else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3)
+			else if ((strcmp(cmd->cmd, dtmd_notification_mount) == 0) && (cmd->args_count == 3)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
 			{
 				print_first(first);
 				fprintf(stdout, "Partition mounted\nPath: %s\nMount point: %s\nMount options: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
 			}
-			else if ((strcmp(cmd->cmd, "unmount") == 0) && (cmd->args_count == 2)
+			else if ((strcmp(cmd->cmd, dtmd_notification_unmount) == 0) && (cmd->args_count == 2)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 			{
 				print_first(first);
@@ -145,6 +145,7 @@ void printUsage(char *app)
 		"\t\tenumerate\n"
 		"\t\tlist_device path\n"
 		"\t\tlist_partition path\n"
+		"\t\tlist_stateful_device path\n"
 		"\t\tmount device [ mount_options ]\n"
 		"\t\tunmount device\n"
 		"\t\tmonitor\n", app);

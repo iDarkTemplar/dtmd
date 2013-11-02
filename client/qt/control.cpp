@@ -442,7 +442,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 			QString title;
 			QString message;
 
-			if ((cmd.cmd == "add_disk") && (cmd.args.size() == 2) && (!cmd.args[0].empty()) && (!cmd.args[1].empty()))
+			if ((cmd.cmd == dtmd_notification_add_disk) && (cmd.args.size() == 2) && (!cmd.args[0].empty()) && (!cmd.args[1].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
@@ -460,7 +460,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					ptr->m_devices.push_back(dtmd::device(cmd.args[0], dtmd_string_to_device_type(cmd.args[1].c_str())));
 				}
 			} // unlock
-			else if ((cmd.cmd == "remove_disk") && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
+			else if ((cmd.cmd == dtmd_notification_remove_disk) && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
@@ -478,7 +478,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					ptr->m_devices.erase(it);
 				}
 			} // unlock
-			else if ((cmd.cmd == "add_partition") && (cmd.args.size() == 4)
+			else if ((cmd.cmd == dtmd_notification_add_partition) && (cmd.args.size() == 4)
 				&& (!cmd.args[0].empty()) && (!cmd.args[1].empty()) && (!cmd.args[3].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
@@ -512,7 +512,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					}
 				}
 			} // unlock
-			else if ((cmd.cmd == "remove_partition") && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
+			else if ((cmd.cmd == dtmd_notification_remove_partition) && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
@@ -538,14 +538,112 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 
 					if (it != dev->partitions.end())
 					{
-						dev->partitions.erase(it);
 						title = QObject::trUtf8("Device removed");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+						dev->partitions.erase(it);
+					}
+				}
+			} // unlock
+			else if ((cmd.cmd == dtmd_notification_add_stateful_device) && (cmd.args.size() == 5)
+				&& (!cmd.args[0].empty()) && (!cmd.args[1].empty()) && (!cmd.args[2].empty()))
+			{ // lock
+				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
+
+				std::vector<dtmd::stateful_device>::iterator it;
+				for (it = ptr->m_stateful_devices.begin(); it != ptr->m_stateful_devices.end(); ++it)
+				{
+					if (cmd.args[0] == it->path)
+					{
+						break;
+					}
+				}
+
+				if (it == ptr->m_stateful_devices.end())
+				{
+					ptr->m_stateful_devices.push_back(dtmd::stateful_device(cmd.args[0],
+						dtmd_string_to_device_type(cmd.args[1].c_str()),
+						dtmd_string_to_device_state(cmd.args[2].c_str()),
+						cmd.args[3],
+						cmd.args[4]));
+
+					dtmd::stateful_device &dev = ptr->m_stateful_devices.back();
+
+					if (dev.state == dtmd_removable_media_state_ok)
+					{
+						title = QObject::trUtf8("Device added");
+						message = QString::fromLocal8Bit(dev.label.empty() ? dev.path.c_str() : dev.label.c_str());
 						modified = true;
 					}
 				}
 			} // unlock
-			else if ((cmd.cmd == "mount") && (cmd.args.size() == 3) && (!cmd.args[0].empty())
+			else if ((cmd.cmd == dtmd_notification_remove_stateful_device) && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
+			{ // lock
+				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
+
+				std::vector<dtmd::stateful_device>::iterator it;
+				for (it = ptr->m_stateful_devices.begin(); it != ptr->m_stateful_devices.end(); ++it)
+				{
+					if (cmd.args[0] == it->path)
+					{
+						break;
+					}
+				}
+
+				if (it != ptr->m_stateful_devices.end())
+				{
+					if (it->state == dtmd_removable_media_state_ok)
+					{
+						title = QObject::trUtf8("Device removed");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+					}
+
+					ptr->m_stateful_devices.erase(it);
+				}
+			} // unlock
+			else if ((cmd.cmd == dtmd_notification_stateful_device_changed) && (cmd.args.size() == 5)
+				&& (!cmd.args[0].empty()) && (!cmd.args[1].empty()) && (!cmd.args[2].empty()))
+			{ // lock
+				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
+
+				std::vector<dtmd::stateful_device>::iterator it;
+				for (it = ptr->m_stateful_devices.begin(); it != ptr->m_stateful_devices.end(); ++it)
+				{
+					if (cmd.args[0] == it->path)
+					{
+						break;
+					}
+				}
+
+				if (it != ptr->m_stateful_devices.end())
+				{
+					dtmd_removable_media_state_t last_state = it->state;
+					std::string last_name = it->label.empty() ? it->path : it->label;
+
+					it->path = cmd.args[0];
+					it->type = dtmd_string_to_device_type(cmd.args[1].c_str());
+					it->state = dtmd_string_to_device_state(cmd.args[2].c_str());
+					it->fstype = cmd.args[3];
+					it->label = cmd.args[4];
+
+					if ((last_state != dtmd_removable_media_state_ok)
+						&& (it->state == dtmd_removable_media_state_ok))
+					{
+						title = QObject::trUtf8("Device changed to state: available");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+					}
+					else if ((last_state == dtmd_removable_media_state_ok)
+						&& (it->state != dtmd_removable_media_state_ok))
+					{
+						title = QObject::trUtf8("Device changed to state: unavailable");
+						message = QString::fromLocal8Bit(last_name.c_str());
+						modified = true;
+					}
+				}
+			} // unlock
+			else if ((cmd.cmd == dtmd_notification_mount) && (cmd.args.size() == 3) && (!cmd.args[0].empty())
 				&& (!cmd.args[1].empty()) && (!cmd.args[2].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
@@ -568,7 +666,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					}
 				}
 			} // unlock
-			else if ((cmd.cmd == "unmount") && (cmd.args.size() == 2) && (!cmd.args[0].empty()) && (!cmd.args[1].empty()))
+			else if ((cmd.cmd == dtmd_notification_unmount) && (cmd.args.size() == 2) && (!cmd.args[0].empty()) && (!cmd.args[1].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 

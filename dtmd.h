@@ -58,4 +58,112 @@ typedef enum dtmd_removable_media_state
 #define dtmd_string_state_clear   "clear"
 #define dtmd_string_state_ok      "ok"
 
+/* Notification types */
+
+#define dtmd_notification_add_disk "add_disk"
+/* parameters: path, type */
+
+#define dtmd_notification_remove_disk "remove_disk"
+/* parameters: path */
+
+#define dtmd_notification_add_partition "add_partition"
+/* parameters: path, fstype, label (or NULL), parent_path */
+
+#define dtmd_notification_remove_partition "remove_partition"
+/* parameters: path */
+
+#define dtmd_notification_add_stateful_device "add_stateful_device"
+/* parameters: path, type, state, fstype (or NULL), label (or NULL) */
+
+#define dtmd_notification_remove_stateful_device "remove_stateful_device"
+/* parameters: path */
+
+#define dtmd_notification_stateful_device_changed "stateful_device_changed"
+/* parameters: path, type, state, fstype (or NULL), label (or NULL) */
+
+#define dtmd_notification_mount "mount"
+/* parameters: path, mount_point, mount_options */
+
+#define dtmd_notification_unmount "unmount"
+/* parameters: path, mount_point */
+
+/* Commands and responses */
+
+#define dtmd_command_enum_all "enum_all"
+/*
+ *	input: none
+ *
+ *	returns:
+ *		devices: count
+ *		device: "path, type, partitions_count"
+ *		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+ *		stateful_devices: count
+ *		stateful_device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
+ *
+ *		or "failed" on fail
+ */
+
+#define dtmd_command_list_device "list_device"
+/*
+ *	input:
+ *		"device path"
+ *
+ *	returns:
+ *		device: "path, type, partitions_count"
+ *		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+ *
+ *		or "failed" on fail
+ */
+
+#define dtmd_command_list_partition "list_partition"
+/*
+ *	input:
+ *		"partition path"
+ *
+ *	returns:
+ *		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+ *
+ *		or "failed" on fail
+ */
+
+#define dtmd_command_list_stateful_device "list_stateful_device"
+/*
+ *	input:
+ *		"device path"
+ *
+ *	returns:
+ *		stateful device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
+ *
+ *		or "failed" on fail
+ */
+
+#define dtmd_command_mount "mount"
+/*
+ *	input:
+ *		"path, mount_options"
+ *
+ *	returns:
+ *		"succeeded" or "failed"
+ */
+
+#define dtmd_command_unmount "unmount"
+/*
+ *	input:
+ *		"path"
+ *
+ *	returns:
+ *		"succeeded" or "failed"
+ */
+
+#define dtmd_response_started "started"
+#define dtmd_response_finished "finished"
+#define dtmd_response_succeeded "succeeded"
+#define dtmd_response_failed "failed"
+
+#define dtmd_response_argument_devices "devices"
+#define dtmd_response_argument_device "device"
+#define dtmd_response_argument_partition "partition"
+#define dtmd_response_argument_stateful_devices "stateful_devices"
+#define dtmd_response_argument_stateful_device "stateful_device"
+
 #endif /* DTMD_H */
