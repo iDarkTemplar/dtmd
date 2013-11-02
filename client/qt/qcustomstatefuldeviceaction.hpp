@@ -18,26 +18,30 @@
  *
  */
 
-#include "qcustomaction.hpp"
+#ifndef QCUSTOMSTATEFULDEVICEACTION_HPP
+#define QCUSTOMSTATEFULDEVICEACTION_HPP
 
-QCustomAction::QCustomAction(QObject *parent)
-	: QAction(parent),
-	m_device(0),
-	m_partition(0)
-{
-	QObject::connect(this, SIGNAL(triggered()), this, SLOT(retrigger()), Qt::DirectConnection);
-}
+#include <QAction>
 
-QCustomAction::QCustomAction(const QString &text, QObject *parent, unsigned int device, unsigned int partition, const QString &partition_name)
-	: QAction(text, parent),
-	m_device(device),
-	m_partition(partition),
-	m_partition_name(partition_name)
+class QCustomStatefulDeviceAction : public QAction
 {
-	QObject::connect(this, SIGNAL(triggered()), this, SLOT(retrigger()), Qt::DirectConnection);
-}
+	Q_OBJECT
 
-void QCustomAction::retrigger()
-{
-	emit triggered(m_device, m_partition, m_partition_name);
-}
+public:
+	explicit QCustomStatefulDeviceAction(QObject *parent = 0);
+	QCustomStatefulDeviceAction(const QString &text, QObject *parent, unsigned int stateful_device, const QString &device_name);
+
+signals:
+	void triggered(unsigned int, QString);
+
+public slots:
+
+protected:
+	unsigned int m_device;
+	QString m_device_name;
+
+protected slots:
+	void retrigger();
+};
+
+#endif // QCUSTOMSTATEFULDEVICEACTION_HPP

@@ -29,6 +29,7 @@
 extern "C" {
 #endif
 
+// TODO: implement stateful devices in library/library++
 /*
 	Notification types:
 	"add_disk(path, type)"
@@ -37,9 +38,9 @@ extern "C" {
 	"remove_partition(path)"
 	"mount(path, mount_point, mount_options)"
 	"unmount(path, mount_point)"
-	"add_stateful_device(path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL))"
+	"add_stateful_device(path, type, state, fstype (or NULL), label (or NULL))"
 	"remove_stateful_device(path)"
-	"stateful_device_changed(path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL))"
+	"stateful_device_changed(path, type, state, fstype (or NULL), label (or NULL))"
 
 	command responses start with "started" or "failed" or "succeeded"
 	and finish with "finished" if "started"
@@ -90,6 +91,7 @@ int notify_add_disk(const char *path, dtmd_removable_media_type_t type);
 int notify_remove_disk(const char *path);
 int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path);
 int notify_remove_partition(const char *path);
+// TODO: add stateful notifications
 int notify_mount(const char *path, const char *mount_point, const char *mount_options);
 int notify_unmount(const char *path, const char *mount_point);
 

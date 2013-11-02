@@ -44,8 +44,11 @@ public:
 public slots:
 	void change_state_icon();
 	void triggeredOpen(unsigned int device, unsigned int partition, QString partition_name);
+	void triggeredOpen(unsigned int stateful_device, QString device_name);
 	void triggeredMount(unsigned int device, unsigned int partition, QString partition_name);
+	void triggeredMount(unsigned int stateful_device, QString device_name);
 	void triggeredUnmount(unsigned int device, unsigned int partition, QString partition_name);
+	void triggeredUnmount(unsigned int stateful_device, QString device_name);
 
 private:
 	Q_DISABLE_COPY(Control)
@@ -74,6 +77,8 @@ private:
 
 	QSystemTrayIcon m_tray;
 	QScopedPointer<dtmd::library> m_lib;
+	// TODO: implement stateful devices
+	std::vector<dtmd::stateful_device> m_stateful_devices;
 	std::vector<dtmd::device> m_devices;
 	QMutex m_devices_mutex;
 

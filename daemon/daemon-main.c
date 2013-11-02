@@ -544,6 +544,30 @@ int main(int argc, char **argv)
 				result = -1;
 				goto exit_8;
 			}
+
+			continue;
+		}
+
+		if ((pollfds[1].revents & POLLHUP) || (pollfds[1].revents & POLLERR) || (pollfds[1].revents & POLLNVAL))
+		{
+			result = -1;
+			goto exit_8;
+		}
+		else if (pollfds[1].revents & POLLIN)
+		{
+			rc = accept(socketfd, NULL, NULL);
+			if (rc < 0)
+			{
+				result = -1;
+				goto exit_8;
+			}
+
+			rc = add_client(rc);
+			if (rc < 0)
+			{
+				result = -1;
+				goto exit_8;
+			}
 		}
 
 		if ((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR) || (pollfds[0].revents & POLLNVAL))
@@ -655,6 +679,7 @@ int main(int argc, char **argv)
 						// TODO: notify change of cdroms
 						//ID_FS_LABEL_ENC=UDF\x20Volume
 						//ID_FS_TYPE=udf
+						// TODO: send unmount notify on device removal and stateful device removal/change
 					}
 					break;
 
@@ -665,28 +690,6 @@ int main(int argc, char **argv)
 				device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
 			}
 			else if (rc < 0)
-			{
-				result = -1;
-				goto exit_8;
-			}
-		}
-
-		if ((pollfds[1].revents & POLLHUP) || (pollfds[1].revents & POLLERR) || (pollfds[1].revents & POLLNVAL))
-		{
-			result = -1;
-			goto exit_8;
-		}
-		else if (pollfds[1].revents & POLLIN)
-		{
-			rc = accept(socketfd, NULL, NULL);
-			if (rc < 0)
-			{
-				result = -1;
-				goto exit_8;
-			}
-
-			rc = add_client(rc);
-			if (rc < 0)
 			{
 				result = -1;
 				goto exit_8;

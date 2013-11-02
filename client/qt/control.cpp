@@ -30,7 +30,8 @@
 #include <stdexcept>
 #include <sstream>
 
-#include "qcustomaction.hpp"
+#include "client/qt/qcustomdeviceaction.hpp"
+#include "client/qt/qcustomstatefuldeviceaction.hpp"
 
 const int Control::defaultTimeout = 5000;
 
@@ -70,7 +71,7 @@ Control::Control()
 
 	{ // lock
 		QMutexLocker devices_locker(&m_devices_mutex);
-		dtmd_result_t result = m_lib->enum_devices(dtmd::timeout_infinite, m_devices);
+		dtmd_result_t result = m_lib->enum_devices(dtmd::timeout_infinite, m_devices, m_stateful_devices);
 		if (result != dtmd_ok)
 		{
 			std::stringstream errMsg;
@@ -143,6 +144,46 @@ void Control::triggeredOpen(unsigned int device, unsigned int partition, QString
 	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
 }
 
+void Control::triggeredOpen(unsigned int stateful_device, QString device_name)
+{
+	if ((stateful_device >= m_stateful_devices.size())
+		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
+	{
+		return;
+	}
+
+	dtmd::stateful_device &dev = m_stateful_devices[stateful_device];
+	QString mount_point;
+
+	if (dev.mnt_point.empty())
+	{
+		setIconState(working, Control::defaultTimeout);
+		dtmd_result_t result = m_lib->mount(dtmd::timeout_infinite, dev.path);
+
+		if (result == dtmd_ok)
+		{
+			setIconState(success, Control::defaultTimeout);
+		}
+		else
+		{
+			setIconState(fail, Control::defaultTimeout);
+			return;
+		}
+
+		dtmd::stateful_device temp;
+
+		m_lib->list_stateful_device(dtmd::timeout_infinite, dev.path, temp);
+
+		mount_point = QString::fromLocal8Bit(temp.mnt_point.c_str());
+	}
+	else
+	{
+		mount_point = QString::fromLocal8Bit(dev.mnt_point.c_str());
+	}
+
+	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
+}
+
 void Control::triggeredMount(unsigned int device, unsigned int partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
@@ -154,6 +195,27 @@ void Control::triggeredMount(unsigned int device, unsigned int partition, QStrin
 
 	setIconState(working, Control::defaultTimeout);
 	dtmd_result_t result = m_lib->mount(dtmd::timeout_infinite, m_devices.at(device).partitions.at(partition).path);
+
+	if (result == dtmd_ok)
+	{
+		setIconState(success, Control::defaultTimeout);
+	}
+	else
+	{
+		setIconState(fail, Control::defaultTimeout);
+	}
+}
+
+void Control::triggeredMount(unsigned int stateful_device, QString device_name)
+{
+	if ((stateful_device >= m_stateful_devices.size())
+		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
+	{
+		return;
+	}
+
+	setIconState(working, Control::defaultTimeout);
+	dtmd_result_t result = m_lib->mount(dtmd::timeout_infinite, m_stateful_devices.at(stateful_device).path);
 
 	if (result == dtmd_ok)
 	{
@@ -187,12 +249,84 @@ void Control::triggeredUnmount(unsigned int device, unsigned int partition, QStr
 	}
 }
 
+void Control::triggeredUnmount(unsigned int stateful_device, QString device_name)
+{
+	if ((stateful_device >= m_stateful_devices.size())
+		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
+	{
+		return;
+	}
+
+	setIconState(working, Control::defaultTimeout);
+	dtmd_result_t result = m_lib->unmount(dtmd::timeout_infinite, m_stateful_devices.at(stateful_device).path);
+
+	if (result == dtmd_ok)
+	{
+		setIconState(success, Control::defaultTimeout);
+	}
+	else
+	{
+		setIconState(fail, Control::defaultTimeout);
+	}
+}
+
 void Control::BuildMenu()
 {
 	QScopedPointer<QMenu> new_menu(new QMenu());
 
 	{ // lock
 		QMutexLocker devices_locker(&m_devices_mutex);
+
+		if (!m_stateful_devices.empty())
+		{
+			for (std::vector<dtmd::stateful_device>::iterator dev = m_stateful_devices.begin(); dev != m_stateful_devices.end(); ++dev)
+			{
+				if (dev->state == dtmd_removable_media_state_ok)
+				{
+					bool is_mounted = !(dev->mnt_point.empty());
+					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
+						QString::fromLocal8Bit(dev->label.empty() ? dev->path.c_str() : dev->label.c_str()));
+
+					QCustomStatefulDeviceAction *action;
+					action = new QCustomStatefulDeviceAction(QObject::trUtf8("Open device"),
+						menu,
+						dev - m_stateful_devices.begin(),
+						QString::fromLocal8Bit(dev->path.c_str()));
+
+					QObject::connect(action, SIGNAL(triggered(uint,QString)),
+						this, SLOT(triggeredOpen(uint,QString)), Qt::DirectConnection);
+
+					menu->addAction(action);
+
+					if (is_mounted)
+					{
+						action = new QCustomStatefulDeviceAction(QObject::trUtf8("Unmount device"),
+							menu,
+							dev - m_stateful_devices.begin(),
+							QString::fromLocal8Bit(dev->path.c_str()));
+
+						QObject::connect(action, SIGNAL(triggered(uint,QString)),
+							this, SLOT(triggeredUnmount(uint,QString)), Qt::DirectConnection);
+
+						menu->addAction(action);
+					}
+					else
+					{
+						action = new QCustomStatefulDeviceAction(QObject::trUtf8("Mount device"),
+							menu,
+							dev - m_stateful_devices.begin(),
+							QString::fromLocal8Bit(dev->path.c_str()));
+
+						QObject::connect(action, SIGNAL(triggered(uint,QString)),
+							this, SLOT(triggeredMount(uint,QString)), Qt::DirectConnection);
+
+						menu->addAction(action);
+					}
+				}
+			}
+		}
+
+		// TODO: separator
 
 		if (!m_devices.empty())
 		{
@@ -204,8 +338,8 @@ void Control::BuildMenu()
 					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
 						QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str()));
 
-					QCustomAction *action;
-					action = new QCustomAction(QObject::trUtf8("Open device"),
+					QCustomDeviceAction *action;
+					action = new QCustomDeviceAction(QObject::trUtf8("Open device"),
 						menu,
 						dev - m_devices.begin(),
 						it - dev->partitions.begin(),
@@ -218,7 +352,7 @@ void Control::BuildMenu()
 
 					if (is_mounted)
 					{
-						action = new QCustomAction(QObject::trUtf8("Unmount device"),
+						action = new QCustomDeviceAction(QObject::trUtf8("Unmount device"),
 							menu,
 							dev - m_devices.begin(),
 							it - dev->partitions.begin(),
@@ -231,7 +365,7 @@ void Control::BuildMenu()
 					}
 					else
 					{
-						action = new QCustomAction(QObject::trUtf8("Mount device"),
+						action = new QCustomDeviceAction(QObject::trUtf8("Mount device"),
 							menu,
 							dev - m_devices.begin(),
 							it - dev->partitions.begin(),

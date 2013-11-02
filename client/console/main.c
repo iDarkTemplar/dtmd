@@ -79,6 +79,44 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 				print_first(first);
 				fprintf(stdout, "Partition removed\nPath: %s\n", cmd->args[0]);
 			}
+			else if ((strcmp(cmd->cmd, "add_stateful_device") == 0) && (cmd->args_count == 5)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
+			{
+				print_first(first);
+				fprintf(stdout, "Stateful device added\nPath: %s\nType: %s\nState: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
+
+				if (cmd->args[3] != NULL)
+				{
+					fprintf(stdout, "Filesystem type: %s\n", cmd->args[3]);
+				}
+
+				if (cmd->args[4] != NULL)
+				{
+					fprintf(stdout, "Label: %s\n", cmd->args[4]);
+				}
+			}
+			else if ((strcmp(cmd->cmd, "remove_stateful_device") == 0) && (cmd->args_count == 1)
+				&& (cmd->args[0] != NULL))
+			{
+				print_first(first);
+				fprintf(stdout, "Stateful device removed\nPath: %s\n", cmd->args[0]);
+			}
+			else if ((strcmp(cmd->cmd, "stateful_device_changed") == 0) && (cmd->args_count == 5)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
+			{
+				print_first(first);
+				fprintf(stdout, "Stateful device changed\nPath: %s\nType: %s\nState: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
+
+				if (cmd->args[3] != NULL)
+				{
+					fprintf(stdout, "Filesystem type: %s\n", cmd->args[3]);
+				}
+
+				if (cmd->args[4] != NULL)
+				{
+					fprintf(stdout, "Label: %s\n", cmd->args[4]);
+				}
+			}
 			else if ((strcmp(cmd->cmd, "mount") == 0) && (cmd->args_count == 3)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
 			{
@@ -115,7 +153,7 @@ void printUsage(char *app)
 void client_print_partition(const dtmd_partition_t *partition)
 {
 	fprintf(stdout, "Path: %s\n", partition->path);
-	fprintf(stdout, "Filesystem type: %s\n", partition->type);
+	fprintf(stdout, "Filesystem type: %s\n", partition->fstype);
 
 	if (partition->label != NULL)
 	{
@@ -131,8 +169,6 @@ void client_print_partition(const dtmd_partition_t *partition)
 	{
 		fprintf(stdout, "Mount options: %s\n", partition->mnt_opts);
 	}
-
-	fprintf(stdout, "\n");
 }
 
 void client_print_device(const dtmd_device_t *device)
@@ -150,12 +186,40 @@ void client_print_device(const dtmd_device_t *device)
 	}
 }
 
+void client_print_stateful_device(const dtmd_stateful_device_t *stateful_device)
+{
+	fprintf(stdout, "Path: %s\n", stateful_device->path);
+	fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(stateful_device->type));
+	fprintf(stdout, "State: %s\n", dtmd_device_state_to_string(stateful_device->state));
+
+	if (stateful_device->fstype != NULL)
+	{
+		fprintf(stdout, "Filesystem type: %s\n", stateful_device->fstype);
+	}
+
+	if (stateful_device->label != NULL)
+	{
+		fprintf(stdout, "Label: %s\n", stateful_device->label);
+	}
+
+	if (stateful_device->mnt_point != NULL)
+	{
+		fprintf(stdout, "Mount point: %s\n", stateful_device->mnt_point);
+	}
+
+	if (stateful_device->mnt_opts != NULL)
+	{
+		fprintf(stdout, "Mount options: %s\n", stateful_device->mnt_opts);
+	}
+}
+
 int client_enumerate(void)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, i;
+	unsigned int count, count_stateful, i;
 	dtmd_device_t **devices;
+	dtmd_stateful_device_t **stateful_devices;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
 	if (lib == NULL)
@@ -164,7 +228,7 @@ int client_enumerate(void)
 		return -1;
 	}
 
-	result = dtmd_enum_devices(lib, -1, &count, &devices);
+	result = dtmd_enum_devices(lib, -1, &count, &devices, &count_stateful, &stateful_devices);
 	if (result != dtmd_ok)
 	{
 		fprintf(stderr, "Couldn't enumerate devices, error code %d\n", result);
@@ -172,14 +236,23 @@ int client_enumerate(void)
 		return -1;
 	}
 
-	fprintf(stdout, "Found %u devices\n\n", count);
+	fprintf(stdout, "Found %u devices\n\n", count + count_stateful);
+
+	for (i = 0; i < count_stateful; ++i)
+	{
+		fprintf(stdout, "Device %u:\n", i);
+		client_print_stateful_device(stateful_devices[i]);
+		fprintf(stdout, "\n");
+	}
 
 	for (i = 0; i < count; ++i)
 	{
-		fprintf(stdout, "Device %u:\n", i);
+		fprintf(stdout, "Device %u:\n", i + count_stateful);
 		client_print_device(devices[i]);
+		fprintf(stdout, "\n");
 	}
 
+	dtmd_free_stateful_devices_array(lib, count_stateful, stateful_devices);
 	dtmd_free_devices_array(lib, count, devices);
 	dtmd_deinit(lib);
 
@@ -251,6 +324,42 @@ int client_list_partition(const char *path)
 	else
 	{
 		fprintf(stdout, "Didn't find partition with specified path!\n");
+	}
+
+	dtmd_deinit(lib);
+
+	return 0;
+}
+
+int client_list_stateful_device(const char *path)
+{
+	dtmd_t *lib;
+	dtmd_result_t result;
+	dtmd_stateful_device_t *stateful_device;
+
+	lib = dtmd_init(&client_callback, (void*)0, &result);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
+		return -1;
+	}
+
+	result = dtmd_list_stateful_device(lib, -1, path, &stateful_device);
+	if (result != dtmd_ok)
+	{
+		fprintf(stderr, "Couldn't list stateful device, error code %d\n", result);
+		dtmd_deinit(lib);
+		return -1;
+	}
+
+	if (stateful_device != NULL)
+	{
+		client_print_stateful_device(stateful_device);
+		dtmd_free_stateful_device(lib, stateful_device);
+	}
+	else
+	{
+		fprintf(stdout, "Didn't find stateful device with specified path!\n");
 	}
 
 	dtmd_deinit(lib);
@@ -361,6 +470,10 @@ int main(int argc, char **argv)
 	else if ((argc == 3) && (strcmp(argv[1], "list_partition") == 0))
 	{
 		return client_list_partition(argv[2]);
+	}
+	else if ((argc == 3) && (strcmp(argv[1], "list_stateful_device") == 0))
+	{
+		return client_list_stateful_device(argv[2]);
 	}
 	else if (((argc == 3) || (argc == 4)) && (strcmp(argv[1], "mount") == 0))
 	{

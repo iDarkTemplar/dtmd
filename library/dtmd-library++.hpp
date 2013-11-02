@@ -54,7 +54,7 @@ public:
 	partition();
 	partition(const dtmd_partition_t *part);
 	partition(const std::string &l_path,
-		const std::string &l_type,
+		const std::string &l_fstype,
 		const std::string &l_label = std::string(),
 		const std::string &l_mnt_point = std::string(),
 		const std::string &l_mnt_opts = std::string());
@@ -67,7 +67,7 @@ public:
 	bool isEmpty() const;
 
 	std::string path;
-	std::string type;
+	std::string fstype;
 	std::string label;
 	std::string mnt_point;
 	std::string mnt_opts;
@@ -92,6 +92,28 @@ public:
 	std::vector<partition> partitions;
 };
 
+class stateful_device
+{
+public:
+	stateful_device();
+	stateful_device(const dtmd_stateful_device_t *dev);
+	stateful_device(const std::string &l_path, dtmd_removable_media_type_t l_type, dtmd_removable_media_state_t l_state);
+
+	virtual ~stateful_device();
+
+	void fillFromStatefulDevice(const dtmd_stateful_device_t *dev);
+	void clear();
+	bool isEmpty() const;
+
+	std::string path;
+	dtmd_removable_media_type_t type;
+	dtmd_removable_media_state_t state;
+	std::string fstype;
+	std::string label;
+	std::string mnt_point;
+	std::string mnt_opts;
+};
+
 typedef void (*callback)(void *arg, const command &cmd);
 
 class library
@@ -100,9 +122,10 @@ public:
 	library(callback cb, void *arg);
 	virtual ~library();
 
-	dtmd_result_t enum_devices(int timeout, std::vector<device> &devices);
+	dtmd_result_t enum_devices(int timeout, std::vector<device> &devices, std::vector<stateful_device> &stateful_devices);
 	dtmd_result_t list_device(int timeout, const std::string &device_path, device &result_device);
 	dtmd_result_t list_partition(int timeout, const std::string &partition_path, partition &result_partition);
+	dtmd_result_t list_stateful_device(int timeout, const std::string &device_path, stateful_device &result_stateful_device);
 	dtmd_result_t mount(int timeout, const std::string &path, const std::string &mount_options = std::string());
 	dtmd_result_t unmount(int timeout, const std::string &path);
 

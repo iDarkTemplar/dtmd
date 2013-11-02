@@ -52,7 +52,7 @@ typedef enum dtmd_result
 typedef struct dtmd_partition
 {
 	char *path;
-	char *type;
+	char *fstype;
 	char *label; // optional
 	char *mnt_point; // optional
 	char *mnt_opts; // optional
@@ -66,20 +66,34 @@ typedef struct dtmd_device
 	dtmd_partition_t **partition;
 } dtmd_device_t;
 
+typedef struct dtmd_stateful_device
+{
+	char *path;
+	dtmd_removable_media_type_t type;
+	dtmd_removable_media_state_t state;
+	char *fstype; // optional
+	char *label; // optional
+	char *mnt_point; // optional
+	char *mnt_opts; // optional
+} dtmd_stateful_device_t;
+
 dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result);
 void dtmd_deinit(dtmd_t *handle);
 
 // timeout is in milliseconds, negative for infinite
-dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *count, dtmd_device_t ***result);
+dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *device_count, dtmd_device_t ***result, unsigned int *stateful_device_count, dtmd_stateful_device_t ***result_stateful);
 dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_path, dtmd_device_t **result);
 dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *partition_path, dtmd_partition_t **result);
+dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char *device_path, dtmd_stateful_device_t **result);
 dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_options);
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path);
 int dtmd_is_state_invalid(dtmd_t *handle);
 
-void dtmd_free_devices_array(dtmd_t *handle, unsigned int count, dtmd_device_t **devices);
+void dtmd_free_devices_array(dtmd_t *handle, unsigned int device_count, dtmd_device_t **devices);
 void dtmd_free_device(dtmd_t *handle, dtmd_device_t *device);
 void dtmd_free_partition(dtmd_t *handle, dtmd_partition_t *partition);
+void dtmd_free_stateful_devices_array(dtmd_t *handle, unsigned int stateful_device_count, dtmd_stateful_device_t **stateful_devices);
+void dtmd_free_stateful_device(dtmd_t *handle, dtmd_stateful_device_t *stateful_device);
 
 #ifdef __cplusplus
 }
