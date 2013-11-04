@@ -31,7 +31,8 @@ typedef enum dtmd_info_type
 {
 	dtmd_info_unknown = 0,
 	dtmd_info_device,
-	dtmd_info_partition
+	dtmd_info_partition,
+	dtmd_info_stateful_device
 } dtmd_info_type_t;
 
 typedef struct dtmd_info
@@ -50,7 +51,6 @@ typedef struct dtmd_info
 	const char *path_parent;
 
 	/* for cdroms only */
-	// TODO: define state of cdrom from libudev
 	dtmd_removable_media_state_t state;
 
 	/* common for all media */

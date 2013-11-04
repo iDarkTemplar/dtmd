@@ -489,6 +489,25 @@ int main(int argc, char **argv)
 				}
 			}
 			break;
+
+		case dtmd_info_stateful_device:
+			if ((dtmd_dev_device->path != NULL)
+				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
+				&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
+			{
+				if (add_stateful_media(dtmd_dev_device->path,
+					dtmd_dev_device->media_type,
+					dtmd_dev_device->state,
+					dtmd_dev_device->fstype,
+					dtmd_dev_device->label) < 0)
+				{
+					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
+					device_system_finish_enumerate_devices(dtmd_dev_enum);
+					result = -1;
+					goto exit_7;
+				}
+			}
+			break;
 		}
 
 		device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
@@ -580,12 +599,12 @@ int main(int argc, char **argv)
 			rc = device_system_monitor_get_device(dtmd_dev_mon, &dtmd_dev_device, &dtmd_dev_action);
 			if (rc > 0)
 			{
+				rc = 0;
+
 				switch (dtmd_dev_action)
 				{
 				case dtmd_device_action_add:
 				case dtmd_device_action_online:
-					rc = 0;
-
 					switch (dtmd_dev_device->type)
 					{
 					case dtmd_info_device:
@@ -609,20 +628,24 @@ int main(int argc, char **argv)
 								dtmd_dev_device->label);
 						}
 						break;
-					}
 
-					if (rc < 0)
-					{
-						device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
-						result = -1;
-						goto exit_8;
+					case dtmd_info_stateful_device:
+						if ((dtmd_dev_device->path != NULL)
+							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
+							&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
+						{
+							rc = add_stateful_media(dtmd_dev_device->path,
+								dtmd_dev_device->media_type,
+								dtmd_dev_device->state,
+								dtmd_dev_device->fstype,
+								dtmd_dev_device->label);
+						}
+						break;
 					}
 					break;
 
 				case dtmd_device_action_remove:
 				case dtmd_device_action_offline:
-					rc = 0;
-
 					switch (dtmd_dev_device->type)
 					{
 					case dtmd_info_device:
@@ -638,33 +661,42 @@ int main(int argc, char **argv)
 							rc = remove_media_partition(NULL, dtmd_dev_device->path);
 						}
 						break;
-					}
 
-					if (rc < 0)
-					{
-						device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
-						result = -1;
-						goto exit_8;
+					case dtmd_info_stateful_device:
+						if (dtmd_dev_device->path != NULL)
+						{
+							rc = remove_stateful_media(dtmd_dev_device->path);
+						}
+						break;
 					}
 					break;
 
 				case dtmd_device_action_change:
-					if ((dtmd_dev_device->type == dtmd_info_device)
-						&& (dtmd_dev_device->media_type == dtmd_removable_media_cdrom)
-						&& (dtmd_dev_device->path != NULL))
+					switch (dtmd_dev_device->type)
 					{
-						// TODO: notify change of cdroms
-						//ID_FS_LABEL_ENC=UDF\x20Volume
-						//ID_FS_TYPE=udf
-						// TODO: send unmount notify on device removal and stateful device removal/change
+					case dtmd_info_stateful_device:
+						if ((dtmd_dev_device->path != NULL)
+							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
+							&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
+						{
+							rc = change_stateful_media(dtmd_dev_device->path,
+								dtmd_dev_device->media_type,
+								dtmd_dev_device->state,
+								dtmd_dev_device->fstype,
+								dtmd_dev_device->label);
+						}
+						break;
 					}
-					break;
-
-				default:
 					break;
 				}
 
 				device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
+
+				if (rc < 0)
+				{
+					result = -1;
+					goto exit_8;
+				}
 			}
 			else if (rc < 0)
 			{

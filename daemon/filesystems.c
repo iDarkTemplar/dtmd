@@ -372,7 +372,7 @@ static dir_state_t get_dir_state(const char *dirname)
 }
 
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-static int invoke_mount_external(unsigned int client_number, unsigned int dev, unsigned int part, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
+static int invoke_mount_external(unsigned int client_number, const char *path, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
 {
 	unsigned int mount_all_opts_len = 0;
 	unsigned int mount_all_opts_len_cur = 0;
@@ -469,7 +469,7 @@ static int invoke_mount_external(unsigned int client_number, unsigned int dev, u
 	}
 
 	// calculate total length
-	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->fstype) + 1 + strlen(media[dev]->partition[part]->path) + 1 + strlen(mount_path);
+	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(fsopts->fstype) + 1 + strlen(path) + 1 + strlen(mount_path);
 
 	if (mount_all_opts_len > 0)
 	{
@@ -487,9 +487,9 @@ static int invoke_mount_external(unsigned int client_number, unsigned int dev, u
 
 	strcpy(mount_cmd, mount_ext_cmd);
 	strcat(mount_cmd, " -t ");
-	strcat(mount_cmd, media[dev]->partition[part]->fstype);
+	strcat(mount_cmd, fsopts->fstype);
 	strcat(mount_cmd, " ");
-	strcat(mount_cmd, media[dev]->partition[part]->path);
+	strcat(mount_cmd, path);
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, mount_path);
 
@@ -610,7 +610,7 @@ invoke_mount_external_error_1:
 }
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-static int invoke_mount_internal(unsigned int client_number, unsigned int dev, unsigned int part, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
+static int invoke_mount_internal(unsigned int client_number, const char *path, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
 {
 	const struct string_to_mount_flag *mntflagslist;
 
@@ -922,11 +922,11 @@ static int invoke_mount_internal(unsigned int client_number, unsigned int dev, u
 		mount_all_opts[mount_all_opts_len_cur] = 0;
 	}
 
-	result = mount(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->fstype, mount_flags, mount_opts);
+	result = mount(path, mount_path, fsopts->fstype, mount_flags, mount_opts);
 
 	if (result == 0)
 	{
-		result = add_to_mtab(media[dev]->partition[part]->path, mount_path, media[dev]->partition[part]->fstype, mount_all_opts);
+		result = add_to_mtab(path, mount_path, fsopts->fstype, mount_all_opts);
 		if (result == 1)
 		{
 			result = 1;
@@ -981,6 +981,9 @@ int invoke_mount(unsigned int client_number, const char *path, const char *mount
 	char *mount_path;
 	int mount_path_len;
 
+	const char *local_mnt_point;
+	const char *local_fstype;
+
 	for (dev = 0; dev < media_count; ++dev)
 	{
 		for (part = 0; part < media[dev]->partitions_count; ++part)
@@ -993,13 +996,32 @@ int invoke_mount(unsigned int client_number, const char *path, const char *mount
 	}
 
 invoke_mount_exit_loop:
-	if (dev >= media_count)
+	if (dev < media_count)
 	{
-		result = 0;
-		goto invoke_mount_error_1;
+		local_mnt_point = media[dev]->partition[part]->mnt_point;
+		local_fstype    = media[dev]->partition[part]->fstype;
+	}
+	else
+	{
+		for (dev = 0; dev < stateful_media_count; ++dev)
+		{
+			if (strcmp(stateful_media[dev]->path, path) == 0)
+			{
+				break;
+			}
+		}
+
+		if (dev >= stateful_media_count)
+		{
+			result = 0;
+			goto invoke_mount_error_1;
+		}
+
+		local_mnt_point = stateful_media[dev]->mnt_point;
+		local_fstype    = stateful_media[dev]->fstype;
 	}
 
-	if (media[dev]->partition[part]->mnt_point != NULL)
+	if (local_mnt_point != NULL)
 	{
 		result = 0;
 		goto invoke_mount_error_1;
@@ -1015,7 +1037,7 @@ invoke_mount_exit_loop:
 			goto invoke_mount_error_1;
 		}
 
-		if (strcmp(fsopts->fstype, media[dev]->partition[part]->fstype) == 0)
+		if (strcmp(fsopts->fstype, local_fstype) == 0)
 		{
 			break;
 		}
@@ -1029,7 +1051,7 @@ invoke_mount_exit_loop:
 	}
 
 	// calculate mount point
-	mount_dev_start = strrchr(media[dev]->partition[part]->path, '/');
+	mount_dev_start = strrchr(path, '/');
 	if (mount_dev_start == NULL)
 	{
 		result = -1;
@@ -1091,14 +1113,14 @@ invoke_mount_exit_loop:
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external)
 	{
-		result = invoke_mount_external(client_number, dev, part, mount_options, mount_path, fsopts);
+		result = invoke_mount_external(client_number, path, mount_options, mount_path, fsopts);
 	}
 	else
 	{
-		result = invoke_mount_internal(client_number, dev, part, mount_options, mount_path, fsopts);
+		result = invoke_mount_internal(client_number, path, mount_options, mount_path, fsopts);
 	}
 #else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-	result = invoke_mount_internal(client_number, dev, part, mount_options, mount_path, fsopts);
+	result = invoke_mount_internal(client_number, path, mount_options, mount_path, fsopts);
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	free(mount_path);
@@ -1113,13 +1135,13 @@ invoke_mount_error_1:
 }
 
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-static int invoke_unmount_external(unsigned int client_number, unsigned int dev, unsigned int part)
+static int invoke_unmount_external(unsigned int client_number, const char *path, const char *mnt_point, const char *fstype)
 {
 	int result;
 	int unmount_cmd_len;
 	char *unmount_cmd;
 
-	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(media[dev]->partition[part]->fstype) + 1 + strlen(media[dev]->partition[part]->mnt_point);
+	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(fstype) + 1 + strlen(mnt_point);
 
 	unmount_cmd = (char*) malloc(unmount_cmd_len + 1);
 	if (unmount_cmd == NULL)
@@ -1129,9 +1151,9 @@ static int invoke_unmount_external(unsigned int client_number, unsigned int dev,
 
 	strcpy(unmount_cmd, unmount_ext_cmd);
 	strcat(unmount_cmd, " -t ");
-	strcat(unmount_cmd, media[dev]->partition[part]->fstype);
+	strcat(unmount_cmd, fstype);
 	strcat(unmount_cmd, " ");
-	strcat(unmount_cmd, media[dev]->partition[part]->mnt_point);
+	strcat(unmount_cmd, mnt_point);
 
 	result = system(unmount_cmd);
 
@@ -1149,11 +1171,11 @@ static int invoke_unmount_external(unsigned int client_number, unsigned int dev,
 }
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-static int invoke_unmount_internal(unsigned int client_number, unsigned int dev, unsigned int part)
+static int invoke_unmount_internal(unsigned int client_number, const char *path, const char *mnt_point, const char *fstype)
 {
 	int result;
 
-	result = point_mount_count(media[dev]->partition[part]->mnt_point, 2);
+	result = point_mount_count(mnt_point, 2);
 	if (result != 1)
 	{
 		if (result < 0)
@@ -1168,13 +1190,13 @@ static int invoke_unmount_internal(unsigned int client_number, unsigned int dev,
 
 	// TODO: check that it's original mounter who requests unmount or root?
 
-	result = umount(media[dev]->partition[part]->mnt_point);
+	result = umount(mnt_point);
 	if (result != 0)
 	{
 		return 0;
 	}
 
-	result = remove_from_mtab(media[dev]->partition[part]->path, media[dev]->partition[part]->mnt_point, media[dev]->partition[part]->fstype);
+	result = remove_from_mtab(path, mnt_point, fstype);
 	if (result != 1)
 	{
 		// NOTE: failing to modify /etc/mtab is non-fatal error
@@ -1192,6 +1214,9 @@ int invoke_unmount(unsigned int client_number, const char *path)
 	const struct filesystem_options *fsopts;
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
+	const char *local_mnt_point;
+	const char *local_fstype;
+
 	for (dev = 0; dev < media_count; ++dev)
 	{
 		for (part = 0; part < media[dev]->partitions_count; ++part)
@@ -1204,12 +1229,31 @@ int invoke_unmount(unsigned int client_number, const char *path)
 	}
 
 invoke_unmount_exit_loop:
-	if (dev >= media_count)
+	if (dev < media_count)
 	{
-		return 0;
+		local_mnt_point = media[dev]->partition[part]->mnt_point;
+		local_fstype    = media[dev]->partition[part]->fstype;
+	}
+	else
+	{
+		for (dev = 0; dev < stateful_media_count; ++dev)
+		{
+			if (strcmp(stateful_media[dev]->path, path) == 0)
+			{
+				break;
+			}
+		}
+
+		if (dev >= stateful_media_count)
+		{
+			return 0;
+		}
+
+		local_mnt_point = stateful_media[dev]->mnt_point;
+		local_fstype    = stateful_media[dev]->fstype;
 	}
 
-	if (media[dev]->partition[part]->mnt_point == NULL)
+	if (local_mnt_point == NULL)
 	{
 		return 0;
 	}
@@ -1224,7 +1268,7 @@ invoke_unmount_exit_loop:
 			return 0;
 		}
 
-		if (strcmp(fsopts->fstype, media[dev]->partition[part]->fstype) == 0)
+		if (strcmp(fsopts->fstype, local_fstype) == 0)
 		{
 			break;
 		}
@@ -1234,21 +1278,21 @@ invoke_unmount_exit_loop:
 
 	if (fsopts->external)
 	{
-		result = invoke_unmount_external(client_number, dev, part);
+		result = invoke_unmount_external(client_number, path, local_mnt_point, local_fstype);
 	}
 	else
 	{
-		result = invoke_unmount_internal(client_number, dev, part);
+		result = invoke_unmount_internal(client_number, path, local_mnt_point, local_fstype);
 	}
 #else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-	result = invoke_unmount_internal(client_number, dev, part);
+	result = invoke_unmount_internal(client_number, path, local_mnt_point, local_fstype);
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	if (result == 1)
 	{
-		if (get_dir_state(media[dev]->partition[part]->mnt_point) == dir_state_empty)
+		if (get_dir_state(local_mnt_point) == dir_state_empty)
 		{
-			rmdir(media[dev]->partition[part]->mnt_point);
+			rmdir(local_mnt_point);
 		}
 	}
 

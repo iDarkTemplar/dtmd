@@ -83,20 +83,23 @@ static void device_system_free_device(dtmd_info_t *device)
 
 static void device_system_fill_device(struct udev_device *dev, const char *path, dtmd_info_t *device_info)
 {
-	device_info->type         = dtmd_info_device;
 	device_info->path         = path;
 	device_info->media_type   = get_device_type(dev);
 	device_info->private_data = dev;
 
 	if (device_info->media_type == dtmd_removable_media_cdrom)
 	{
+		device_info->type   = dtmd_info_stateful_device;
 		device_info->fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
 		device_info->label  = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+		// TODO: query cdrom's state
 	}
 	else
 	{
+		device_info->type   = dtmd_info_device;
 		device_info->fstype = NULL;
 		device_info->label  = NULL;
+		device_info->state  = dtmd_removable_media_state_unknown;
 	}
 
 	device_info->path_parent = NULL;
@@ -119,6 +122,7 @@ static void device_system_fill_partition(struct udev_device *dev, const char *pa
 	}
 
 	device_info->type         = dtmd_info_partition;
+	device_info->state        = dtmd_removable_media_state_unknown;
 	device_info->path         = path;
 	device_info->fstype       = udev_device_get_property_value(dev, "ID_FS_TYPE");
 	device_info->label        = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
