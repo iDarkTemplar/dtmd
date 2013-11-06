@@ -26,6 +26,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#define ID_CDROM_MEDIA_STATE_BLANK "blank"
+#define ID_CDROM_MEDIA_STATE_COMPLETE "complete"
+
 struct dtmd_device_enumeration
 {
 	struct udev_enumerate *enumerate;
@@ -83,6 +86,8 @@ static void device_system_free_device(dtmd_info_t *device)
 
 static void device_system_fill_device(struct udev_device *dev, const char *path, dtmd_info_t *device_info)
 {
+	const char *state;
+
 	device_info->path         = path;
 	device_info->media_type   = get_device_type(dev);
 	device_info->private_data = dev;
@@ -92,7 +97,21 @@ static void device_system_fill_device(struct udev_device *dev, const char *path,
 		device_info->type   = dtmd_info_stateful_device;
 		device_info->fstype = udev_device_get_property_value(dev, "ID_FS_TYPE");
 		device_info->label  = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
-		// TODO: query cdrom's state
+		state               = udev_device_get_property_value(dev, "ID_CDROM_MEDIA_STATE");
+
+		device_info->state = dtmd_removable_media_state_empty;
+
+		if (state != NULL)
+		{
+			if ((device_info->fstype != NULL) && (strcmp(state, ID_CDROM_MEDIA_STATE_COMPLETE) == 0))
+			{
+				device_info->state = dtmd_removable_media_state_ok;
+			}
+			else if (strcmp(state, ID_CDROM_MEDIA_STATE_BLANK) == 0)
+			{
+				device_info->state = dtmd_removable_media_state_clear;
+			}
+		}
 	}
 	else
 	{
