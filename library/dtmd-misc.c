@@ -363,7 +363,7 @@ dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string)
 		}
 		else if (strcmp(string, str_removable_media_state_clear) == 0)
 		{
-			return dtmd_removable_media_state_ok;
+			return dtmd_removable_media_state_clear;
 		}
 		else if (strcmp(string, str_removable_media_state_ok) == 0)
 		{

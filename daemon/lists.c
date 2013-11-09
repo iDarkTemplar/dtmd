@@ -567,6 +567,23 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 	{
 		if (strcmp(stateful_media[i]->path, path) == 0)
 		{
+			if ((stateful_media[i]->type == media_type)
+				&& (stateful_media[i]->state == state)
+				&& (((stateful_media[i]->fstype == NULL)
+						&& (fstype == NULL))
+					|| ((stateful_media[i]->fstype != NULL)
+						&& (fstype != NULL)
+						&& (strcmp(stateful_media[i]->fstype, fstype) == 0)))
+				&& (((stateful_media[i]->label == NULL)
+						&& (label == NULL))
+					|| ((stateful_media[i]->label != NULL)
+						&& (label != NULL)
+					&& (strcmp(stateful_media[i]->label, label) == 0))))
+			{
+				// nothing seems to have changed
+				return 0;
+			}
+
 			if (stateful_media[i]->mnt_point != NULL)
 			{
 				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);

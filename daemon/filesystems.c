@@ -1011,7 +1011,7 @@ invoke_mount_exit_loop:
 			}
 		}
 
-		if (dev >= stateful_media_count)
+		if ((dev >= stateful_media_count) || (stateful_media[dev]->state != dtmd_removable_media_state_ok))
 		{
 			result = 0;
 			goto invoke_mount_error_1;

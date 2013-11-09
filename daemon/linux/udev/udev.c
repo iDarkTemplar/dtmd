@@ -24,7 +24,6 @@
 #include <libudev.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #define ID_CDROM_MEDIA_STATE_BLANK "blank"
 #define ID_CDROM_MEDIA_STATE_COMPLETE "complete"
@@ -214,7 +213,7 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 		free(enumeration);
 	}
 }
-#include <stdio.h>
+
 int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t **device)
 {
 	const char *path;
