@@ -147,7 +147,7 @@ static void device_system_fill_partition(struct udev_device *dev, const char *pa
 	device_info->private_data = dev;
 }
 
-dtmd_device_system_t* device_system_init()
+dtmd_device_system_t* device_system_init(void)
 {
 	return (dtmd_device_system_t*) udev_new();
 }

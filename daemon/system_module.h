@@ -71,7 +71,7 @@ typedef struct dtmd_device_system      dtmd_device_system_t;
 typedef struct dtmd_device_enumeration dtmd_device_enumeration_t;
 typedef struct dtmd_device_monitor     dtmd_device_monitor_t;
 
-dtmd_device_system_t* device_system_init();
+dtmd_device_system_t* device_system_init(void);
 void device_system_deinit(dtmd_device_system_t *system);
 
 dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t *system);
