@@ -417,17 +417,20 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 						goto dtmd_enum_all_error_1;
 					}
 
-					result_devices = (dtmd_device_t**) malloc(sizeof(dtmd_device_t*)*expected_devices_count);
-					if (result_devices == NULL)
+					if (expected_devices_count > 0)
 					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_enum_all_error_1;
-					}
+						result_devices = (dtmd_device_t**) malloc(sizeof(dtmd_device_t*)*expected_devices_count);
+						if (result_devices == NULL)
+						{
+							dtmd_free_command(cmd);
+							handle->result_state = dtmd_memory_error;
+							goto dtmd_enum_all_error_1;
+						}
 
-					for (result_count = 0; result_count < expected_devices_count; ++result_count)
-					{
-						result_devices[result_count] = NULL;
+						for (result_count = 0; result_count < expected_devices_count; ++result_count)
+						{
+							result_devices[result_count] = NULL;
+						}
 					}
 
 					result_count = 0;
@@ -572,17 +575,20 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 						goto dtmd_enum_all_error_1;
 					}
 
-					result_devices_stateful = (dtmd_stateful_device_t**) malloc(sizeof(dtmd_stateful_device_t*)*expected_stateful_devices_count);
-					if (result_devices_stateful == NULL)
+					if (expected_stateful_devices_count > 0)
 					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_enum_all_error_1;
-					}
+						result_devices_stateful = (dtmd_stateful_device_t**) malloc(sizeof(dtmd_stateful_device_t*)*expected_stateful_devices_count);
+						if (result_devices_stateful == NULL)
+						{
+							dtmd_free_command(cmd);
+							handle->result_state = dtmd_memory_error;
+							goto dtmd_enum_all_error_1;
+						}
 
-					for (result_stateful_count = 0; result_stateful_count < expected_stateful_devices_count; ++result_stateful_count)
-					{
-						result_devices_stateful[result_stateful_count] = NULL;
+						for (result_stateful_count = 0; result_stateful_count < expected_stateful_devices_count; ++result_stateful_count)
+						{
+							result_devices_stateful[result_stateful_count] = NULL;
+						}
 					}
 
 					result_stateful_count = 0;
@@ -728,7 +734,8 @@ dtmd_enum_all_exit_1:
 			handle->result_state = dtmd_invalid_state;
 		}
 
-		if ((result_devices != NULL)
+		if ((expected_devices_count > 0)
+			&& (result_devices != NULL)
 			&& ((result_devices[result_count-1] == NULL)
 				|| (!dtmd_helper_validate_device(result_devices[result_count-1]))))
 		{
@@ -736,7 +743,8 @@ dtmd_enum_all_exit_1:
 			goto dtmd_enum_all_error_1;
 		}
 
-		if ((result_devices_stateful != NULL)
+		if ((expected_stateful_devices_count > 0)
+			&& (result_devices_stateful != NULL)
 			&& (result_devices_stateful[result_stateful_count-1] == NULL))
 		{
 			handle->result_state = dtmd_invalid_state;

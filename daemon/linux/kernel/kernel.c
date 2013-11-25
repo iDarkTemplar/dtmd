@@ -37,12 +37,13 @@
 #include <linux/netlink.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #define block_devices_dir "/sys/block"
 #define filename_dev "dev"
 #define filename_removable "removable"
 #define filename_device_type "device/type"
-#define removable_correct_value '1'
+#define removable_correct_value 1
 #define devices_dir "/dev"
 #define block_sys_dir "/sys"
 
@@ -66,6 +67,11 @@
 #define NETLINK_STRING_DEVTYPE_PARTITION "partition"
 
 #define NETLINK_GROUP_KERNEL 1
+
+// TODO: build hierarchy of devices and store it. Use second thread to receive netlink events.
+// TODO: update sd and usb-hdd
+// /sys/bus/mmc/devices/
+// /sys/bus/usb/devices/*/host*/target*/*/block/*
 
 struct dtmd_device_enumeration
 {
@@ -96,6 +102,7 @@ static int read_int_from_file(const char *filename)
 	FILE *file;
 	int value = 0;
 	int read_val;
+	int not_first = 0;
 
 	file = fopen(filename, "r");
 	if (file == NULL)
@@ -108,9 +115,17 @@ static int read_int_from_file(const char *filename)
 		if ((read_val < '0')
 			|| (read_val > '9'))
 		{
-			goto read_int_from_file_error_2;
+			if (not_first)
+			{
+				break;
+			}
+			else
+			{
+				goto read_int_from_file_error_2;
+			}
 		}
 
+		not_first = 1;
 		value = (value * 10) + (read_val - '0');
 	}
 
@@ -147,6 +162,11 @@ static char* read_string_from_file(const char *filename)
 
 	while ((read_val = fgetc(file)) != EOF)
 	{
+		if (!isprint(read_val))
+		{
+			break;
+		}
+
 		tmp = realloc(result, result_len + 2);
 		if (tmp == NULL)
 		{
@@ -568,7 +588,7 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 					continue;
 				}
 
-				strcpy(&(file_name[len_base + len_core + len_dev_base]), filename_device_type);
+				strcpy(&(file_name[len_base + len_dev_base + 1]), filename_device_type);
 				device_type = read_string_from_file(file_name);
 				if (device_type == NULL)
 				{
@@ -1142,24 +1162,24 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 		strcat((char*) device_info->path, "/");
 		strcat((char*) device_info->path, devname);
 
-		switch (device_info->type)
+		switch (action_type)
 		{
-		case dtmd_info_partition:
-			device_info->state = dtmd_removable_media_state_unknown;
-
-			if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
-				|| (device_info->fstype == NULL))
+		case dtmd_device_action_add:
+		case dtmd_device_action_online:
+		case dtmd_device_action_change:
+			switch (device_info->type)
 			{
-				goto device_system_monitor_get_device_error_3;
-			}
-			break;
+			case dtmd_info_partition:
+				device_info->state = dtmd_removable_media_state_unknown;
 
-		case dtmd_info_stateful_device:
-			switch (action_type)
-			{
-			case dtmd_device_action_add:
-			case dtmd_device_action_online:
-			case dtmd_device_action_change:
+				if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
+				    || (device_info->fstype == NULL))
+				{
+					goto device_system_monitor_get_device_error_3;
+				}
+				break;
+
+			case dtmd_info_stateful_device:
 				switch (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)))
 				{
 				case 0:
@@ -1183,7 +1203,9 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 				break;
 
 			default:
-				device_info->state = dtmd_removable_media_state_unknown;
+				device_info->fstype = NULL;
+				device_info->label  = NULL;
+				device_info->state  = dtmd_removable_media_state_unknown;
 				break;
 			}
 			break;
