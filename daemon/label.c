@@ -45,7 +45,7 @@ char* decode_label(const char *label)
 	int i;
 	int k;
 
-	result = malloc(strlen(label)+1);
+	result = malloc((strlen(label)*4)+1);
 	if (result == NULL)
 	{
 		return NULL;
@@ -67,43 +67,77 @@ char* decode_label(const char *label)
 
 			switch (*label)
 			{
-#ifdef DTMD_MISC_DECODE_CONTROL_CHARS
 			case 'a':
-				*cur_result = '\a';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\a' & 0700) >> 6);
+				cur_result[2] = '0' + (('\a' &  070) >> 3);
+				cur_result[3] = '0' + ( '\a' &   07);
+				cur_result += 3;
 				break;
 
 			case 'b':
-				*cur_result = '\b';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\b' & 0700) >> 6);
+				cur_result[2] = '0' + (('\b' &  070) >> 3);
+				cur_result[3] = '0' + ( '\b' &   07);
+				cur_result += 3;
 				break;
 
 			case 'f':
-				*cur_result = '\f';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\f' & 0700) >> 6);
+				cur_result[2] = '0' + (('\f' &  070) >> 3);
+				cur_result[3] = '0' + ( '\f' &   07);
+				cur_result += 3;
 				break;
 
 			case 'n':
-				*cur_result = '\n';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\n' & 0700) >> 6);
+				cur_result[2] = '0' + (('\n' &  070) >> 3);
+				cur_result[3] = '0' + ( '\n' &   07);
+				cur_result += 3;
 				break;
 
 			case 'r':
-				*cur_result = '\r';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\r' & 0700) >> 6);
+				cur_result[2] = '0' + (('\r' &  070) >> 3);
+				cur_result[3] = '0' + ( '\r' &   07);
+				cur_result += 3;
 				break;
 
 			case 't':
-				*cur_result = '\t';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\t' & 0700) >> 6);
+				cur_result[2] = '0' + (('\t' &  070) >> 3);
+				cur_result[3] = '0' + ( '\t' &   07);
+				cur_result += 3;
 				break;
 
 			case '\\':
-				*cur_result = '\\';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\\' & 0700) >> 6);
+				cur_result[2] = '0' + (('\\' &  070) >> 3);
+				cur_result[3] = '0' + ( '\\' &   07);
+				cur_result += 3;
 				break;
 
 			case '\'':
-				*cur_result = '\'';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\'' & 0700) >> 6);
+				cur_result[2] = '0' + (('\'' &  070) >> 3);
+				cur_result[3] = '0' + ( '\'' &   07);
+				cur_result += 3;
 				break;
 
 			case '\"':
-				*cur_result = '\"';
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (('\"' & 0700) >> 6);
+				cur_result[2] = '0' + (('\"' &  070) >> 3);
+				cur_result[3] = '0' + ( '\"' &   07);
+				cur_result += 3;
 				break;
-#endif /* DTMD_MISC_DECODE_CONTROL_CHARS */
 
 			case 'x':
 				k = 0;
@@ -128,7 +162,19 @@ char* decode_label(const char *label)
 					}
 				}
 
-				*cur_result = k;
+				if ((!iscntrl(k)) && (!ispunct(k)))
+				{
+					*cur_result = k;
+				}
+				else
+				{
+					cur_result[0] = '\\';
+					cur_result[1] = '0' + ((k & 0700) >> 6);
+					cur_result[2] = '0' + ((k &  070) >> 3);
+					cur_result[3] = '0' + ( k &   07);
+					cur_result += 3;
+				}
+
 				label += 2;
 				break;
 
@@ -154,24 +200,42 @@ char* decode_label(const char *label)
 					k += label[i] - '0';
 				}
 
-				*cur_result = k;
+				if ((!iscntrl(k)) && (!ispunct(k)))
+				{
+					*cur_result = k;
+				}
+				else
+				{
+					cur_result[0] = '\\';
+					cur_result[1] = '0' + ((k & 0700) >> 6);
+					cur_result[2] = '0' + ((k &  070) >> 3);
+					cur_result[3] = '0' + ( k &   07);
+					cur_result += 3;
+				}
+
 				label += 2;
 				break;
 
 			default:
-#ifdef DTMD_MISC_DECODE_CONTROL_CHARS
 				*cur_result = '\\';
 				++cur_result;
 				*cur_result = *label;
-#else /* DTMD_MISC_DECODE_CONTROL_CHARS */
-				free(result);
-				return NULL;
-#endif /* DTMD_MISC_DECODE_CONTROL_CHARS */
 			}
 		}
 		else
 		{
-			*cur_result = *label;
+			if ((!iscntrl(*label)) && (!ispunct(*label)))
+			{
+				*cur_result = *label;
+			}
+			else
+			{
+					cur_result[0] = '\\';
+					cur_result[1] = '0' + (((*label) & 0700) >> 6);
+					cur_result[2] = '0' + (((*label) &  070) >> 3);
+					cur_result[3] = '0' + ( (*label) &   07);
+					cur_result += 3;
+			}
 		}
 
 		++cur_result;

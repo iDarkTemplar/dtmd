@@ -73,7 +73,7 @@ void print_and_free(char *orig, char *label, char *expected)
 int main(int argc, char **argv)
 {
 	char *label_test1 = "test\\a\\b\\f\\n\\r\\t\\\\\\'\\\"\\123\\x20";
-	char *label_test2 = "test\\x20\\040label";
+	char *label_test2 = "test\\x20\\040label\\z";
 	char *label_test3 = "label\\0a1fail";
 	char *label_test4 = "label\\xfzfail";
 
@@ -82,12 +82,8 @@ int main(int argc, char **argv)
 	char *label_result3;
 	char *label_result4;
 
-#ifdef DTMD_MISC_DECODE_CONTROL_CHARS
-	char *label_expected_result1 = "test\a\b\f\n\r\t\\'\"\123\x20";
-#else /* DTMD_MISC_DECODE_CONTROL_CHARS */
-	char *label_expected_result1 = NULL;
-#endif /* DTMD_MISC_DECODE_CONTROL_CHARS */
-	char *label_expected_result2 = "test  label";
+	char *label_expected_result1 = "test\\007\\010\\014\\012\\015\\011\\134\\047\\042S ";
+	char *label_expected_result2 = "test  label\\z";
 	char *label_expected_result3 = NULL;
 	char *label_expected_result4 = NULL;
 
@@ -96,7 +92,7 @@ int main(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 
-	test_compare((label_result1 = decode_label(label_test1)) == NULL);
+	test_compare(((label_result1 = decode_label(label_test1)) != NULL) && (strcmp(label_result1, label_expected_result1) == 0));
 	test_compare(((label_result2 = decode_label(label_test2)) != NULL) && (strcmp(label_result2, label_expected_result2) == 0));
 	test_compare((label_result3 = decode_label(label_test3)) == NULL);
 	test_compare((label_result4 = decode_label(label_test4)) == NULL);
