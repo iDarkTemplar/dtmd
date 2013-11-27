@@ -38,6 +38,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <limits.h>
 
 #define block_devices_dir "/sys/block"
 #define filename_dev "dev"
@@ -508,10 +509,7 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 
 int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t **device)
 {
-	char *file_name = NULL;
-	void *tmp;
-
-	size_t file_name_len_real = 0;
+	char file_name[PATH_MAX + 1];
 	size_t len_core;
 	size_t len_base;
 	size_t len_ext;
@@ -563,16 +561,9 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 
 				len_core = strlen(dir_entry->d_name) + 2;
 
-				if (len_core + len_base + len_dev_base + len_ext > file_name_len_real)
+				if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
 				{
-					file_name_len_real = len_core + len_base + len_dev_base + len_ext;
-					tmp = realloc(file_name, (file_name_len_real + 1) * sizeof(char));
-					if (tmp == NULL)
-					{
-						goto device_system_next_enumerated_device_error_2;
-					}
-
-					file_name = (char*) tmp;
+					goto device_system_next_enumerated_device_error_1;
 				}
 
 				strcpy(file_name, block_devices_dir);
@@ -601,19 +592,19 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 				if (device_info == NULL)
 				{
-					goto device_system_next_enumerated_device_error_2;
+					goto device_system_next_enumerated_device_error_1;
 				}
 
 				device_info->path = (char*) malloc(strlen(devices_dir) + strlen(dir_entry->d_name) + 2);
 				if (device_info->path == NULL)
 				{
-					goto device_system_next_enumerated_device_error_3;
+					goto device_system_next_enumerated_device_error_2;
 				}
 
 				device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(enumeration->last_device_entry->d_name) + 2);
 				if (device_info->path_parent == NULL)
 				{
-					goto device_system_next_enumerated_device_error_4;
+					goto device_system_next_enumerated_device_error_3;
 				}
 
 				device_info->type = dtmd_info_partition;
@@ -643,10 +634,9 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 						free((char*) device_info->label);
 					}
 
-					goto device_system_next_enumerated_device_error_5;
+					goto device_system_next_enumerated_device_error_4;
 				}
 
-				free(file_name);
 				*device = device_info;
 				return 1;
 			}
@@ -666,16 +656,9 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 
 		len_core = strlen(dir_entry->d_name) + 2;
 
-		if (len_core + len_base + len_ext > file_name_len_real)
+		if (len_core + len_base + len_ext > PATH_MAX)
 		{
-			file_name_len_real = len_core + len_base + len_ext;
-			tmp = realloc(file_name, (file_name_len_real + 1) * sizeof(char));
-			if (tmp == NULL)
-			{
-				goto device_system_next_enumerated_device_error_2;
-			}
-
-			file_name = (char*) tmp;
+			goto device_system_next_enumerated_device_error_1;
 		}
 
 		strcpy(file_name, block_devices_dir);
@@ -714,19 +697,19 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			enumeration->dir_pointer_partitions = opendir(file_name);
 			if (enumeration->dir_pointer_partitions == NULL)
 			{
-				goto device_system_next_enumerated_device_error_2;
+				goto device_system_next_enumerated_device_error_1;
 			}
 
 			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 			if (device_info == NULL)
 			{
-				goto device_system_next_enumerated_device_error_2;
+				goto device_system_next_enumerated_device_error_1;
 			}
 
 			device_info->path = (char*) malloc(strlen(devices_dir) + strlen(dir_entry->d_name) + 2);
 			if (device_info->path == NULL)
 			{
-				goto device_system_next_enumerated_device_error_3;
+				goto device_system_next_enumerated_device_error_2;
 			}
 
 			device_info->type = dtmd_info_device;
@@ -742,7 +725,6 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			device_info->state        = dtmd_removable_media_state_unknown;
 			device_info->private_data = NULL;
 
-			free(file_name);
 			enumeration->last_device_entry = dir_entry;
 			*device = device_info;
 			return 1;
@@ -751,13 +733,13 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 			if (device_info == NULL)
 			{
-				goto device_system_next_enumerated_device_error_2;
+				goto device_system_next_enumerated_device_error_1;
 			}
 
 			device_info->path = (char*) malloc(strlen(devices_dir) + strlen(dir_entry->d_name) + 2);
 			if (device_info->path == NULL)
 			{
-				goto device_system_next_enumerated_device_error_3;
+				goto device_system_next_enumerated_device_error_2;
 			}
 
 			device_info->type = dtmd_info_stateful_device;
@@ -788,38 +770,26 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 				break;
 
 			case -1:
-				goto device_system_next_enumerated_device_error_4;
+				goto device_system_next_enumerated_device_error_3;
 			}
 
-			free(file_name);
 			*device = device_info;
 			return 1;
 		}
-	}
-
-	if (file_name != NULL)
-	{
-		free(file_name);
 	}
 
 	enumeration->last_device_entry = NULL;
 	*device = NULL;
 	return 0;
 
-device_system_next_enumerated_device_error_5:
+device_system_next_enumerated_device_error_4:
 	free((char*) device_info->path_parent);
 
-device_system_next_enumerated_device_error_4:
+device_system_next_enumerated_device_error_3:
 	free((char*) device_info->path);
 
-device_system_next_enumerated_device_error_3:
-	free(device_info);
-
 device_system_next_enumerated_device_error_2:
-	if (file_name != NULL)
-	{
-		free(file_name);
-	}
+	free(device_info);
 
 device_system_next_enumerated_device_error_1:
 	return -1;
@@ -960,7 +930,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 	char *subsystem = NULL;
 	char *devpath = NULL;
 	dtmd_info_t *device_info;
-	char *file_name;
+	char file_name[PATH_MAX + 1];
 	char *device_type;
 
 	char *last_delim;
@@ -1082,8 +1052,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 		case dtmd_device_action_add:
 		case dtmd_device_action_online:
 		case dtmd_device_action_change:
-			file_name = (char*) malloc(strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 5);
-			if (file_name == NULL)
+			if (strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 4 > PATH_MAX)
 			{
 				goto device_system_monitor_get_device_error_2;
 			}
@@ -1096,14 +1065,10 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 
 			if (device_type == NULL)
 			{
-				strcpy(file_name, block_sys_dir);
-				strcat(file_name, devpath);
-				strcat(file_name, "/../");
+				strcpy(&(file_name[strlen(block_sys_dir) + strlen(devpath)]), "/../");
 				strcat(file_name, filename_device_type);
 				device_type = read_string_from_file(file_name);
 			}
-
-			free(file_name);
 
 			if (device_type == NULL)
 			{
