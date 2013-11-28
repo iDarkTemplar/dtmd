@@ -41,6 +41,9 @@
 #include <limits.h>
 
 #define block_devices_dir "/sys/block"
+#define block_mmc_devices_dir "/sys/bus/mmc/devices"
+#define block_usb_devices_dir "/sys/bus/usb/devices"
+
 #define filename_dev "dev"
 #define filename_removable "removable"
 #define filename_device_type "device/type"
@@ -79,6 +82,8 @@ struct dtmd_device_enumeration
 	dtmd_device_system_t *system;
 	DIR *dir_pointer;
 	DIR *dir_pointer_partitions;
+	DIR *dir_pointer_usb;
+	DIR *dir_pointer_mmc;
 
 	struct dirent *last_device_entry;
 };
@@ -334,6 +339,216 @@ static int open_netlink_socket(void)
 	return fd;
 }
 
+static int helper_read_partition(const char *name, const char *device_name, const char *device_name_parent, dtmd_info_t **device)
+{
+	char *device_type;
+	struct stat stat_entry;
+	char *start_string;
+
+	dtmd_info_t *device_info;
+	dtmd_removable_media_type_t media_type;
+
+	start_string = (char *) name + strlen(name);
+
+	strcpy(start_string, device_name);
+	strcat(start_string, "/");
+	strcat(start_string, filename_dev);
+
+	if (stat(name, &stat_entry) != 0)
+	{
+		goto helper_read_partition_exit_1;
+	}
+
+	strcpy(start_string, filename_device_type);
+	device_type = read_string_from_file(name);
+	if (device_type == NULL)
+	{
+		goto helper_read_partition_exit_1;
+	}
+
+	media_type = device_type_from_string(device_type);
+	free(device_type);
+
+	device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
+	if (device_info == NULL)
+	{
+		goto helper_read_partition_error_1;
+	}
+
+	device_info->path = (char*) malloc(strlen(devices_dir) + strlen(device_name) + 2);
+	if (device_info->path == NULL)
+	{
+		goto helper_read_partition_error_2;
+	}
+
+	device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(device_name_parent) + 2);
+	if (device_info->path_parent == NULL)
+	{
+		goto helper_read_partition_error_3;
+	}
+
+	device_info->type = dtmd_info_partition;
+
+	strcpy((char*) device_info->path, devices_dir);
+	strcat((char*) device_info->path, "/");
+	strcat((char*) device_info->path, device_name);
+
+	strcpy((char*) device_info->path_parent, devices_dir);
+	strcat((char*) device_info->path_parent, "/");
+	strcat((char*) device_info->path_parent, device_name_parent);
+
+	device_info->media_type   = media_type;
+	device_info->state        = dtmd_removable_media_state_unknown;
+	device_info->private_data = NULL;
+
+	if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
+	    || (device_info->fstype == NULL))
+	{
+		if (device_info->fstype != NULL)
+		{
+			free((char*) device_info->fstype);
+		}
+
+		if (device_info->label != NULL)
+		{
+			free((char*) device_info->label);
+		}
+
+		goto helper_read_partition_error_4;
+	}
+
+	*device = device_info;
+	return 1;
+
+helper_read_partition_exit_1:
+	return 0;
+
+helper_read_partition_error_4:
+	free((char*) device_info->path_parent);
+
+helper_read_partition_error_3:
+	free((char*) device_info->path);
+
+helper_read_partition_error_2:
+	free(device_info);
+
+helper_read_partition_error_1:
+	return -1;
+}
+
+static int helper_read_device(const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
+{
+	char *device_type;
+	struct stat stat_entry;
+	char *start_string;
+
+	dtmd_info_t *device_info;
+	dtmd_removable_media_type_t media_type;
+
+	start_string = (char *) name + strlen(name);
+
+	strcpy(start_string, filename_dev);
+
+	if (stat(name, &stat_entry) != 0)
+	{
+		goto helper_read_device_exit_1;
+	}
+
+	if (check_removable)
+	{
+		strcpy(start_string, filename_removable);
+
+		if (read_int_from_file(name) != removable_correct_value)
+		{
+			goto helper_read_device_exit_1;
+		}
+	}
+
+	strcpy(start_string, filename_device_type);
+	device_type = read_string_from_file(name);
+	if (device_type == NULL)
+	{
+		goto helper_read_device_exit_1;
+	}
+
+	media_type = device_type_from_string(device_type);
+	free(device_type);
+
+	if (media_type != dtmd_removable_media_unknown_or_persistent)
+	{
+		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
+		if (device_info == NULL)
+		{
+			goto helper_read_device_error_1;
+		}
+
+		device_info->path = (char*) malloc(strlen(devices_dir) + strlen(device_name) + 2);
+		if (device_info->path == NULL)
+		{
+			goto helper_read_device_error_2;
+		}
+
+		strcpy((char*) device_info->path, devices_dir);
+		strcat((char*) device_info->path, "/");
+		strcat((char*) device_info->path, device_name);
+
+		device_info->media_type   = media_type;
+		device_info->path_parent  = NULL;
+		device_info->private_data = NULL;
+
+		switch (media_type)
+		{
+		case dtmd_removable_media_removable_disk:
+		case dtmd_removable_media_sd_card:
+			device_info->type   = dtmd_info_device;
+			device_info->fstype = NULL;
+			device_info->label  = NULL;
+			device_info->state  = dtmd_removable_media_state_unknown;
+			*device             = device_info;
+			return 1;
+
+		case dtmd_removable_media_cdrom:
+			device_info->type = dtmd_info_stateful_device;
+
+			switch (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)))
+			{
+			case 0:
+				device_info->state = dtmd_removable_media_state_empty;
+				break;
+
+			case 1:
+				if (device_info->fstype == NULL)
+				{
+					device_info->state = dtmd_removable_media_state_clear;
+				}
+				else
+				{
+					device_info->state = dtmd_removable_media_state_ok;
+				}
+				break;
+
+			case -1:
+				goto helper_read_device_error_3;
+			}
+
+			*device = device_info;
+			return 2;
+		}
+	}
+
+helper_read_device_exit_1:
+	return 0;
+
+helper_read_device_error_3:
+	free((char*) device_info->path);
+
+helper_read_device_error_2:
+	free(device_info);
+
+helper_read_device_error_1:
+	return -1;
+}
+
 dtmd_device_system_t* device_system_init(void)
 {
 	dtmd_device_system_t *device_system;
@@ -365,6 +580,16 @@ static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 	if (enumeration->dir_pointer_partitions != NULL)
 	{
 		closedir(enumeration->dir_pointer_partitions);
+	}
+
+	if (enumeration->dir_pointer_mmc != NULL)
+	{
+		closedir(enumeration->dir_pointer_mmc);
+	}
+
+	if (enumeration->dir_pointer_usb != NULL)
+	{
+		closedir(enumeration->dir_pointer_usb);
 	}
 
 	free(enumeration);
@@ -419,6 +644,8 @@ void device_system_deinit(dtmd_device_system_t *system)
 dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t *system)
 {
 	DIR *dir_pointer;
+	DIR *dir_pointer_usb;
+	DIR *dir_pointer_mmc;
 	dtmd_device_enumeration_t *enumeration;
 	void **tmp;
 
@@ -433,16 +660,28 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 		goto device_system_enumerate_devices_error_1;
 	}
 
+	dir_pointer_mmc = opendir(block_mmc_devices_dir);
+	if (dir_pointer_mmc == NULL)
+	{
+		goto device_system_enumerate_devices_error_2;
+	}
+
+	dir_pointer_usb = opendir(block_usb_devices_dir);
+	if (dir_pointer_usb == NULL)
+	{
+		goto device_system_enumerate_devices_error_3;
+	}
+
 	enumeration = (dtmd_device_enumeration_t*) malloc(sizeof(dtmd_device_enumeration_t));
 	if (enumeration == NULL)
 	{
-		goto device_system_enumerate_devices_error_2;
+		goto device_system_enumerate_devices_error_4;
 	}
 
 	tmp = realloc(system->enumerations, (system->enumeration_count + 1) * sizeof(dtmd_device_enumeration_t*));
 	if (tmp == NULL)
 	{
-		goto device_system_enumerate_devices_error_3;
+		goto device_system_enumerate_devices_error_5;
 	}
 
 	system->enumerations = (dtmd_device_enumeration_t**) tmp;
@@ -452,11 +691,19 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	enumeration->system                 = system;
 	enumeration->dir_pointer            = dir_pointer;
 	enumeration->dir_pointer_partitions = NULL;
+	enumeration->dir_pointer_mmc        = dir_pointer_mmc;
+	enumeration->dir_pointer_usb        = dir_pointer_usb;
 
 	return enumeration;
 
-device_system_enumerate_devices_error_3:
+device_system_enumerate_devices_error_5:
 	free(enumeration);
+
+device_system_enumerate_devices_error_4:
+	closedir(dir_pointer_usb);
+
+device_system_enumerate_devices_error_3:
+	closedir(dir_pointer_mmc);
 
 device_system_enumerate_devices_error_2:
 	closedir(dir_pointer);
@@ -515,13 +762,7 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 	size_t len_ext;
 	size_t len_dev_base;
 
-	char *device_type;
-
 	struct dirent *dir_entry;
-	struct stat stat_entry;
-
-	dtmd_info_t *device_info;
-	dtmd_removable_media_type_t media_type;
 
 	if ((enumeration == NULL)
 		|| (device == NULL))
@@ -570,75 +811,19 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 				strcat(file_name, "/");
 				strcat(file_name, enumeration->last_device_entry->d_name);
 				strcat(file_name, "/");
-				strcat(file_name, dir_entry->d_name);
-				strcat(file_name, "/");
-				strcat(file_name, filename_dev);
 
-				if (stat(file_name, &stat_entry) != 0)
+				switch (helper_read_partition(file_name, dir_entry->d_name, enumeration->last_device_entry->d_name, device))
 				{
-					continue;
-				}
-
-				strcpy(&(file_name[len_base + len_dev_base + 1]), filename_device_type);
-				device_type = read_string_from_file(file_name);
-				if (device_type == NULL)
-				{
-					continue;
-				}
-
-				media_type = device_type_from_string(device_type);
-				free(device_type);
-
-				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-				if (device_info == NULL)
-				{
+				case 1:
+					return 1;
+				/*
+				case 0:
+					break;
+				*/
+				case -1:
 					goto device_system_next_enumerated_device_error_1;
+					//break;
 				}
-
-				device_info->path = (char*) malloc(strlen(devices_dir) + strlen(dir_entry->d_name) + 2);
-				if (device_info->path == NULL)
-				{
-					goto device_system_next_enumerated_device_error_2;
-				}
-
-				device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(enumeration->last_device_entry->d_name) + 2);
-				if (device_info->path_parent == NULL)
-				{
-					goto device_system_next_enumerated_device_error_3;
-				}
-
-				device_info->type = dtmd_info_partition;
-
-				strcpy((char*) device_info->path, devices_dir);
-				strcat((char*) device_info->path, "/");
-				strcat((char*) device_info->path, dir_entry->d_name);
-
-				strcpy((char*) device_info->path_parent, devices_dir);
-				strcat((char*) device_info->path_parent, "/");
-				strcat((char*) device_info->path_parent, enumeration->last_device_entry->d_name);
-
-				device_info->media_type   = media_type;
-				device_info->state        = dtmd_removable_media_state_unknown;
-				device_info->private_data = NULL;
-
-				if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
-					|| (device_info->fstype == NULL))
-				{
-					if (device_info->fstype != NULL)
-					{
-						free((char*) device_info->fstype);
-					}
-
-					if (device_info->label != NULL)
-					{
-						free((char*) device_info->label);
-					}
-
-					goto device_system_next_enumerated_device_error_4;
-				}
-
-				*device = device_info;
-				return 1;
 			}
 		}
 
@@ -665,131 +850,36 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 		strcat(file_name, "/");
 		strcat(file_name, dir_entry->d_name);
 		strcat(file_name, "/");
-		strcat(file_name, filename_dev);
 
-		if (stat(file_name, &stat_entry) != 0)
+		switch (helper_read_device(file_name, dir_entry->d_name, 1, device))
 		{
-			continue;
-		}
-
-		strcpy(&(file_name[len_base + len_core]), filename_removable);
-
-		if (read_int_from_file(file_name) != removable_correct_value)
-		{
-			continue;
-		}
-
-		strcpy(&(file_name[len_base + len_core]), filename_device_type);
-		device_type = read_string_from_file(file_name);
-		if (device_type == NULL)
-		{
-			continue;
-		}
-
-		media_type = device_type_from_string(device_type);
-		free(device_type);
-
-		switch (media_type)
-		{
-		case dtmd_removable_media_removable_disk:
-		case dtmd_removable_media_sd_card:
+		case 1: // device
 			file_name[len_base + len_core - 1] = 0;
 			enumeration->dir_pointer_partitions = opendir(file_name);
 			if (enumeration->dir_pointer_partitions == NULL)
 			{
+				device_system_free_device(*device);
+				*device = NULL;
 				goto device_system_next_enumerated_device_error_1;
 			}
-
-			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-			if (device_info == NULL)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			device_info->path = (char*) malloc(strlen(devices_dir) + strlen(dir_entry->d_name) + 2);
-			if (device_info->path == NULL)
-			{
-				goto device_system_next_enumerated_device_error_2;
-			}
-
-			device_info->type = dtmd_info_device;
-
-			strcpy((char*) device_info->path, devices_dir);
-			strcat((char*) device_info->path, "/");
-			strcat((char*) device_info->path, dir_entry->d_name);
-
-			device_info->media_type   = media_type;
-			device_info->fstype       = NULL;
-			device_info->label        = NULL;
-			device_info->path_parent  = NULL;
-			device_info->state        = dtmd_removable_media_state_unknown;
-			device_info->private_data = NULL;
-
 			enumeration->last_device_entry = dir_entry;
-			*device = device_info;
 			return 1;
 
-		case dtmd_removable_media_cdrom:
-			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-			if (device_info == NULL)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			device_info->path = (char*) malloc(strlen(devices_dir) + strlen(dir_entry->d_name) + 2);
-			if (device_info->path == NULL)
-			{
-				goto device_system_next_enumerated_device_error_2;
-			}
-
-			device_info->type = dtmd_info_stateful_device;
-
-			strcpy((char*) device_info->path, devices_dir);
-			strcat((char*) device_info->path, "/");
-			strcat((char*) device_info->path, dir_entry->d_name);
-
-			device_info->media_type   = media_type;
-			device_info->path_parent  = NULL;
-			device_info->private_data = NULL;
-
-			switch (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)))
-			{
-			case 0:
-				device_info->state = dtmd_removable_media_state_empty;
-				break;
-
-			case 1:
-				if (device_info->fstype == NULL)
-				{
-					device_info->state = dtmd_removable_media_state_clear;
-				}
-				else
-				{
-					device_info->state = dtmd_removable_media_state_ok;
-				}
-				break;
-
-			case -1:
-				goto device_system_next_enumerated_device_error_3;
-			}
-
-			*device = device_info;
+		case 2: // stateful_device
 			return 1;
+		/*
+		case 0:
+			break;
+		*/
+		case -1:
+			goto device_system_next_enumerated_device_error_1;
+			//break;
 		}
 	}
 
 	enumeration->last_device_entry = NULL;
 	*device = NULL;
 	return 0;
-
-device_system_next_enumerated_device_error_4:
-	free((char*) device_info->path_parent);
-
-device_system_next_enumerated_device_error_3:
-	free((char*) device_info->path);
-
-device_system_next_enumerated_device_error_2:
-	free(device_info);
 
 device_system_next_enumerated_device_error_1:
 	return -1;
