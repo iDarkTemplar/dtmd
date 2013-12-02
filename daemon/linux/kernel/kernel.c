@@ -75,9 +75,6 @@
 #define NETLINK_GROUP_KERNEL 1
 
 // TODO: build hierarchy of devices and store it. Use second thread to receive netlink events.
-// TODO: update sd and usb-hdd
-// /sys/bus/mmc/devices/
-// /sys/bus/usb/devices/*/host*/target*/*/block/*
 
 struct dtmd_device_enumeration
 {
@@ -104,6 +101,12 @@ struct dtmd_device_enumeration
 	struct dirent *dirent_usb_target_device_blocks;
 
 	DIR *dir_pointer_mmc;
+	DIR *dir_pointer_mmc_device;
+	DIR *dir_pointer_mmc_device_blocks;
+
+	struct dirent *dirent_mmc;
+	struct dirent *dirent_mmc_device;
+	struct dirent *dirent_mmc_device_blocks;
 };
 
 struct dtmd_device_monitor
@@ -600,11 +603,6 @@ static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 		closedir(enumeration->dir_pointer_partitions);
 	}
 
-	if (enumeration->dir_pointer_mmc != NULL)
-	{
-		closedir(enumeration->dir_pointer_mmc);
-	}
-
 	if (enumeration->dir_pointer_usb != NULL)
 	{
 		closedir(enumeration->dir_pointer_usb);
@@ -633,6 +631,21 @@ static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 	if (enumeration->dir_pointer_usb_target_device_blocks != NULL)
 	{
 		closedir(enumeration->dir_pointer_usb_target_device_blocks);
+	}
+
+	if (enumeration->dir_pointer_mmc != NULL)
+	{
+		closedir(enumeration->dir_pointer_mmc);
+	}
+
+	if (enumeration->dir_pointer_mmc_device != NULL)
+	{
+		closedir(enumeration->dir_pointer_mmc_device);
+	}
+
+	if (enumeration->dir_pointer_mmc_device_blocks != NULL)
+	{
+		closedir(enumeration->dir_pointer_mmc_device_blocks);
 	}
 
 	free(enumeration);
@@ -731,19 +744,21 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	system->enumerations[system->enumeration_count] = enumeration;
 	++(system->enumeration_count);
 
-	enumeration->system                 = system;
+	enumeration->system                               = system;
 
-	enumeration->dir_pointer            = dir_pointer;
-	enumeration->dir_pointer_partitions = NULL;
+	enumeration->dir_pointer                          = dir_pointer;
+	enumeration->dir_pointer_partitions               = NULL;
 
-	enumeration->dir_pointer_mmc        = dir_pointer_mmc;
-
-	enumeration->dir_pointer_usb        = dir_pointer_usb;
-	enumeration->dir_pointer_usb_device = NULL;
-	enumeration->dir_pointer_usb_host   = NULL;
-	enumeration->dir_pointer_usb_target = NULL;
-	enumeration->dir_pointer_usb_target_device = NULL;
+	enumeration->dir_pointer_usb                      = dir_pointer_usb;
+	enumeration->dir_pointer_usb_device               = NULL;
+	enumeration->dir_pointer_usb_host                 = NULL;
+	enumeration->dir_pointer_usb_target               = NULL;
+	enumeration->dir_pointer_usb_target_device        = NULL;
 	enumeration->dir_pointer_usb_target_device_blocks = NULL;
+
+	enumeration->dir_pointer_mmc                      = dir_pointer_mmc;
+	enumeration->dir_pointer_mmc_device               = NULL;
+	enumeration->dir_pointer_mmc_device_blocks        = NULL;
 
 	return enumeration;
 
@@ -1253,6 +1268,162 @@ device_system_next_enumerated_device_usb_step_2:
 
 		closedir(enumeration->dir_pointer_usb);
 		enumeration->dir_pointer_usb = NULL;
+	}
+
+	if (enumeration->dir_pointer_mmc != NULL)
+	{
+		len_base = strlen(block_mmc_devices_dir);
+
+		if (enumeration->dir_pointer_mmc_device != NULL)
+		{
+			if (enumeration->dir_pointer_mmc_device_blocks != NULL)
+			{
+				len_dev_base = strlen(enumeration->dirent_mmc_device->d_name)
+					+ strlen(block_dir_name) + strlen(enumeration->dirent_mmc->d_name) + 4;
+
+				while ((enumeration->dirent_mmc_device_blocks = readdir(enumeration->dir_pointer_mmc_device_blocks)) != NULL)
+				{
+					if ((strcmp(enumeration->dirent_mmc_device_blocks->d_name, ".") == 0)
+						|| (strcmp(enumeration->dirent_mmc_device_blocks->d_name, "..") == 0))
+					{
+						continue;
+					}
+
+					len_core = strlen(enumeration->dirent_mmc_device_blocks->d_name) + 2;
+
+					if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
+					{
+						goto device_system_next_enumerated_device_error_1;
+					}
+
+					strcpy(file_name, block_mmc_devices_dir);
+					strcat(file_name, "/");
+					strcat(file_name, enumeration->dirent_mmc->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, block_dir_name);
+					strcat(file_name, "/");
+					strcat(file_name, enumeration->dirent_mmc_device->d_name);
+					strcat(file_name, "/");
+
+					switch (helper_read_partition(file_name,
+						enumeration->dirent_mmc_device_blocks->d_name,
+						enumeration->dirent_mmc_device->d_name,
+						device))
+					{
+					case 1:
+						return 1;
+					/*
+					case 0:
+						break;
+					*/
+					case -1:
+						goto device_system_next_enumerated_device_error_1;
+						//break;
+					}
+				}
+
+				closedir(enumeration->dir_pointer_mmc_device_blocks);
+				enumeration->dir_pointer_mmc_device_blocks = NULL;
+			}
+
+device_system_next_enumerated_device_mmc_step_2:
+			while ((enumeration->dirent_mmc_device = readdir(enumeration->dir_pointer_mmc_device)) != NULL)
+			{
+				if ((strcmp(enumeration->dirent_mmc_device->d_name, ".") == 0)
+					|| (strcmp(enumeration->dirent_mmc_device->d_name, "..") == 0))
+				{
+					continue;
+				}
+
+				len_core = strlen(enumeration->dirent_mmc_device->d_name)
+					+ strlen(block_dir_name) + strlen(enumeration->dirent_mmc->d_name) + 5;
+
+				if (len_core + len_base + len_ext > PATH_MAX)
+				{
+					goto device_system_next_enumerated_device_error_1;
+				}
+
+				strcpy(file_name, block_mmc_devices_dir);
+				strcat(file_name, "/");
+				strcat(file_name, enumeration->dirent_mmc->d_name);
+				strcat(file_name, "/");
+				strcat(file_name, block_dir_name);
+				strcat(file_name, "/");
+				strcat(file_name, enumeration->dirent_mmc_device->d_name);
+
+				if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+				{
+					continue;
+				}
+
+				strcat(file_name, "/");
+
+				switch (helper_read_device(file_name, enumeration->dirent_mmc_device->d_name, 0, device))
+				{
+				case 1: // device
+					file_name[len_base + len_core - 1] = 0;
+					enumeration->dir_pointer_mmc_device_blocks = opendir(file_name);
+					if (enumeration->dir_pointer_mmc_device_blocks == NULL)
+					{
+						device_system_free_device(*device);
+						*device = NULL;
+						goto device_system_next_enumerated_device_error_1;
+					}
+					return 1;
+
+				case 2: // stateful_device
+					return 1;
+				/*
+				case 0:
+					break;
+				*/
+				case -1:
+					goto device_system_next_enumerated_device_error_1;
+					//break;
+				}
+			}
+
+			closedir(enumeration->dir_pointer_mmc_device);
+			enumeration->dir_pointer_mmc_device = NULL;
+		}
+
+		while ((enumeration->dirent_mmc = readdir(enumeration->dir_pointer_mmc)) != NULL)
+		{
+			if ((strcmp(enumeration->dirent_mmc->d_name, ".") == 0)
+				|| (strcmp(enumeration->dirent_mmc->d_name, "..") == 0))
+			{
+				continue;
+			}
+
+			len_core = strlen(block_dir_name) + strlen(enumeration->dirent_mmc->d_name) + 3;
+
+			if (len_core + len_base + len_ext > PATH_MAX)
+			{
+				goto device_system_next_enumerated_device_error_1;
+			}
+
+			strcpy(file_name, block_mmc_devices_dir);
+			strcat(file_name, "/");
+			strcat(file_name, enumeration->dirent_mmc->d_name);
+			strcat(file_name, "/");
+			strcat(file_name, block_dir_name);
+
+			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+			{
+				continue;
+			}
+
+			enumeration->dir_pointer_mmc_device = opendir(file_name);
+			if (enumeration->dir_pointer_mmc_device == NULL)
+			{
+				goto device_system_next_enumerated_device_error_1;
+			}
+
+			goto device_system_next_enumerated_device_mmc_step_2;
+		}
+
+		closedir(enumeration->dir_pointer_mmc);
+		enumeration->dir_pointer_mmc = NULL;
 	}
 
 	*device = NULL;
