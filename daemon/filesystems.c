@@ -342,7 +342,6 @@ peercred.cr_version == XUCRED_VERSION
 static dir_state_t get_dir_state(const char *dirname)
 {
 	int n = 0;
-	struct dirent *d;
 	DIR *dir;
 
 	dir = opendir(dirname);
@@ -351,7 +350,7 @@ static dir_state_t get_dir_state(const char *dirname)
 		return dir_state_not_dir;
 	}
 
-	while ((d = readdir(dir)) != NULL)
+	while (readdir(dir) != NULL)
 	{
 		if(++n > 2)
 		{

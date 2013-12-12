@@ -180,6 +180,7 @@ void remove_empty_dirs(const char *dirname)
 	char *fulldirname = NULL;
 	int fulldirname_len = 0;
 	int fulldirname_maxlen = 0;
+	void *tmp;
 
 	dir = opendir(dirname);
 	if (dir == NULL)
@@ -198,11 +199,13 @@ void remove_empty_dirs(const char *dirname)
 			if (fulldirname_len > fulldirname_maxlen)
 			{
 				fulldirname_maxlen = fulldirname_len;
-				fulldirname = (char*) realloc(fulldirname, fulldirname_maxlen + 1);
-				if (fulldirname == NULL)
+				tmp = realloc(fulldirname, fulldirname_maxlen + 1);
+				if (tmp == NULL)
 				{
 					goto remove_empty_dirs_error_1;
 				}
+
+				fulldirname = (char*) tmp;
 			}
 
 			strcpy(fulldirname, dirname);

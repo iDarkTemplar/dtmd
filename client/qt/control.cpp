@@ -421,7 +421,7 @@ QIcon Control::iconFromType(dtmd_removable_media_type_t type, bool is_mounted)
 		}
 		else
 		{
-			return m_icon_mounted_sd_card;
+			return m_icon_sd_card;
 		}
 
 	//case unknown_or_persistent:

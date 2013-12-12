@@ -144,7 +144,7 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
 
 	sockaddr.sun_family = AF_LOCAL;
 	memset(sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
-	strncat(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
+	strncpy(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
 
 	if (connect(handle->socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
 	{
@@ -1624,7 +1624,7 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 				&& (dtmd_helper_is_helper_mount(cmd))
 				&& (strcmp(cmd->args[1], path) == 0)
 				&& (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], mount_options) == 0))
-					|| ((cmd->args[2] == NULL) && (cmd->args[2] == NULL))))
+					|| (cmd->args[2] == NULL)))
 			{
 				if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
 				{
