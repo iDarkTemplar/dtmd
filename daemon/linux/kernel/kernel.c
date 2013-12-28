@@ -40,6 +40,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <limits.h>
+#include <poll.h>
 
 #define block_devices_dir "/sys/block"
 #define block_mmc_devices_dir "/sys/bus/mmc/devices"
@@ -78,35 +79,6 @@
 
 struct dtmd_device_enumeration
 {
-	dtmd_device_system_t *system;
-
-	DIR *dir_pointer;
-	DIR *dir_pointer_partitions;
-
-	struct dirent *dirent_device;
-	struct dirent *dirent_device_partition;
-
-	DIR *dir_pointer_usb;
-	DIR *dir_pointer_usb_device;
-	DIR *dir_pointer_usb_host;
-	DIR *dir_pointer_usb_target;
-	DIR *dir_pointer_usb_target_device;
-	DIR *dir_pointer_usb_target_device_blocks;
-
-	struct dirent *dirent_usb;
-	struct dirent *dirent_usb_device;
-	struct dirent *dirent_usb_host;
-	struct dirent *dirent_usb_target;
-	struct dirent *dirent_usb_target_device;
-	struct dirent *dirent_usb_target_device_blocks;
-
-	DIR *dir_pointer_mmc;
-	DIR *dir_pointer_mmc_device;
-	DIR *dir_pointer_mmc_device_blocks;
-
-	struct dirent *dirent_mmc;
-	struct dirent *dirent_mmc_device;
-	struct dirent *dirent_mmc_device_blocks;
 };
 
 struct dtmd_device_monitor
@@ -115,8 +87,27 @@ struct dtmd_device_monitor
 	int fd;
 };
 
+typedef struct dtmd_device_internal
+{
+	dtmd_info_t *device;
+
+	dtmd_info_t **partitions;
+	uint32_t partitions_count;
+} dtmd_device_internal_t;
+
 struct dtmd_device_system
 {
+	int events_fd;
+	int worker_control_pipe[2];
+	pthread_mutex_t control_mutex;
+	pthread_t worker_thread;
+
+	dtmd_device_internal_t **devices;
+	uint32_t devices_count;
+
+	dtmd_info_t **stateful_devices;
+	uint32_t stateful_devices_count;
+
 	uint16_t enumeration_count;
 	dtmd_device_enumeration_t **enumerations;
 
@@ -570,14 +561,988 @@ helper_read_device_error_1:
 	return -1;
 }
 
+static int device_system_init_add_stateless_device(dtmd_device_system_t *device_system, dtmd_info_t *device)
+{
+	uint32_t index;
+	dtmd_device_internal_t *internal_device;
+	void *tmp;
+
+	for (index = 0; index < device_system->devices_count; ++index)
+	{
+		if (strcmp(device_system->devices[index]->device->path, device->path) == 0)
+		{
+			goto device_system_init_add_stateless_device_exit_1;
+		}
+	}
+
+	internal_device = malloc(sizeof(dtmd_device_internal_t));
+	if (internal_device == NULL)
+	{
+		goto device_system_init_add_stateless_device_error_1;
+	}
+
+	tmp = realloc(device_system->devices, (device_system->devices_count + 1) * sizeof(dtmd_device_internal_t*));
+	if (tmp == NULL)
+	{
+		goto device_system_init_add_stateless_device_error_2;
+	}
+
+	device_system->devices = (dtmd_device_internal_t**) tmp;
+
+	internal_device->device           = device;
+	internal_device->partitions       = NULL;
+	internal_device->partitions_count = 0;
+
+	device_system->devices[device_system->devices_count] = internal_device;
+	++(device_system->devices_count);
+
+	return 1;
+
+device_system_init_add_stateless_device_exit_1:
+	device_system_free_device(device);
+
+	return 0;
+
+device_system_init_add_stateless_device_error_2:
+	free(internal_device);
+
+device_system_init_add_stateless_device_error_1:
+	device_system_free_device(device);
+
+	return -1;
+}
+
+static int device_system_init_add_stateful_device(dtmd_device_system_t *device_system, dtmd_info_t *device)
+{
+	uint32_t index;
+	void *tmp;
+
+	for (index = 0; index < device_system->stateful_devices_count; ++index)
+	{
+		if (strcmp(device_system->stateful_devices[index]->path, device->path) == 0)
+		{
+			goto device_system_init_add_stateful_device_exit_1;
+		}
+	}
+
+	tmp = realloc(device_system->stateful_devices, (device_system->stateful_devices_count + 1) * sizeof(dtmd_info_t*));
+	if (tmp == NULL)
+	{
+		goto device_system_init_add_stateful_device_error_1;
+	}
+
+	device_system->stateful_devices = (dtmd_info_t**) tmp;
+
+	device_system->stateful_devices[device_system->stateful_devices_count] = device;
+	++(device_system->stateful_devices_count);
+
+	return 1;
+
+device_system_init_add_stateful_device_exit_1:
+	device_system_free_device(device);
+
+	return 0;
+
+device_system_init_add_stateful_device_error_1:
+	device_system_free_device(device);
+
+	return -1;
+}
+
+	dtmd_device_internal_t **devices;
+	uint32_t devices_count;
+
+	dtmd_info_t **stateless_devices;
+	uint32_t stateless_devices_count;
+
+static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
+{
+	DIR *dir_pointer = NULL;
+	DIR *dir_pointer_partitions = NULL;
+
+	struct dirent *dirent_device = NULL;
+	struct dirent *dirent_device_partition = NULL;
+
+	DIR *dir_pointer_usb = NULL;
+	DIR *dir_pointer_usb_device = NULL;
+	DIR *dir_pointer_usb_host = NULL;
+	DIR *dir_pointer_usb_target = NULL;
+	DIR *dir_pointer_usb_target_device = NULL;
+	DIR *dir_pointer_usb_target_device_blocks = NULL;
+
+	struct dirent *dirent_usb = NULL;
+	struct dirent *dirent_usb_device = NULL;
+	struct dirent *dirent_usb_host = NULL;
+	struct dirent *dirent_usb_target = NULL;
+	struct dirent *dirent_usb_target_device = NULL;
+	struct dirent *dirent_usb_target_device_blocks = NULL;
+
+	DIR *dir_pointer_mmc = NULL;
+	DIR *dir_pointer_mmc_device = NULL;
+	DIR *dir_pointer_mmc_device_blocks = NULL;
+
+	struct dirent *dirent_mmc = NULL;
+	struct dirent *dirent_mmc_device = NULL;
+	struct dirent *dirent_mmc_device_blocks = NULL;
+
+	dtmd_info_t *device;
+	void *tmp;
+
+	char file_name[PATH_MAX + 1];
+	size_t len_core;
+	size_t len_base;
+	size_t len_ext;
+	size_t len_dev_base;
+	struct stat statbuf;
+
+	len_ext       = strlen(filename_dev);
+
+	len_base      = strlen(filename_removable);
+	if (len_base > len_ext)
+	{
+		len_ext = len_base;
+	}
+
+	len_base      = strlen(filename_device_type);
+	if (len_base > len_ext)
+	{
+		len_ext = len_base;
+	}
+
+	dir_pointer = opendir(block_devices_dir);
+	if (dir_pointer == NULL)
+	{
+		goto device_system_init_fill_devices_error_plain_1;
+	}
+
+	len_base = strlen(block_devices_dir);
+
+	while ((dirent_device = readdir(dir_pointer)) != NULL)
+	{
+		if ((strcmp(dirent_device->d_name, ".") == 0)
+			|| (strcmp(dirent_device->d_name, "..") == 0))
+		{
+			continue;
+		}
+
+		len_core = strlen(dirent_device->d_name) + 2;
+
+		if (len_core + len_base + len_ext > PATH_MAX)
+		{
+			goto device_system_init_fill_devices_error_plain_2;
+		}
+
+		strcpy(file_name, block_devices_dir);
+		strcat(file_name, "/");
+		strcat(file_name, dirent_device->d_name);
+
+		if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+		{
+			continue;
+		}
+
+		strcat(file_name, "/");
+
+		switch (helper_read_device(file_name, dirent_device->d_name, 1, &device))
+		{
+		case 1: // device
+			switch (device_system_init_add_stateless_device(device_system, device))
+			{
+			case 1: // ok
+				file_name[len_base + len_core - 1] = 0;
+				dir_pointer_partitions = opendir(file_name);
+				if (dir_pointer_partitions == NULL)
+				{
+					goto device_system_init_fill_devices_error_plain_2;
+				}
+				break;
+			/*
+			case 0: // ok
+				break;
+			*/
+			case -1: // error
+				goto device_system_init_fill_devices_error_plain_2;
+				//break;
+			}
+			break;
+
+		case 2: // stateful_device
+			switch (device_system_init_add_stateful_device(device_system, device))
+			{
+			/*
+			case 1: // ok
+				break;
+			*/
+			/*
+			case 0: //ok
+				break;
+			*/
+			case -1: // error
+				goto device_system_init_fill_devices_error_plain_2;
+				//break;
+			}
+			break;
+		/*
+		case 0:
+			break;
+		*/
+		case -1:
+			goto device_system_init_fill_devices_error_plain_2;
+			//break;
+		}
+
+		if (dir_pointer_partitions != NULL)
+		{
+			len_dev_base = strlen(dirent_device->d_name) + 1;
+
+			while ((dirent_device_partition = readdir(dir_pointer_partitions)) != NULL)
+			{
+				if ((strcmp(dirent_device_partition->d_name, ".") == 0)
+					|| (strcmp(dirent_device_partition->d_name, "..") == 0))
+				{
+					continue;
+				}
+
+				len_core = strlen(dirent_device_partition->d_name) + 2;
+
+				if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
+				{
+					goto device_system_init_fill_devices_error_plain_3;
+				}
+
+				strcpy(file_name, block_devices_dir);
+				strcat(file_name, "/");
+				strcat(file_name, dirent_device->d_name);
+				strcat(file_name, "/");
+
+				switch (helper_read_partition(file_name,
+					dirent_device_partition->d_name,
+					dirent_device->d_name,
+					&device))
+				{
+				case 1:
+					tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
+						(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
+					if (tmp == NULL)
+					{
+						device_system_free_device(device);
+						goto device_system_init_fill_devices_error_plain_3;
+					}
+
+					device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
+
+					device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
+					++(device_system->devices[device_system->devices_count-1]->partitions_count);
+					break;
+				/*
+				case 0:
+					break;
+				*/
+				case -1:
+					goto device_system_init_fill_devices_error_plain_3;
+					//break;
+				}
+			}
+
+			closedir(dir_pointer_partitions);
+			dir_pointer_partitions = NULL;
+		}
+	}
+
+	closedir(dir_pointer);
+	dir_pointer = NULL;
+
+	dir_pointer_usb = opendir(block_usb_devices_dir);
+	if (dir_pointer_usb == NULL)
+	{
+		goto device_system_init_fill_devices_error_usb_1;
+	}
+
+	len_base = strlen(block_usb_devices_dir);
+
+	while ((dirent_usb = readdir(dir_pointer_usb)) != NULL)
+	{
+		if ((strcmp(dirent_usb->d_name, ".") == 0)
+			|| (strcmp(dirent_usb->d_name, "..") == 0))
+		{
+			continue;
+		}
+
+		len_core = strlen(dirent_usb->d_name) + 2;
+
+		if (len_core + len_base + len_ext > PATH_MAX)
+		{
+			goto device_system_init_fill_devices_error_usb_2;
+		}
+
+		strcpy(file_name, block_usb_devices_dir);
+		strcat(file_name, "/");
+		strcat(file_name, dirent_usb->d_name);
+
+		if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+		{
+			continue;
+		}
+
+		dir_pointer_usb_device = opendir(file_name);
+		if (dir_pointer_usb_device == NULL)
+		{
+			goto device_system_init_fill_devices_error_usb_2;
+		}
+
+		while ((dirent_usb_device = readdir(dir_pointer_usb_device)) != NULL)
+		{
+			if ((strcmp(dirent_usb_device->d_name, ".") == 0)
+				|| (strcmp(dirent_usb_device->d_name, "..") == 0))
+			{
+				continue;
+			}
+
+			if (strncmp(dirent_usb_device->d_name, "host", strlen("host")) != 0)
+			{
+				continue;
+			}
+
+			len_core = strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 3;
+
+			if (len_core + len_base + len_ext > PATH_MAX)
+			{
+				goto device_system_init_fill_devices_error_usb_3;
+			}
+
+			strcpy(file_name, block_usb_devices_dir);
+			strcat(file_name, "/");
+			strcat(file_name, dirent_usb->d_name);
+			strcat(file_name, "/");
+			strcat(file_name, dirent_usb_device->d_name);
+
+			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+			{
+				continue;
+			}
+
+			dir_pointer_usb_host = opendir(file_name);
+			if (dir_pointer_usb_host == NULL)
+			{
+				goto device_system_init_fill_devices_error_usb_3;
+			}
+
+			while ((dirent_usb_host = readdir(dir_pointer_usb_host)) != NULL)
+			{
+				if ((strcmp(dirent_usb_host->d_name, ".") == 0)
+					|| (strcmp(dirent_usb_host->d_name, "..") == 0))
+				{
+					continue;
+				}
+
+				if (strncmp(dirent_usb_host->d_name, "target", strlen("target")) != 0)
+				{
+					continue;
+				}
+
+				len_core = strlen(dirent_usb_host->d_name) + strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 4;
+
+				if (len_core + len_base + len_ext > PATH_MAX)
+				{
+					goto device_system_init_fill_devices_error_usb_4;
+				}
+
+				strcpy(file_name, block_usb_devices_dir);
+				strcat(file_name, "/");
+				strcat(file_name, dirent_usb->d_name);
+				strcat(file_name, "/");
+				strcat(file_name, dirent_usb_device->d_name);
+				strcat(file_name, "/");
+				strcat(file_name, dirent_usb_host->d_name);
+
+				if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+				{
+					continue;
+				}
+
+				dir_pointer_usb_target = opendir(file_name);
+				if (dir_pointer_usb_target == NULL)
+				{
+					goto device_system_init_fill_devices_error_usb_4;
+				}
+
+				while ((dirent_usb_target = readdir(dir_pointer_usb_target)) != NULL)
+				{
+					if ((strcmp(dirent_usb_target->d_name, ".") == 0)
+						|| (strcmp(dirent_usb_target->d_name, "..") == 0))
+					{
+						continue;
+					}
+
+					len_core = strlen(block_dir_name) + strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
+						+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 6;
+
+					if (len_core + len_base + len_ext > PATH_MAX)
+					{
+						goto device_system_init_fill_devices_error_usb_5;
+					}
+
+					strcpy(file_name, block_usb_devices_dir);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_usb->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_usb_device->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_usb_host->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_usb_target->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, block_dir_name);
+
+					if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+					{
+						continue;
+					}
+
+					dir_pointer_usb_target_device = opendir(file_name);
+					if (dir_pointer_usb_target_device == NULL)
+					{
+						goto device_system_init_fill_devices_error_usb_5;
+					}
+
+					while ((dirent_usb_target_device = readdir(dir_pointer_usb_target_device)) != NULL)
+					{
+						if ((strcmp(dirent_usb_target_device->d_name, ".") == 0)
+							|| (strcmp(dirent_usb_target_device->d_name, "..") == 0))
+						{
+							continue;
+						}
+
+						len_core = strlen(dirent_usb_target_device->d_name) + strlen(block_dir_name)
+							+ strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
+							+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 8;
+
+						if (len_core + len_base + len_ext > PATH_MAX)
+						{
+							goto device_system_init_fill_devices_error_usb_6;
+						}
+
+						strcpy(file_name, block_usb_devices_dir);
+						strcat(file_name, "/");
+						strcat(file_name, dirent_usb->d_name);
+						strcat(file_name, "/");
+						strcat(file_name, dirent_usb_device->d_name);
+						strcat(file_name, "/");
+						strcat(file_name, dirent_usb_host->d_name);
+						strcat(file_name, "/");
+						strcat(file_name, dirent_usb_target->d_name);
+						strcat(file_name, "/");
+						strcat(file_name, block_dir_name);
+						strcat(file_name, "/");
+						strcat(file_name, dirent_usb_target_device->d_name);
+
+						if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+						{
+							continue;
+						}
+
+						strcat(file_name, "/");
+
+						switch (helper_read_device(file_name, dirent_usb_target_device->d_name, 0, &device))
+						{
+						case 1: // device
+							switch (device_system_init_add_stateless_device(device_system, device))
+							{
+							case 1: // ok
+								file_name[len_base + len_core - 1] = 0;
+								dir_pointer_usb_target_device_blocks = opendir(file_name);
+								if (dir_pointer_usb_target_device_blocks == NULL)
+								{
+									goto device_system_init_fill_devices_error_usb_6;
+								}
+								break;
+							/*
+							case 0: // ok
+								break;
+							*/
+							case -1: // error
+								goto device_system_init_fill_devices_error_usb_6;
+								//break;
+							}
+							break;
+
+						case 2: // stateful_device
+							switch (device_system_init_add_stateful_device(device_system, device))
+							{
+							/*
+							case 1: // ok
+								break;
+							*/
+							/*
+							case 0: //ok
+								break;
+							*/
+							case -1: // error
+								goto device_system_init_fill_devices_error_usb_6;
+								//break;
+							}
+							break;
+						/*
+						case 0:
+							break;
+						*/
+						case -1:
+							goto device_system_init_fill_devices_error_plain_2;
+							//break;
+						}
+
+						if (dir_pointer_usb_target_device_blocks != NULL)
+						{
+							len_dev_base = strlen(dirent_usb_target_device->d_name) + strlen(block_dir_name)
+								+ strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
+								+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 7;
+
+							while ((dirent_usb_target_device_blocks = readdir(dir_pointer_usb_target_device_blocks)) != NULL)
+							{
+								if ((strcmp(dirent_usb_target_device_blocks->d_name, ".") == 0)
+									|| (strcmp(dirent_usb_target_device_blocks->d_name, "..") == 0))
+								{
+									continue;
+								}
+
+								len_core = strlen(dirent_usb_target_device_blocks->d_name) + 2;
+
+								if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
+								{
+									goto device_system_init_fill_devices_error_usb_7;
+								}
+
+								strcpy(file_name, block_usb_devices_dir);
+								strcat(file_name, "/");
+								strcat(file_name, dirent_usb->d_name);
+								strcat(file_name, "/");
+								strcat(file_name, dirent_usb_device->d_name);
+								strcat(file_name, "/");
+								strcat(file_name, dirent_usb_host->d_name);
+								strcat(file_name, "/");
+								strcat(file_name, dirent_usb_target->d_name);
+								strcat(file_name, "/");
+								strcat(file_name, block_dir_name);
+								strcat(file_name, "/");
+								strcat(file_name, dirent_usb_target_device->d_name);
+								strcat(file_name, "/");
+
+								switch (helper_read_partition(file_name,
+									dirent_usb_target_device_blocks->d_name,
+									dirent_usb_target_device->d_name,
+									&device))
+								{
+								case 1:
+									tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
+										(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
+									if (tmp == NULL)
+									{
+										device_system_free_device(device);
+										goto device_system_init_fill_devices_error_usb_7;
+									}
+
+									device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
+
+									device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
+									++(device_system->devices[device_system->devices_count-1]->partitions_count);
+									break;
+								/*
+								case 0:
+									break;
+								*/
+								case -1:
+									goto device_system_init_fill_devices_error_usb_7;
+									//break;
+								}
+							}
+
+							closedir(dir_pointer_usb_target_device_blocks);
+							dir_pointer_usb_target_device_blocks = NULL;
+						}
+					}
+
+					closedir(dir_pointer_usb_target_device);
+					dir_pointer_usb_target_device = NULL;
+				}
+
+				closedir(dir_pointer_usb_target);
+				dir_pointer_usb_target = NULL;
+			}
+
+			closedir(dir_pointer_usb_host);
+			dir_pointer_usb_host = NULL;
+		}
+
+		closedir(dir_pointer_usb_device);
+		dir_pointer_usb_device = NULL;
+	}
+
+	closedir(dir_pointer_usb);
+	dir_pointer_usb = NULL;
+
+	dir_pointer_mmc = opendir(block_mmc_devices_dir);
+	if (dir_pointer_mmc == NULL)
+	{
+		goto device_system_init_fill_devices_error_mmc_1;
+	}
+
+	len_base = strlen(block_mmc_devices_dir);
+
+	while ((dirent_mmc = readdir(dir_pointer_mmc)) != NULL)
+	{
+		if ((strcmp(dirent_mmc->d_name, ".") == 0)
+			|| (strcmp(dirent_mmc->d_name, "..") == 0))
+		{
+			continue;
+		}
+
+		len_core = strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 3;
+
+		if (len_core + len_base + len_ext > PATH_MAX)
+		{
+			goto device_system_init_fill_devices_error_mmc_2;
+		}
+
+		strcpy(file_name, block_mmc_devices_dir);
+		strcat(file_name, "/");
+		strcat(file_name, dirent_mmc->d_name);
+		strcat(file_name, "/");
+		strcat(file_name, block_dir_name);
+
+		if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+		{
+			continue;
+		}
+
+		dir_pointer_mmc_device = opendir(file_name);
+		if (dir_pointer_mmc_device == NULL)
+		{
+			goto device_system_init_fill_devices_error_mmc_2;
+		}
+
+		while ((dirent_mmc_device = readdir(dir_pointer_mmc_device)) != NULL)
+		{
+			if ((strcmp(dirent_mmc_device->d_name, ".") == 0)
+				|| (strcmp(dirent_mmc_device->d_name, "..") == 0))
+			{
+				continue;
+			}
+
+			len_core = strlen(dirent_mmc_device->d_name)
+				+ strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 5;
+
+			if (len_core + len_base + len_ext > PATH_MAX)
+			{
+				goto device_system_init_fill_devices_error_mmc_3;
+			}
+
+			strcpy(file_name, block_mmc_devices_dir);
+			strcat(file_name, "/");
+			strcat(file_name, dirent_mmc->d_name);
+			strcat(file_name, "/");
+			strcat(file_name, block_dir_name);
+			strcat(file_name, "/");
+			strcat(file_name, dirent_mmc_device->d_name);
+
+			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+			{
+				continue;
+			}
+
+			strcat(file_name, "/");
+
+			switch (helper_read_device(file_name, dirent_mmc_device->d_name, 0, &device))
+			{
+			case 1: // device
+				switch (device_system_init_add_stateless_device(device_system, device))
+				{
+				case 1: // ok
+					file_name[len_base + len_core - 1] = 0;
+					dir_pointer_mmc_device_blocks = opendir(file_name);
+					if (dir_pointer_mmc_device_blocks == NULL)
+					{
+						goto device_system_init_fill_devices_error_mmc_3;
+					}
+					break;
+				/*
+				case 0: // ok
+					break;
+				*/
+				case -1: // error
+					goto device_system_init_fill_devices_error_mmc_3;
+					//break;
+				}
+				break;
+
+			case 2: // stateful_device
+				switch (device_system_init_add_stateful_device(device_system, device))
+				{
+				/*
+				case 1: // ok
+					break;
+				*/
+				/*
+				case 0: //ok
+					break;
+				*/
+				case -1: // error
+					goto device_system_init_fill_devices_error_mmc_3;
+					//break;
+				}
+				break;
+			/*
+			case 0:
+				break;
+			*/
+			case -1:
+				goto device_system_init_fill_devices_error_mmc_3;
+				//break;
+			}
+
+			if (dir_pointer_mmc_device_blocks != NULL)
+			{
+				len_dev_base = strlen(dirent_mmc_device->d_name)
+					+ strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 4;
+
+				while ((dirent_mmc_device_blocks = readdir(dir_pointer_mmc_device_blocks)) != NULL)
+				{
+					if ((strcmp(dirent_mmc_device_blocks->d_name, ".") == 0)
+						|| (strcmp(dirent_mmc_device_blocks->d_name, "..") == 0))
+					{
+						continue;
+					}
+
+					len_core = strlen(dirent_mmc_device_blocks->d_name) + 2;
+
+					if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
+					{
+						goto device_system_init_fill_devices_error_mmc_4;
+					}
+
+					strcpy(file_name, block_mmc_devices_dir);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_mmc->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, block_dir_name);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_mmc_device->d_name);
+					strcat(file_name, "/");
+
+					switch (helper_read_partition(file_name,
+						dirent_mmc_device_blocks->d_name,
+						dirent_mmc_device->d_name,
+						&device))
+					{
+					case 1:
+						tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
+							(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
+						if (tmp == NULL)
+						{
+							device_system_free_device(device);
+							goto device_system_init_fill_devices_error_mmc_4;
+						}
+
+						device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
+
+						device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
+						++(device_system->devices[device_system->devices_count-1]->partitions_count);
+						break;
+					/*
+					case 0:
+						break;
+					*/
+					case -1:
+						goto device_system_init_fill_devices_error_mmc_4;
+						//break;
+					}
+				}
+
+				closedir(dir_pointer_mmc_device_blocks);
+				dir_pointer_mmc_device_blocks = NULL;
+			}
+		}
+
+		closedir(dir_pointer_mmc_device);
+		dir_pointer_mmc_device = NULL;
+	}
+
+	closedir(dir_pointer_mmc);
+	dir_pointer_mmc = NULL;
+
+	return 0;
+
+device_system_init_fill_devices_error_mmc_4:
+	closedir(dir_pointer_mmc_device_blocks);
+
+device_system_init_fill_devices_error_mmc_3:
+	closedir(dir_pointer_mmc_device);
+
+device_system_init_fill_devices_error_mmc_2:
+	closedir(dir_pointer_mmc);
+
+	goto device_system_init_fill_devices_error_mmc_2;
+
+device_system_init_fill_devices_error_usb_7:
+	closedir(dir_pointer_usb_target_device_blocks);
+
+device_system_init_fill_devices_error_usb_6:
+	closedir(dir_pointer_usb_target_device);
+
+device_system_init_fill_devices_error_usb_5:
+	closedir(dir_pointer_usb_target);
+
+device_system_init_fill_devices_error_usb_4:
+	closedir(dir_pointer_usb_host);
+
+device_system_init_fill_devices_error_usb_3:
+	closedir(dir_pointer_usb_device);
+
+device_system_init_fill_devices_error_usb_2:
+	closedir(dir_pointer_usb);
+
+	goto device_system_init_fill_devices_error_usb_1;
+
+device_system_init_fill_devices_error_plain_3:
+	closedir(dir_pointer_partitions);
+
+device_system_init_fill_devices_error_plain_2:
+	closedir(dir_pointer);
+
+device_system_init_fill_devices_error_mmc_1:
+device_system_init_fill_devices_error_usb_1:
+device_system_init_fill_devices_error_plain_1:
+	return -1;
+}
+
+static void* device_system_worker_function(void *arg)
+{
+	dtmd_device_system_t *device_system;
+	struct pollfd fds[2];
+	char data;
+	int rc;
+
+	device_system = (dtmd_device_system_t*) arg;
+
+	fds[0].fd = device_system->worker_control_pipe[0];
+	fds[1].fd = device_system->events_fd;
+
+	for (;;)
+	{
+		fds[0].events  = POLLIN;
+		fds[0].revents = 0;
+		fds[1].events  = POLLIN;
+		fds[1].revents = 0;
+
+		rc = poll(fds, 2, -1);
+
+		if ((rc == -1)
+			|| (fds[0].revents & POLLERR)
+			|| (fds[0].revents & POLLHUP)
+			|| (fds[0].revents & POLLNVAL)
+			|| (fds[1].revents & POLLERR)
+			|| (fds[1].revents & POLLHUP)
+			|| (fds[1].revents & POLLNVAL))
+		{
+			goto device_system_worker_function_error;
+		}
+
+		if (fds[0].revents & POLLIN)
+		{
+			rc = read(handle->pipes[0], &data, sizeof(char));
+
+			if (rc == 1)
+			{
+				if (data == 1)
+				{
+					// release ownership of socket and wait for return
+					data = 1;
+					write(handle->feedback[1], &data, sizeof(char));
+
+					sem_wait(&(handle->caller_socket));
+				}
+				else
+				{
+					goto device_system_worker_function_exit;
+				}
+			}
+			else
+			{
+				goto device_system_worker_function_error;
+			}
+		}
+
+		if (fds[1].revents & POLLIN)
+		{
+			rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
+			if (rc <= 0)
+			{
+				goto device_system_worker_function_error;
+			}
+
+			handle->cur_pos += rc;
+			handle->buffer[handle->cur_pos] = 0;
+		}
+	}
+
+device_system_worker_function_error:
+	// Signal about error
+	//handle->callback(handle->callback_arg, NULL);
+
+device_system_worker_function_exit:
+	// Signal about exit
+	data = 0;
+	write(handle->feedback[1], &data, sizeof(char));
+
+	pthread_exit(0);
+
+//device_system_worker_function_exit:
+	// Signal about exit
+	//data = 0;
+	//write(handle->feedback[1], &data, sizeof(char));
+
+	pthread_exit(0);
+}
+
 dtmd_device_system_t* device_system_init(void)
 {
 	dtmd_device_system_t *device_system;
+	/* char data = 0; */
 
 	device_system = (dtmd_device_system_t*) malloc(sizeof(dtmd_device_system_t));
 	if (device_system == NULL)
 	{
 		goto device_system_init_error_1;
+	}
+
+	device_system->events_fd = open_netlink_socket();
+	if (device_system->events_fd < 0)
+	{
+		goto device_system_init_error_2;
+	}
+
+	device_system->devices = NULL;
+	device_system->devices_count = 0;
+	device_system->stateful_devices = NULL;
+	device_system->stateful_devices_count = 0;
+
+	if (device_system_init_fill_devices(device_system) < 0)
+	{
+		goto device_system_init_error_3;
+	}
+
+	if (pipe(device_system->worker_control_pipe) < 0)
+	{
+		goto device_system_init_error_4;
+	}
+
+	if (pthread_mutex_init(&(device_system->control_mutex), NULL) != 0)
+	{
+		goto device_system_init_error_5;
+	}
+
+	if ((pthread_create(&(device_system->worker_thread), NULL, &device_system_worker_function, device_system)) != 0)
+	{
+		goto device_system_init_error_6;
 	}
 
 	device_system->enumeration_count = 0;
@@ -586,6 +1551,28 @@ dtmd_device_system_t* device_system_init(void)
 	device_system->monitors          = NULL;
 
 	return device_system;
+
+/*
+device_system_init_error_7:
+	write(device_system->worker_control_pipe[1], &data, sizeof(char));
+	pthread_join(device_system->worker_thread, NULL);
+*/
+
+device_system_init_error_6:
+	pthread_mutex_destroy(&(device_system->control_mutex));
+
+device_system_init_error_5:
+	close(device_system->worker_control_pipe[0]);
+	close(device_system->worker_control_pipe[1]);
+
+device_system_init_error_4:
+	// TODO: write
+
+device_system_init_error_3:
+	close(device_system->events_fd);
+
+device_system_init_error_2:
+	free(device_system);
 
 device_system_init_error_1:
 	return NULL;
@@ -822,615 +1809,7 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 
 int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t **device)
 {
-	char file_name[PATH_MAX + 1];
-	size_t len_core;
-	size_t len_base;
-	size_t len_ext;
-	size_t len_dev_base;
-	struct stat statbuf;
-
-	if ((enumeration == NULL)
-		|| (device == NULL))
-	{
-		goto device_system_next_enumerated_device_error_1;
-	}
-
-	len_ext       = strlen(filename_dev);
-
-	len_base      = strlen(filename_removable);
-	if (len_base > len_ext)
-	{
-		len_ext = len_base;
-	}
-
-	len_base      = strlen(filename_device_type);
-	if (len_base > len_ext)
-	{
-		len_ext = len_base;
-	}
-
-	if (enumeration->dir_pointer != NULL)
-	{
-		len_base = strlen(block_devices_dir);
-
-		if (enumeration->dir_pointer_partitions != NULL)
-		{
-			len_dev_base = strlen(enumeration->dirent_device->d_name) + 1;
-
-			while ((enumeration->dirent_device_partition = readdir(enumeration->dir_pointer_partitions)) != NULL)
-			{
-				if ((strcmp(enumeration->dirent_device_partition->d_name, ".") == 0)
-				    || (strcmp(enumeration->dirent_device_partition->d_name, "..") == 0))
-				{
-					continue;
-				}
-
-				len_core = strlen(enumeration->dirent_device_partition->d_name) + 2;
-
-				if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
-				{
-					goto device_system_next_enumerated_device_error_1;
-				}
-
-				strcpy(file_name, block_devices_dir);
-				strcat(file_name, "/");
-				strcat(file_name, enumeration->dirent_device->d_name);
-				strcat(file_name, "/");
-
-				switch (helper_read_partition(file_name,
-					enumeration->dirent_device_partition->d_name,
-					enumeration->dirent_device->d_name,
-					device))
-				{
-				case 1:
-					return 1;
-				/*
-				case 0:
-					break;
-				*/
-				case -1:
-					goto device_system_next_enumerated_device_error_1;
-					//break;
-				}
-			}
-
-			closedir(enumeration->dir_pointer_partitions);
-			enumeration->dir_pointer_partitions = NULL;
-		}
-
-		while ((enumeration->dirent_device = readdir(enumeration->dir_pointer)) != NULL)
-		{
-			if ((strcmp(enumeration->dirent_device->d_name, ".") == 0)
-			    || (strcmp(enumeration->dirent_device->d_name, "..") == 0))
-			{
-				continue;
-			}
-
-			len_core = strlen(enumeration->dirent_device->d_name) + 2;
-
-			if (len_core + len_base + len_ext > PATH_MAX)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			strcpy(file_name, block_devices_dir);
-			strcat(file_name, "/");
-			strcat(file_name, enumeration->dirent_device->d_name);
-
-			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-			{
-				continue;
-			}
-
-			strcat(file_name, "/");
-
-			switch (helper_read_device(file_name, enumeration->dirent_device->d_name, 1, device))
-			{
-			case 1: // device
-				file_name[len_base + len_core - 1] = 0;
-				enumeration->dir_pointer_partitions = opendir(file_name);
-				if (enumeration->dir_pointer_partitions == NULL)
-				{
-					device_system_free_device(*device);
-					*device = NULL;
-					goto device_system_next_enumerated_device_error_1;
-				}
-				return 1;
-
-			case 2: // stateful_device
-				return 1;
-			/*
-			case 0:
-				break;
-			*/
-			case -1:
-				goto device_system_next_enumerated_device_error_1;
-				//break;
-			}
-		}
-
-		closedir(enumeration->dir_pointer);
-		enumeration->dir_pointer = NULL;
-	}
-
-	if (enumeration->dir_pointer_usb != NULL)
-	{
-		len_base = strlen(block_usb_devices_dir);
-
-		if (enumeration->dir_pointer_usb_device != NULL)
-		{
-			if (enumeration->dir_pointer_usb_host != NULL)
-			{
-				if (enumeration->dir_pointer_usb_target != NULL)
-				{
-					if (enumeration->dir_pointer_usb_target_device != NULL)
-					{
-						if (enumeration->dir_pointer_usb_target_device_blocks != NULL)
-						{
-							len_dev_base = strlen(enumeration->dirent_usb_target_device->d_name) + strlen(block_dir_name)
-								+ strlen(enumeration->dirent_usb_target->d_name) + strlen(enumeration->dirent_usb_host->d_name)
-								+ strlen(enumeration->dirent_usb_device->d_name) + strlen(enumeration->dirent_usb->d_name) + 7;
-
-							while ((enumeration->dirent_usb_target_device_blocks = readdir(enumeration->dir_pointer_usb_target_device_blocks)) != NULL)
-							{
-								if ((strcmp(enumeration->dirent_usb_target_device_blocks->d_name, ".") == 0)
-									|| (strcmp(enumeration->dirent_usb_target_device_blocks->d_name, "..") == 0))
-								{
-									continue;
-								}
-
-								len_core = strlen(enumeration->dirent_usb_target_device_blocks->d_name) + 2;
-
-								if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
-								{
-									goto device_system_next_enumerated_device_error_1;
-								}
-
-								strcpy(file_name, block_usb_devices_dir);
-								strcat(file_name, "/");
-								strcat(file_name, enumeration->dirent_usb->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, enumeration->dirent_usb_device->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, enumeration->dirent_usb_host->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, enumeration->dirent_usb_target->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, block_dir_name);
-								strcat(file_name, "/");
-								strcat(file_name, enumeration->dirent_usb_target_device->d_name);
-								strcat(file_name, "/");
-
-								switch (helper_read_partition(file_name,
-									enumeration->dirent_usb_target_device_blocks->d_name,
-									enumeration->dirent_usb_target_device->d_name,
-									device))
-								{
-								case 1:
-									return 1;
-								/*
-								case 0:
-									break;
-								*/
-								case -1:
-									goto device_system_next_enumerated_device_error_1;
-									//break;
-								}
-							}
-
-							closedir(enumeration->dir_pointer_usb_target_device_blocks);
-							enumeration->dir_pointer_usb_target_device_blocks = NULL;
-						}
-
-device_system_next_enumerated_device_usb_step_5:
-
-						while ((enumeration->dirent_usb_target_device = readdir(enumeration->dir_pointer_usb_target_device)) != NULL)
-						{
-							if ((strcmp(enumeration->dirent_usb_target_device->d_name, ".") == 0)
-								|| (strcmp(enumeration->dirent_usb_target_device->d_name, "..") == 0))
-							{
-								continue;
-							}
-
-							len_core = strlen(enumeration->dirent_usb_target_device->d_name) + strlen(block_dir_name)
-								+ strlen(enumeration->dirent_usb_target->d_name) + strlen(enumeration->dirent_usb_host->d_name)
-								+ strlen(enumeration->dirent_usb_device->d_name) + strlen(enumeration->dirent_usb->d_name) + 8;
-
-							if (len_core + len_base + len_ext > PATH_MAX)
-							{
-								goto device_system_next_enumerated_device_error_1;
-							}
-
-							strcpy(file_name, block_usb_devices_dir);
-							strcat(file_name, "/");
-							strcat(file_name, enumeration->dirent_usb->d_name);
-							strcat(file_name, "/");
-							strcat(file_name, enumeration->dirent_usb_device->d_name);
-							strcat(file_name, "/");
-							strcat(file_name, enumeration->dirent_usb_host->d_name);
-							strcat(file_name, "/");
-							strcat(file_name, enumeration->dirent_usb_target->d_name);
-							strcat(file_name, "/");
-							strcat(file_name, block_dir_name);
-							strcat(file_name, "/");
-							strcat(file_name, enumeration->dirent_usb_target_device->d_name);
-
-							if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-							{
-								continue;
-							}
-
-							strcat(file_name, "/");
-
-							switch (helper_read_device(file_name, enumeration->dirent_usb_target_device->d_name, 0, device))
-							{
-							case 1: // device
-								file_name[len_base + len_core - 1] = 0;
-								enumeration->dir_pointer_usb_target_device_blocks = opendir(file_name);
-								if (enumeration->dir_pointer_usb_target_device_blocks == NULL)
-								{
-									device_system_free_device(*device);
-									*device = NULL;
-									goto device_system_next_enumerated_device_error_1;
-								}
-								return 1;
-
-							case 2: // stateful_device
-								return 1;
-							/*
-							case 0:
-								break;
-							*/
-							case -1:
-								goto device_system_next_enumerated_device_error_1;
-								//break;
-							}
-						}
-
-						closedir(enumeration->dir_pointer_usb_target_device);
-						enumeration->dir_pointer_usb_target_device = NULL;
-					}
-
-device_system_next_enumerated_device_usb_step_4:
-
-					while ((enumeration->dirent_usb_target = readdir(enumeration->dir_pointer_usb_target)) != NULL)
-					{
-						if ((strcmp(enumeration->dirent_usb_target->d_name, ".") == 0)
-							|| (strcmp(enumeration->dirent_usb_target->d_name, "..") == 0))
-						{
-							continue;
-						}
-
-						len_core = strlen(block_dir_name) + strlen(enumeration->dirent_usb_target->d_name) + strlen(enumeration->dirent_usb_host->d_name)
-							+ strlen(enumeration->dirent_usb_device->d_name) + strlen(enumeration->dirent_usb->d_name) + 6;
-
-						if (len_core + len_base + len_ext > PATH_MAX)
-						{
-							goto device_system_next_enumerated_device_error_1;
-						}
-
-						strcpy(file_name, block_usb_devices_dir);
-						strcat(file_name, "/");
-						strcat(file_name, enumeration->dirent_usb->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, enumeration->dirent_usb_device->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, enumeration->dirent_usb_host->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, enumeration->dirent_usb_target->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, block_dir_name);
-
-						if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-						{
-							continue;
-						}
-
-						enumeration->dir_pointer_usb_target_device = opendir(file_name);
-						if (enumeration->dir_pointer_usb_target_device == NULL)
-						{
-							goto device_system_next_enumerated_device_error_1;
-						}
-
-						goto device_system_next_enumerated_device_usb_step_5;
-					}
-
-					closedir(enumeration->dir_pointer_usb_target);
-					enumeration->dir_pointer_usb_target = NULL;
-				}
-
-device_system_next_enumerated_device_usb_step_3:
-
-				while ((enumeration->dirent_usb_host = readdir(enumeration->dir_pointer_usb_host)) != NULL)
-				{
-					if ((strcmp(enumeration->dirent_usb_host->d_name, ".") == 0)
-						|| (strcmp(enumeration->dirent_usb_host->d_name, "..") == 0))
-					{
-						continue;
-					}
-
-					if (strncmp(enumeration->dirent_usb_host->d_name, "target", strlen("target")) != 0)
-					{
-						continue;
-					}
-
-					len_core = strlen(enumeration->dirent_usb_host->d_name) + strlen(enumeration->dirent_usb_device->d_name) + strlen(enumeration->dirent_usb->d_name) + 4;
-
-					if (len_core + len_base + len_ext > PATH_MAX)
-					{
-						goto device_system_next_enumerated_device_error_1;
-					}
-
-					strcpy(file_name, block_usb_devices_dir);
-					strcat(file_name, "/");
-					strcat(file_name, enumeration->dirent_usb->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, enumeration->dirent_usb_device->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, enumeration->dirent_usb_host->d_name);
-
-					if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-					{
-						continue;
-					}
-
-					enumeration->dir_pointer_usb_target = opendir(file_name);
-					if (enumeration->dir_pointer_usb_target == NULL)
-					{
-						goto device_system_next_enumerated_device_error_1;
-					}
-
-					goto device_system_next_enumerated_device_usb_step_4;
-				}
-
-				closedir(enumeration->dir_pointer_usb_host);
-				enumeration->dir_pointer_usb_host = NULL;
-			}
-
-device_system_next_enumerated_device_usb_step_2:
-
-			while ((enumeration->dirent_usb_device = readdir(enumeration->dir_pointer_usb_device)) != NULL)
-			{
-				if ((strcmp(enumeration->dirent_usb_device->d_name, ".") == 0)
-					|| (strcmp(enumeration->dirent_usb_device->d_name, "..") == 0))
-				{
-					continue;
-				}
-
-				if (strncmp(enumeration->dirent_usb_device->d_name, "host", strlen("host")) != 0)
-				{
-					continue;
-				}
-
-				len_core = strlen(enumeration->dirent_usb_device->d_name) + strlen(enumeration->dirent_usb->d_name) + 3;
-
-				if (len_core + len_base + len_ext > PATH_MAX)
-				{
-					goto device_system_next_enumerated_device_error_1;
-				}
-
-				strcpy(file_name, block_usb_devices_dir);
-				strcat(file_name, "/");
-				strcat(file_name, enumeration->dirent_usb->d_name);
-				strcat(file_name, "/");
-				strcat(file_name, enumeration->dirent_usb_device->d_name);
-
-				if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-				{
-					continue;
-				}
-
-				enumeration->dir_pointer_usb_host = opendir(file_name);
-				if (enumeration->dir_pointer_usb_host == NULL)
-				{
-					goto device_system_next_enumerated_device_error_1;
-				}
-
-				goto device_system_next_enumerated_device_usb_step_3;
-			}
-
-			closedir(enumeration->dir_pointer_usb_device);
-			enumeration->dir_pointer_usb_device = NULL;
-		}
-
-		while ((enumeration->dirent_usb = readdir(enumeration->dir_pointer_usb)) != NULL)
-		{
-			if ((strcmp(enumeration->dirent_usb->d_name, ".") == 0)
-				|| (strcmp(enumeration->dirent_usb->d_name, "..") == 0))
-			{
-				continue;
-			}
-
-			len_core = strlen(enumeration->dirent_usb->d_name) + 2;
-
-			if (len_core + len_base + len_ext > PATH_MAX)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			strcpy(file_name, block_usb_devices_dir);
-			strcat(file_name, "/");
-			strcat(file_name, enumeration->dirent_usb->d_name);
-
-			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-			{
-				continue;
-			}
-
-			enumeration->dir_pointer_usb_device = opendir(file_name);
-			if (enumeration->dir_pointer_usb_device == NULL)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			goto device_system_next_enumerated_device_usb_step_2;
-		}
-
-		closedir(enumeration->dir_pointer_usb);
-		enumeration->dir_pointer_usb = NULL;
-	}
-
-	if (enumeration->dir_pointer_mmc != NULL)
-	{
-		len_base = strlen(block_mmc_devices_dir);
-
-		if (enumeration->dir_pointer_mmc_device != NULL)
-		{
-			if (enumeration->dir_pointer_mmc_device_blocks != NULL)
-			{
-				len_dev_base = strlen(enumeration->dirent_mmc_device->d_name)
-					+ strlen(block_dir_name) + strlen(enumeration->dirent_mmc->d_name) + 4;
-
-				while ((enumeration->dirent_mmc_device_blocks = readdir(enumeration->dir_pointer_mmc_device_blocks)) != NULL)
-				{
-					if ((strcmp(enumeration->dirent_mmc_device_blocks->d_name, ".") == 0)
-						|| (strcmp(enumeration->dirent_mmc_device_blocks->d_name, "..") == 0))
-					{
-						continue;
-					}
-
-					len_core = strlen(enumeration->dirent_mmc_device_blocks->d_name) + 2;
-
-					if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
-					{
-						goto device_system_next_enumerated_device_error_1;
-					}
-
-					strcpy(file_name, block_mmc_devices_dir);
-					strcat(file_name, "/");
-					strcat(file_name, enumeration->dirent_mmc->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, block_dir_name);
-					strcat(file_name, "/");
-					strcat(file_name, enumeration->dirent_mmc_device->d_name);
-					strcat(file_name, "/");
-
-					switch (helper_read_partition(file_name,
-						enumeration->dirent_mmc_device_blocks->d_name,
-						enumeration->dirent_mmc_device->d_name,
-						device))
-					{
-					case 1:
-						return 1;
-					/*
-					case 0:
-						break;
-					*/
-					case -1:
-						goto device_system_next_enumerated_device_error_1;
-						//break;
-					}
-				}
-
-				closedir(enumeration->dir_pointer_mmc_device_blocks);
-				enumeration->dir_pointer_mmc_device_blocks = NULL;
-			}
-
-device_system_next_enumerated_device_mmc_step_2:
-			while ((enumeration->dirent_mmc_device = readdir(enumeration->dir_pointer_mmc_device)) != NULL)
-			{
-				if ((strcmp(enumeration->dirent_mmc_device->d_name, ".") == 0)
-					|| (strcmp(enumeration->dirent_mmc_device->d_name, "..") == 0))
-				{
-					continue;
-				}
-
-				len_core = strlen(enumeration->dirent_mmc_device->d_name)
-					+ strlen(block_dir_name) + strlen(enumeration->dirent_mmc->d_name) + 5;
-
-				if (len_core + len_base + len_ext > PATH_MAX)
-				{
-					goto device_system_next_enumerated_device_error_1;
-				}
-
-				strcpy(file_name, block_mmc_devices_dir);
-				strcat(file_name, "/");
-				strcat(file_name, enumeration->dirent_mmc->d_name);
-				strcat(file_name, "/");
-				strcat(file_name, block_dir_name);
-				strcat(file_name, "/");
-				strcat(file_name, enumeration->dirent_mmc_device->d_name);
-
-				if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-				{
-					continue;
-				}
-
-				strcat(file_name, "/");
-
-				switch (helper_read_device(file_name, enumeration->dirent_mmc_device->d_name, 0, device))
-				{
-				case 1: // device
-					file_name[len_base + len_core - 1] = 0;
-					enumeration->dir_pointer_mmc_device_blocks = opendir(file_name);
-					if (enumeration->dir_pointer_mmc_device_blocks == NULL)
-					{
-						device_system_free_device(*device);
-						*device = NULL;
-						goto device_system_next_enumerated_device_error_1;
-					}
-					return 1;
-
-				case 2: // stateful_device
-					return 1;
-				/*
-				case 0:
-					break;
-				*/
-				case -1:
-					goto device_system_next_enumerated_device_error_1;
-					//break;
-				}
-			}
-
-			closedir(enumeration->dir_pointer_mmc_device);
-			enumeration->dir_pointer_mmc_device = NULL;
-		}
-
-		while ((enumeration->dirent_mmc = readdir(enumeration->dir_pointer_mmc)) != NULL)
-		{
-			if ((strcmp(enumeration->dirent_mmc->d_name, ".") == 0)
-				|| (strcmp(enumeration->dirent_mmc->d_name, "..") == 0))
-			{
-				continue;
-			}
-
-			len_core = strlen(block_dir_name) + strlen(enumeration->dirent_mmc->d_name) + 3;
-
-			if (len_core + len_base + len_ext > PATH_MAX)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			strcpy(file_name, block_mmc_devices_dir);
-			strcat(file_name, "/");
-			strcat(file_name, enumeration->dirent_mmc->d_name);
-			strcat(file_name, "/");
-			strcat(file_name, block_dir_name);
-
-			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-			{
-				continue;
-			}
-
-			enumeration->dir_pointer_mmc_device = opendir(file_name);
-			if (enumeration->dir_pointer_mmc_device == NULL)
-			{
-				goto device_system_next_enumerated_device_error_1;
-			}
-
-			goto device_system_next_enumerated_device_mmc_step_2;
-		}
-
-		closedir(enumeration->dir_pointer_mmc);
-		enumeration->dir_pointer_mmc = NULL;
-	}
-
-	*device = NULL;
-	return 0;
-
-device_system_next_enumerated_device_error_1:
-	return -1;
+	// TODO: write
 }
 
 void device_system_free_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t *device)

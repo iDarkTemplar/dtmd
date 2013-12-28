@@ -122,7 +122,7 @@ set ( LINUX_UDEV_LIBS udev )
 
 set ( LINUX_KERNEL_SOURCES daemon/linux/kernel/kernel.c )
 set ( LINUX_KERNEL_HEADERS )
-set ( LINUX_KERNEL_LIBS )
+set ( LINUX_KERNEL_LIBS pthread )
 
 set ( MISC_LIBRARY_SOURCES library/dtmd-misc.c )
 set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
