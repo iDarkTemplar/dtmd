@@ -75,10 +75,17 @@
 
 #define NETLINK_GROUP_KERNEL 1
 
+#define IFLIST_REPLY_BUFFER 8192
+
 // TODO: build hierarchy of devices and store it. Use second thread to receive netlink events.
 
 struct dtmd_device_enumeration
 {
+	dtmd_device_system_t *system;
+
+	dtmd_info_t **devices;
+	uint32_t devices_count;
+	uint32_t current_device;
 };
 
 struct dtmd_device_monitor
@@ -648,12 +655,6 @@ device_system_init_add_stateful_device_error_1:
 
 	return -1;
 }
-
-	dtmd_device_internal_t **devices;
-	uint32_t devices_count;
-
-	dtmd_info_t **stateless_devices;
-	uint32_t stateless_devices_count;
 
 static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 {
@@ -1414,6 +1415,157 @@ device_system_init_fill_devices_error_plain_1:
 	return -1;
 }
 
+static void device_system_free_all_devices(dtmd_device_system_t *device_system)
+{
+	uint32_t i, j;
+
+	if (device_system->devices != NULL)
+	{
+		for (i = 0; i < device_system->devices_count; ++i)
+		{
+			if (device_system->devices[i] != NULL)
+			{
+				if (device_system->devices[i]->device != NULL)
+				{
+					device_system_free_device(device_system->devices[i]->device);
+				}
+
+				if (device_system->devices[i]->partitions != NULL)
+				{
+					for (j = 0; j < device_system->devices[i]->partitions_count; ++j)
+					{
+						if (device_system->devices[i]->partitions[j] != NULL)
+						{
+							device_system_free_device(device_system->devices[i]->partitions[j]);
+						}
+					}
+
+					free(device_system->devices[i]->partitions);
+				}
+			}
+		}
+
+		free(device_system->devices);
+	}
+
+	if (device_system->stateful_devices != NULL)
+	{
+		for (i = 0; i < device_system->stateful_devices_count; ++i)
+		{
+			if (device_system->stateful_devices[i] != NULL)
+			{
+				device_system_free_device(device_system->stateful_devices[i]);
+			}
+		}
+
+		free(device_system->stateful_devices);
+	}
+}
+
+static dtmd_info_t* device_system_copy_device(dtmd_info_t *device)
+{
+	dtmd_info_t *copy;
+
+	copy = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
+	if (copy == NULL)
+	{
+		goto device_system_copy_device_error_1;
+	}
+
+	copy->type = device->type;
+
+	if (device->path != NULL)
+	{
+		copy->path = strdup(device->path);
+		if (copy->path == NULL)
+		{
+			goto device_system_copy_device_error_2;
+		}
+	}
+	else
+	{
+		copy->path = NULL;
+	}
+
+	copy->media_type = device->media_type;
+
+	if (device->fstype != NULL)
+	{
+		copy->fstype = strdup(device->fstype);
+		if (copy->fstype == NULL)
+		{
+			goto device_system_copy_device_error_3;
+		}
+	}
+	else
+	{
+		copy->fstype = NULL;
+	}
+
+	if (device->label != NULL)
+	{
+		copy->label = strdup(device->label);
+		if (copy->label == NULL)
+		{
+			goto device_system_copy_device_error_4;
+		}
+	}
+	else
+	{
+		copy->label = NULL;
+	}
+
+	if (device->path_parent != NULL)
+	{
+		copy->path_parent = strdup(device->path_parent);
+		if (copy->path_parent == NULL)
+		{
+			goto device_system_copy_device_error_5;
+		}
+	}
+	else
+	{
+		copy->path_parent = NULL;
+	}
+
+	copy->state = device->state;
+	copy->private_data = NULL;
+
+	return copy;
+
+/*
+device_system_copy_device_error_6:
+	if (copy->path_parent != NULL)
+	{
+		free((char*) copy->path_parent);
+	}
+*/
+
+device_system_copy_device_error_5:
+	if (copy->label != NULL)
+	{
+		free((char*) copy->label);
+	}
+
+device_system_copy_device_error_4:
+	if (copy->fstype != NULL)
+	{
+		free((char*) copy->fstype);
+	}
+
+device_system_copy_device_error_3:
+	if (copy->path != NULL)
+	{
+		free((char*) copy->path);
+	}
+
+device_system_copy_device_error_2:
+	free(copy);
+
+device_system_copy_device_error_1:
+	return NULL;
+}
+
 static void* device_system_worker_function(void *arg)
 {
 	dtmd_device_system_t *device_system;
@@ -1448,22 +1600,11 @@ static void* device_system_worker_function(void *arg)
 
 		if (fds[0].revents & POLLIN)
 		{
-			rc = read(handle->pipes[0], &data, sizeof(char));
+			rc = read(device_system->worker_control_pipe[0], &data, sizeof(char));
 
 			if (rc == 1)
 			{
-				if (data == 1)
-				{
-					// release ownership of socket and wait for return
-					data = 1;
-					write(handle->feedback[1], &data, sizeof(char));
-
-					sem_wait(&(handle->caller_socket));
-				}
-				else
-				{
-					goto device_system_worker_function_exit;
-				}
+				goto device_system_worker_function_exit;
 			}
 			else
 			{
@@ -1473,14 +1614,7 @@ static void* device_system_worker_function(void *arg)
 
 		if (fds[1].revents & POLLIN)
 		{
-			rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
-			if (rc <= 0)
-			{
-				goto device_system_worker_function_error;
-			}
-
-			handle->cur_pos += rc;
-			handle->buffer[handle->cur_pos] = 0;
+			// TODO: read device and notify
 		}
 	}
 
@@ -1489,13 +1623,6 @@ device_system_worker_function_error:
 	//handle->callback(handle->callback_arg, NULL);
 
 device_system_worker_function_exit:
-	// Signal about exit
-	data = 0;
-	write(handle->feedback[1], &data, sizeof(char));
-
-	pthread_exit(0);
-
-//device_system_worker_function_exit:
 	// Signal about exit
 	//data = 0;
 	//write(handle->feedback[1], &data, sizeof(char));
@@ -1514,16 +1641,20 @@ dtmd_device_system_t* device_system_init(void)
 		goto device_system_init_error_1;
 	}
 
+	device_system->devices                = NULL;
+	device_system->devices_count          = 0;
+	device_system->stateful_devices       = NULL;
+	device_system->stateful_devices_count = 0;
+	device_system->enumerations           = NULL;
+	device_system->enumeration_count      = 0;
+	device_system->monitors               = NULL;
+	device_system->monitor_count          = 0;
+
 	device_system->events_fd = open_netlink_socket();
 	if (device_system->events_fd < 0)
 	{
 		goto device_system_init_error_2;
 	}
-
-	device_system->devices = NULL;
-	device_system->devices_count = 0;
-	device_system->stateful_devices = NULL;
-	device_system->stateful_devices_count = 0;
 
 	if (device_system_init_fill_devices(device_system) < 0)
 	{
@@ -1532,43 +1663,36 @@ dtmd_device_system_t* device_system_init(void)
 
 	if (pipe(device_system->worker_control_pipe) < 0)
 	{
-		goto device_system_init_error_4;
+		goto device_system_init_error_3;
 	}
 
 	if (pthread_mutex_init(&(device_system->control_mutex), NULL) != 0)
 	{
-		goto device_system_init_error_5;
+		goto device_system_init_error_4;
 	}
 
 	if ((pthread_create(&(device_system->worker_thread), NULL, &device_system_worker_function, device_system)) != 0)
 	{
-		goto device_system_init_error_6;
+		goto device_system_init_error_5;
 	}
-
-	device_system->enumeration_count = 0;
-	device_system->enumerations      = NULL;
-	device_system->monitor_count     = 0;
-	device_system->monitors          = NULL;
 
 	return device_system;
 
 /*
-device_system_init_error_7:
+device_system_init_error_6:
 	write(device_system->worker_control_pipe[1], &data, sizeof(char));
 	pthread_join(device_system->worker_thread, NULL);
 */
 
-device_system_init_error_6:
+device_system_init_error_5:
 	pthread_mutex_destroy(&(device_system->control_mutex));
 
-device_system_init_error_5:
+device_system_init_error_4:
 	close(device_system->worker_control_pipe[0]);
 	close(device_system->worker_control_pipe[1]);
 
-device_system_init_error_4:
-	// TODO: write
-
 device_system_init_error_3:
+	device_system_free_all_devices(device_system);
 	close(device_system->events_fd);
 
 device_system_init_error_2:
@@ -1580,59 +1704,16 @@ device_system_init_error_1:
 
 static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 {
-	if (enumeration->dir_pointer != NULL)
-	{
-		closedir(enumeration->dir_pointer);
-	}
+	uint32_t i;
 
-	if (enumeration->dir_pointer_partitions != NULL)
+	if (enumeration->devices_count > 0)
 	{
-		closedir(enumeration->dir_pointer_partitions);
-	}
+		for (i = 0; i < enumeration->devices_count; ++i)
+		{
+			device_system_free_device(enumeration->devices[i]);
+		}
 
-	if (enumeration->dir_pointer_usb != NULL)
-	{
-		closedir(enumeration->dir_pointer_usb);
-	}
-
-	if (enumeration->dir_pointer_usb_device != NULL)
-	{
-		closedir(enumeration->dir_pointer_usb_device);
-	}
-
-	if (enumeration->dir_pointer_usb_host != NULL)
-	{
-		closedir(enumeration->dir_pointer_usb_host);
-	}
-
-	if (enumeration->dir_pointer_usb_target != NULL)
-	{
-		closedir(enumeration->dir_pointer_usb_target);
-	}
-
-	if (enumeration->dir_pointer_usb_target_device != NULL)
-	{
-		closedir(enumeration->dir_pointer_usb_target_device);
-	}
-
-	if (enumeration->dir_pointer_usb_target_device_blocks != NULL)
-	{
-		closedir(enumeration->dir_pointer_usb_target_device_blocks);
-	}
-
-	if (enumeration->dir_pointer_mmc != NULL)
-	{
-		closedir(enumeration->dir_pointer_mmc);
-	}
-
-	if (enumeration->dir_pointer_mmc_device != NULL)
-	{
-		closedir(enumeration->dir_pointer_mmc_device);
-	}
-
-	if (enumeration->dir_pointer_mmc_device_blocks != NULL)
-	{
-		closedir(enumeration->dir_pointer_mmc_device_blocks);
+		free(enumeration->devices);
 	}
 
 	free(enumeration);
@@ -1651,9 +1732,15 @@ static void helper_free_monitor(dtmd_device_monitor_t *monitor)
 void device_system_deinit(dtmd_device_system_t *system)
 {
 	uint32_t i;
+	char data = 0;
 
 	if (system != NULL)
 	{
+		write(system->worker_control_pipe[1], &data, sizeof(char));
+		pthread_join(system->worker_thread, NULL);
+
+		close(system->events_fd);
+
 		if (system->enumerations != NULL)
 		{
 			for (i = 0; i < (uint32_t) system->enumeration_count; ++i)
@@ -1680,86 +1767,118 @@ void device_system_deinit(dtmd_device_system_t *system)
 			free(system->monitors);
 		}
 
+		pthread_mutex_destroy(&(system->control_mutex));
+
+		close(system->worker_control_pipe[0]);
+		close(system->worker_control_pipe[1]);
+
+		device_system_free_all_devices(system);
+
 		free(system);
 	}
 }
 
 dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t *system)
 {
-	DIR *dir_pointer;
-	DIR *dir_pointer_usb;
-	DIR *dir_pointer_mmc;
 	dtmd_device_enumeration_t *enumeration;
 	void **tmp;
+	uint32_t devices_count;
+	uint32_t i, j, k;
 
 	if (system == NULL)
 	{
 		goto device_system_enumerate_devices_error_1;
 	}
 
-	dir_pointer = opendir(block_devices_dir);
-	if (dir_pointer == NULL)
-	{
-		goto device_system_enumerate_devices_error_1;
-	}
+	devices_count = system->devices_count + system->stateful_devices_count;
 
-	dir_pointer_mmc = opendir(block_mmc_devices_dir);
-	if (dir_pointer_mmc == NULL)
+	for (i = 0; i < system->devices_count; ++i)
 	{
-		goto device_system_enumerate_devices_error_2;
-	}
-
-	dir_pointer_usb = opendir(block_usb_devices_dir);
-	if (dir_pointer_usb == NULL)
-	{
-		goto device_system_enumerate_devices_error_3;
+		devices_count += system->devices[i]->partitions_count;
 	}
 
 	enumeration = (dtmd_device_enumeration_t*) malloc(sizeof(dtmd_device_enumeration_t));
 	if (enumeration == NULL)
 	{
-		goto device_system_enumerate_devices_error_4;
+		goto device_system_enumerate_devices_error_1;
+	}
+
+	enumeration->system         = system;
+	enumeration->devices_count  = devices_count;
+	enumeration->current_device = 0;
+	k = 0;
+
+	if (enumeration->devices_count > 0)
+	{
+		enumeration->devices = (dtmd_info_t**) malloc(devices_count * sizeof(dtmd_info_t*));
+		if (enumeration->devices == NULL)
+		{
+			goto device_system_enumerate_devices_error_2;
+		}
+
+		for (i = 0 ; i < system->devices_count; ++i)
+		{
+			enumeration->devices[k] = device_system_copy_device(system->devices[i]->device);
+			if (enumeration->devices[k] == NULL)
+			{
+				goto device_system_enumerate_devices_error_3;
+			}
+
+			++k;
+
+			for (j = 0; j < system->devices[i]->partitions_count; ++j)
+			{
+				enumeration->devices[k] = device_system_copy_device(system->devices[i]->partitions[j]);
+				if (enumeration->devices[k] == NULL)
+				{
+					goto device_system_enumerate_devices_error_3;
+				}
+
+				++k;
+			}
+		}
+
+		for (i = 0; i < system->stateful_devices_count; ++i)
+		{
+			enumeration->devices[k] = device_system_copy_device(system->stateful_devices[i]);
+			if (enumeration->devices[k] == NULL)
+			{
+				goto device_system_enumerate_devices_error_3;
+			}
+
+			++k;
+		}
+	}
+	else
+	{
+		enumeration->devices = NULL;
 	}
 
 	tmp = realloc(system->enumerations, (system->enumeration_count + 1) * sizeof(dtmd_device_enumeration_t*));
 	if (tmp == NULL)
 	{
-		goto device_system_enumerate_devices_error_5;
+		goto device_system_enumerate_devices_error_3;
 	}
 
 	system->enumerations = (dtmd_device_enumeration_t**) tmp;
 	system->enumerations[system->enumeration_count] = enumeration;
 	++(system->enumeration_count);
 
-	enumeration->system                               = system;
-
-	enumeration->dir_pointer                          = dir_pointer;
-	enumeration->dir_pointer_partitions               = NULL;
-
-	enumeration->dir_pointer_usb                      = dir_pointer_usb;
-	enumeration->dir_pointer_usb_device               = NULL;
-	enumeration->dir_pointer_usb_host                 = NULL;
-	enumeration->dir_pointer_usb_target               = NULL;
-	enumeration->dir_pointer_usb_target_device        = NULL;
-	enumeration->dir_pointer_usb_target_device_blocks = NULL;
-
-	enumeration->dir_pointer_mmc                      = dir_pointer_mmc;
-	enumeration->dir_pointer_mmc_device               = NULL;
-	enumeration->dir_pointer_mmc_device_blocks        = NULL;
-
 	return enumeration;
 
-device_system_enumerate_devices_error_5:
-	free(enumeration);
-
-device_system_enumerate_devices_error_4:
-	closedir(dir_pointer_usb);
-
 device_system_enumerate_devices_error_3:
-	closedir(dir_pointer_mmc);
+	if (enumeration->devices_count > 0)
+	{
+		for (i = 0; i < k; ++i)
+		{
+			device_system_free_device(enumeration->devices[i]);
+		}
+
+		free(enumeration->devices);
+	}
 
 device_system_enumerate_devices_error_2:
-	closedir(dir_pointer);
+	free(enumeration);
 
 device_system_enumerate_devices_error_1:
 	return NULL;
@@ -1778,13 +1897,13 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 			{
 				if (enumeration->system->enumerations[i] == enumeration)
 				{
-					if (i != (uint32_t)(enumeration->system->enumeration_count - 1))
-					{
-						enumeration->system->enumerations[i] = enumeration->system->enumerations[enumeration->system->enumeration_count - 1];
-					}
-
 					if (enumeration->system->enumeration_count > 1)
 					{
+						if (i != (uint32_t)(enumeration->system->enumeration_count - 1))
+						{
+							enumeration->system->enumerations[i] = enumeration->system->enumerations[enumeration->system->enumeration_count - 1];
+						}
+
 						tmp = realloc(enumeration->system->enumerations, (enumeration->system->enumeration_count - 1) * sizeof(dtmd_device_enumeration_t*));
 						if (tmp != NULL)
 						{
@@ -1809,16 +1928,28 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 
 int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t **device)
 {
-	// TODO: write
+	if ((enumeration == NULL)
+		|| (device == NULL))
+	{
+		return -1;
+	}
+
+	if (enumeration->current_device < enumeration->devices_count)
+	{
+		*device = enumeration->devices[enumeration->current_device];
+		++(enumeration->current_device);
+		return 1;
+	}
+	else
+	{
+		*device = NULL;
+		return 0;
+	}
 }
 
 void device_system_free_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t *device)
 {
-	if ((enumeration != NULL)
-		&& (device != NULL))
-	{
-		device_system_free_device(device);
-	}
+	// NOTE: do nothing, it's freed on enumeration free
 }
 
 dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *system)
@@ -1928,12 +2059,8 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 	struct sockaddr_nl kernel;
 	struct iovec io;
 	char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
-
-	const int IFLIST_REPLY_BUFFER = 8192;
 	char reply[IFLIST_REPLY_BUFFER];
-
 	ssize_t len;
-
 	struct msghdr rtnl_reply;
 	struct iovec io_reply;
 
@@ -2155,7 +2282,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 				device_info->state = dtmd_removable_media_state_unknown;
 
 				if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
-				    || (device_info->fstype == NULL))
+					|| (device_info->fstype == NULL))
 				{
 					goto device_system_monitor_get_device_error_3;
 				}
