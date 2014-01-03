@@ -88,10 +88,22 @@ struct dtmd_device_enumeration
 	uint32_t current_device;
 };
 
+typedef struct dtmd_monitor_item
+{
+	dtmd_info_t *item;
+	dtmd_device_action_type_t action;
+
+	struct dtmd_monitor_item *next;
+} dtmd_monitor_item_t;
+
 struct dtmd_device_monitor
 {
 	dtmd_device_system_t *system;
-	int fd;
+
+	int data_pipe[2];
+
+	dtmd_monitor_item_t *first;
+	dtmd_monitor_item_t *last;
 };
 
 typedef struct dtmd_device_internal
@@ -1566,6 +1578,16 @@ device_system_copy_device_error_1:
 	return NULL;
 }
 
+static void device_system_free_monitor_item(dtmd_monitor_item_t *item)
+{
+	if (item->item != NULL)
+	{
+		device_system_free_device(item->item);
+	}
+
+	free(item);
+}
+
 static void* device_system_worker_function(void *arg)
 {
 	dtmd_device_system_t *device_system;
@@ -1721,10 +1743,20 @@ static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 
 static void helper_free_monitor(dtmd_device_monitor_t *monitor)
 {
-	if (monitor->fd >= 0)
+	dtmd_monitor_item_t *item, *delete_item;
+
+	item = monitor->first;
+
+	while (item != NULL)
 	{
-		close(monitor->fd);
+		delete_item = item;
+		item = item->next;
+
+		device_system_free_monitor_item(delete_item);
 	}
+
+	close(monitor->data_pipe[0]);
+	close(monitor->data_pipe[1]);
 
 	free(monitor);
 }
@@ -1790,6 +1822,11 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 		goto device_system_enumerate_devices_error_1;
 	}
 
+	if (pthread_mutex_lock(&(system->control_mutex)) != 0)
+	{
+		goto device_system_enumerate_devices_error_1;
+	}
+
 	devices_count = system->devices_count + system->stateful_devices_count;
 
 	for (i = 0; i < system->devices_count; ++i)
@@ -1800,7 +1837,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	enumeration = (dtmd_device_enumeration_t*) malloc(sizeof(dtmd_device_enumeration_t));
 	if (enumeration == NULL)
 	{
-		goto device_system_enumerate_devices_error_1;
+		goto device_system_enumerate_devices_error_2;
 	}
 
 	enumeration->system         = system;
@@ -1813,7 +1850,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 		enumeration->devices = (dtmd_info_t**) malloc(devices_count * sizeof(dtmd_info_t*));
 		if (enumeration->devices == NULL)
 		{
-			goto device_system_enumerate_devices_error_2;
+			goto device_system_enumerate_devices_error_3;
 		}
 
 		for (i = 0 ; i < system->devices_count; ++i)
@@ -1821,7 +1858,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 			enumeration->devices[k] = device_system_copy_device(system->devices[i]->device);
 			if (enumeration->devices[k] == NULL)
 			{
-				goto device_system_enumerate_devices_error_3;
+				goto device_system_enumerate_devices_error_4;
 			}
 
 			++k;
@@ -1831,7 +1868,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 				enumeration->devices[k] = device_system_copy_device(system->devices[i]->partitions[j]);
 				if (enumeration->devices[k] == NULL)
 				{
-					goto device_system_enumerate_devices_error_3;
+					goto device_system_enumerate_devices_error_4;
 				}
 
 				++k;
@@ -1843,7 +1880,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 			enumeration->devices[k] = device_system_copy_device(system->stateful_devices[i]);
 			if (enumeration->devices[k] == NULL)
 			{
-				goto device_system_enumerate_devices_error_3;
+				goto device_system_enumerate_devices_error_4;
 			}
 
 			++k;
@@ -1857,16 +1894,18 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	tmp = realloc(system->enumerations, (system->enumeration_count + 1) * sizeof(dtmd_device_enumeration_t*));
 	if (tmp == NULL)
 	{
-		goto device_system_enumerate_devices_error_3;
+		goto device_system_enumerate_devices_error_4;
 	}
 
 	system->enumerations = (dtmd_device_enumeration_t**) tmp;
 	system->enumerations[system->enumeration_count] = enumeration;
 	++(system->enumeration_count);
 
+	pthread_mutex_unlock(&(system->control_mutex));
+
 	return enumeration;
 
-device_system_enumerate_devices_error_3:
+device_system_enumerate_devices_error_4:
 	if (enumeration->devices_count > 0)
 	{
 		for (i = 0; i < k; ++i)
@@ -1877,8 +1916,11 @@ device_system_enumerate_devices_error_3:
 		free(enumeration->devices);
 	}
 
-device_system_enumerate_devices_error_2:
+device_system_enumerate_devices_error_3:
 	free(enumeration);
+
+device_system_enumerate_devices_error_2:
+	pthread_mutex_unlock(&(system->control_mutex));
 
 device_system_enumerate_devices_error_1:
 	return NULL;
@@ -1908,6 +1950,10 @@ void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumerati
 						if (tmp != NULL)
 						{
 							enumeration->system->enumerations = (dtmd_device_enumeration_t**) tmp;
+						}
+						else
+						{
+							enumeration->system->enumerations[enumeration->system->enumeration_count - 1] = NULL;
 						}
 					}
 					else
@@ -1954,7 +2000,6 @@ void device_system_free_enumerated_device(dtmd_device_enumeration_t *enumeration
 
 dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *system)
 {
-	int fd;
 	dtmd_device_monitor_t *monitor;
 	void **tmp;
 
@@ -1963,14 +2008,18 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 		goto device_system_start_monitoring_error_1;
 	}
 
-	fd = open_netlink_socket();
-	if (fd < 0)
+	monitor = (dtmd_device_monitor_t*) malloc(sizeof(dtmd_device_monitor_t));
+	if (monitor == NULL)
 	{
 		goto device_system_start_monitoring_error_1;
 	}
 
-	monitor = (dtmd_device_monitor_t*) malloc(sizeof(dtmd_device_monitor_t));
-	if (monitor == NULL)
+	monitor->system = system;
+
+	monitor->first = NULL;
+	monitor->last  = NULL;
+
+	if (pipe(monitor->data_pipe) < 0)
 	{
 		goto device_system_start_monitoring_error_2;
 	}
@@ -1985,16 +2034,14 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 	system->monitors[system->monitor_count] = monitor;
 	++(system->monitor_count);
 
-	monitor->system = system;
-	monitor->fd     = fd;
-
 	return monitor;
 
 device_system_start_monitoring_error_3:
-	free(monitor);
+	close(monitor->data_pipe[0]);
+	close(monitor->data_pipe[1]);
 
 device_system_start_monitoring_error_2:
-	close(fd);
+	free(monitor);
 
 device_system_start_monitoring_error_1:
 	return NULL;
@@ -2009,21 +2056,27 @@ void device_system_stop_monitoring(dtmd_device_monitor_t *monitor)
 	{
 		if (monitor->system != NULL)
 		{
+			pthread_mutex_lock(&(monitor->system->control_mutex));
+
 			for (i = 0; i < (uint32_t) monitor->system->monitor_count; ++i)
 			{
 				if (monitor->system->monitors[i] == monitor)
 				{
-					if (i != (uint32_t)(monitor->system->monitor_count - 1))
-					{
-						monitor->system->monitors[i] = monitor->system->monitors[monitor->system->monitor_count - 1];
-					}
-
 					if (monitor->system->monitor_count > 1)
 					{
+						if (i != (uint32_t)(monitor->system->monitor_count - 1))
+						{
+							monitor->system->monitors[i] = monitor->system->monitors[monitor->system->monitor_count - 1];
+						}
+
 						tmp = realloc(monitor->system->monitors, (monitor->system->monitor_count - 1) * sizeof(dtmd_device_monitor_t*));
 						if (tmp != NULL)
 						{
 							monitor->system->monitors = (dtmd_device_monitor_t**) tmp;
+						}
+						else
+						{
+							monitor->system->monitors[monitor->system->monitor_count - 1] = NULL;
 						}
 					}
 					else
@@ -2036,6 +2089,8 @@ void device_system_stop_monitoring(dtmd_device_monitor_t *monitor)
 					break;
 				}
 			}
+
+			pthread_mutex_unlock(&(monitor->system->control_mutex));
 		}
 
 		helper_free_monitor(monitor);
@@ -2046,7 +2101,7 @@ int device_system_get_monitor_fd(dtmd_device_monitor_t *monitor)
 {
 	if (monitor != NULL)
 	{
-		return monitor->fd;
+		return monitor->data_pipe[0];
 	}
 	else
 	{
@@ -2054,6 +2109,63 @@ int device_system_get_monitor_fd(dtmd_device_monitor_t *monitor)
 	}
 }
 
+int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t **device, dtmd_device_action_type_t *action)
+{
+	dtmd_monitor_item_t *delete_item;
+
+	if ((monitor == NULL)
+		|| (device == NULL)
+		|| (action == NULL))
+	{
+		goto device_system_monitor_get_device_error_1;
+	}
+
+	if (pthread_mutex_lock(&(monitor->system->control_mutex)) != 0)
+	{
+		goto device_system_monitor_get_device_error_1;
+	}
+
+	if (monitor->first != NULL)
+	{
+		delete_item = monitor->first;
+
+		if (monitor->first != monitor->last)
+		{
+			monitor->first = monitor->first->next;
+		}
+		else
+		{
+			monitor->first = NULL;
+			monitor->last  = NULL;
+		}
+
+		*device = delete_item->item;
+		*action = delete_item->action;
+		free(delete_item);
+
+		pthread_mutex_unlock(&(monitor->system->control_mutex));
+
+		return 1;
+	}
+	else
+	{
+		*device = NULL;
+		*action = dtmd_device_action_unknown;
+		pthread_mutex_unlock(&(monitor->system->control_mutex));
+
+		return 0;
+	}
+
+/*
+device_system_monitor_get_device_error_2:
+	pthread_mutex_unlock(&(monitor->system->control_mutex));
+*/
+
+device_system_monitor_get_device_error_1:
+	return -1;
+}
+
+/*
 int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t **device, dtmd_device_action_type_t *action)
 {
 	struct sockaddr_nl kernel;
@@ -2390,6 +2502,7 @@ device_system_monitor_get_device_error_2:
 device_system_monitor_get_device_error_1:
 	return -1;
 }
+*/
 
 void device_system_monitor_free_device(dtmd_device_monitor_t *monitor, dtmd_info_t *device)
 {
