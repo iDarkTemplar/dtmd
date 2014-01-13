@@ -2155,8 +2155,9 @@ static void* device_system_worker_function(void *arg)
 						{
 							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
 							{
-								if (found_device_type == dtmd_info_device)
+								switch (found_device_type)
 								{
+								case dtmd_info_device:
 									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
 									{
 										if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[parent_index], action) < 0)
@@ -2164,11 +2165,26 @@ static void* device_system_worker_function(void *arg)
 											goto device_system_worker_function_error_3;
 										}
 									}
-								}
 
-								if (device_system_monitor_add_item(device_system->monitors[monitor_index], device, action) < 0)
-								{
-									goto device_system_worker_function_error_3;
+									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->device, action) < 0)
+									{
+										goto device_system_worker_function_error_3;
+									}
+									break;
+
+								case dtmd_info_partition:
+									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[partition_index], action) < 0)
+									{
+										goto device_system_worker_function_error_3;
+									}
+									break;
+
+								case dtmd_info_stateful_device:
+									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->stateful_devices[device_index], action) < 0)
+									{
+										goto device_system_worker_function_error_3;
+									}
+									break;
 								}
 							}
 
