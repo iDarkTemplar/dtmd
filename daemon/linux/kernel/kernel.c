@@ -77,7 +77,7 @@
 
 #define IFLIST_REPLY_BUFFER 8192
 
-// TODO: build hierarchy of devices and store it. Use second thread to receive netlink events.
+// TODO: reference counting for some items of hierarchy?
 
 struct dtmd_device_enumeration
 {
@@ -1917,6 +1917,48 @@ device_system_monitor_receive_device_error_1:
 	return -1;
 }
 
+static int device_system_monitor_add_item(dtmd_device_monitor_t *monitor, dtmd_info_t *device, dtmd_device_action_type_t action)
+{
+	char data = 1;
+	dtmd_monitor_item_t *monitor_item;
+
+	monitor_item = (dtmd_monitor_item_t*) malloc(sizeof(dtmd_monitor_item_t));
+	if (monitor_item == NULL)
+	{
+		goto device_system_monitor_add_item_error_1;
+	}
+
+	monitor_item->item = device_system_copy_device(device);
+	if (monitor_item->item == NULL)
+	{
+		goto device_system_monitor_add_item_error_2;
+	}
+
+	monitor_item->action = action;
+	monitor_item->next   = NULL;
+
+	if (monitor->last != NULL)
+	{
+		monitor->last->next = monitor_item;
+		monitor->last = monitor->last->next;
+	}
+	else
+	{
+		monitor->first = monitor_item;
+		monitor->last = monitor->first;
+	}
+
+	write(monitor->data_pipe[1], &data, 1);
+
+	return 1;
+
+device_system_monitor_add_item_error_2:
+	free(monitor_item);
+
+device_system_monitor_add_item_error_1:
+	return -1;
+}
+
 static void* device_system_worker_function(void *arg)
 {
 	dtmd_device_system_t *device_system;
@@ -1925,6 +1967,11 @@ static void* device_system_worker_function(void *arg)
 	int rc;
 	dtmd_info_t *device;
 	dtmd_device_action_type_t action;
+	dtmd_info_type_t found_device_type;
+	uint32_t device_index, partition_index, parent_index, monitor_index;
+	int found_parent;
+	void *tmp;
+	dtmd_device_internal_t *device_item;
 
 	device_system = (dtmd_device_system_t*) arg;
 
@@ -1948,7 +1995,7 @@ static void* device_system_worker_function(void *arg)
 			|| (fds[1].revents & POLLHUP)
 			|| (fds[1].revents & POLLNVAL))
 		{
-			goto device_system_worker_function_error;
+			goto device_system_worker_function_error_1;
 		}
 
 		if (fds[0].revents & POLLIN)
@@ -1961,29 +2008,299 @@ static void* device_system_worker_function(void *arg)
 			}
 			else
 			{
-				goto device_system_worker_function_error;
+				goto device_system_worker_function_error_1;
 			}
 		}
 
 		if (fds[1].revents & POLLIN)
 		{
-			// TODO: read device and notify
 			rc = device_system_monitor_receive_device(fds[1].fd, &device, &action);
 			switch (rc)
 			{
 			case 1:
-				// TODO: write
 				switch (action)
 				{
 				case dtmd_device_action_add:
 				case dtmd_device_action_online:
-					break;
-
 				case dtmd_device_action_remove:
 				case dtmd_device_action_offline:
-					break;
-
 				case dtmd_device_action_change:
+					if (pthread_mutex_lock(&(device_system->control_mutex)) != 0)
+					{
+						goto device_system_worker_function_error_2;
+					}
+
+					found_device_type = dtmd_info_unknown;
+					found_parent = 0;
+
+					for (device_index = 0; device_index < device_system->devices_count; ++device_index)
+					{
+						if ((device_system->devices[device_index] != NULL)
+							&& (device_system->devices[device_index]->device != NULL))
+						{
+							if (strcmp(device_system->devices[device_index]->device->path, device->path) == 0)
+							{
+								found_device_type = dtmd_info_device;
+								break;
+							}
+
+							if ((device->type == dtmd_info_partition)
+								&& (strcmp(device_system->devices[device_index]->device->path, device->path_parent) == 0))
+							{
+								parent_index = device_index;
+								found_parent = 1;
+							}
+
+							if (device_system->devices[device_index]->partitions != NULL)
+							{
+								for (partition_index = 0; partition_index < device_system->devices[device_index]->partitions_count; ++partition_index)
+								{
+									if ((device_system->devices[device_index]->partitions[partition_index] != NULL)
+										&& (strcmp(device_system->devices[device_index]->partitions[partition_index]->path, device->path) == 0))
+									{
+										found_device_type = dtmd_info_partition;
+										break;
+									}
+								}
+							}
+						}
+					}
+
+					if ((found_device_type == dtmd_info_unknown)
+						&& (device->type != dtmd_info_partition))
+					{
+						for (device_index = 0; device_index < device_system->stateful_devices_count; ++device_index)
+						{
+							if ((device_system->stateful_devices[device_index] != NULL)
+								&& (strcmp(device_system->stateful_devices[device_index]->path, device->path) == 0))
+							{
+								found_device_type = dtmd_info_stateful_device;
+								break;
+							}
+						}
+					}
+
+					switch (action)
+					{
+					case dtmd_device_action_add:
+					case dtmd_device_action_online:
+						if (found_device_type == dtmd_info_unknown)
+						{
+							if ((device->type != dtmd_info_partition)
+								|| (found_parent))
+							{
+								for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
+								{
+									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device, action) < 0)
+									{
+										goto device_system_worker_function_error_3;
+									}
+								}
+
+								switch (device->type)
+								{
+								case dtmd_info_device:
+									device_item = (dtmd_device_internal_t*) malloc(sizeof(dtmd_device_internal_t));
+									if (device_item == NULL)
+									{
+										goto device_system_worker_function_error_3;
+									}
+
+									device_item->device           = device;
+									device_item->partitions       = NULL;
+									device_item->partitions_count = 0;
+
+									tmp = realloc(device_system->devices, (device_system->devices_count + 1) * sizeof(dtmd_device_internal_t*));
+									if (tmp == NULL)
+									{
+										goto device_system_worker_function_error_4;
+									}
+
+									device_system->devices = (dtmd_device_internal_t**) tmp;
+									device_system->devices[device_system->devices_count] = device_item;
+									++(device_system->devices_count);
+									break;
+
+								case dtmd_info_partition:
+									tmp = realloc(device_system->devices[parent_index]->partitions, (device_system->devices[parent_index]->partitions_count + 1) * sizeof(dtmd_info_t*));
+									if (tmp == NULL)
+									{
+										goto device_system_worker_function_error_3;
+									}
+
+									device_system->devices[parent_index]->partitions = (dtmd_info_t**) tmp;
+									device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count] = device;
+									++(device_system->devices[parent_index]->partitions_count);
+									break;
+
+								case dtmd_info_stateful_device:
+									tmp = realloc(device_system->stateful_devices, (device_system->stateful_devices_count + 1) * sizeof(dtmd_info_t*));
+									if (tmp == NULL)
+									{
+										goto device_system_worker_function_error_3;
+									}
+
+									device_system->stateful_devices = (dtmd_info_t**) tmp;
+									device_system->stateful_devices[device_system->stateful_devices_count] = device;
+									++(device_system->stateful_devices_count);
+									break;
+								}
+							}
+						}
+						break;
+
+					case dtmd_device_action_remove:
+					case dtmd_device_action_offline:
+						if (found_device_type != dtmd_info_unknown)
+						{
+							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
+							{
+								if (found_device_type == dtmd_info_device)
+								{
+									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
+									{
+										if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[parent_index], action) < 0)
+										{
+											goto device_system_worker_function_error_3;
+										}
+									}
+								}
+
+								if (device_system_monitor_add_item(device_system->monitors[monitor_index], device, action) < 0)
+								{
+									goto device_system_worker_function_error_3;
+								}
+							}
+
+							switch (found_device_type)
+							{
+							case dtmd_info_device:
+								for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
+								{
+									if (device_system->devices[device_index]->partitions[parent_index] != NULL)
+									{
+										device_system_free_device(device_system->devices[device_index]->partitions[parent_index]);
+									}
+								}
+
+								device_system_free_device(device_system->devices[device_index]->device);
+								free(device_system->devices[device_index]);
+
+								--(device_system->devices_count);
+
+								if (device_system->devices_count > 0)
+								{
+									device_system->devices[device_index] = device_system->devices[device_system->devices_count + 1];
+
+									tmp = realloc(device_system->devices, device_system->devices_count * sizeof(dtmd_device_internal_t*));
+									if (tmp != NULL)
+									{
+										device_system->devices = (dtmd_device_internal_t**) tmp;
+									}
+									else
+									{
+										device_system->devices[device_system->devices_count + 1] = NULL;
+									}
+								}
+								else
+								{
+									free(device_system->devices);
+									device_system->devices = NULL;
+								}
+								break;
+
+							case dtmd_info_partition:
+								device_system_free_device(device_system->devices[device_index]->partitions[partition_index]);
+
+								--(device_system->devices[device_index]->partitions_count);
+
+								if (device_system->devices[device_index]->partitions_count > 0)
+								{
+									device_system->devices[device_index]->partitions[partition_index] = device_system->devices[device_index]->partitions[device_system->devices[device_index]->partitions_count + 1];
+
+									tmp = realloc(device_system->devices[device_index]->partitions, device_system->devices[device_index]->partitions_count * sizeof(dtmd_info_t*));
+									if (tmp != NULL)
+									{
+										device_system->devices[device_index]->partitions = (dtmd_info_t**) tmp;
+									}
+									else
+									{
+										device_system->devices[device_index]->partitions[device_system->devices[device_index]->partitions_count + 1] = NULL;
+									}
+								}
+								else
+								{
+									free(device_system->devices[device_index]->partitions);
+									device_system->devices[device_index]->partitions = NULL;
+								}
+								break;
+
+							case dtmd_info_stateful_device:
+								device_system_free_device(device_system->stateful_devices[device_index]);
+
+								--(device_system->stateful_devices_count);
+
+								if (device_system->stateful_devices_count > 0)
+								{
+									device_system->stateful_devices[device_index] = device_system->stateful_devices[device_system->stateful_devices_count + 1];
+
+									tmp = realloc(device_system->stateful_devices, device_system->stateful_devices_count * sizeof(dtmd_info_t*));
+									if (tmp != NULL)
+									{
+										device_system->stateful_devices = (dtmd_info_t**) tmp;
+									}
+									else
+									{
+										device_system->stateful_devices[device_system->stateful_devices_count + 1] = NULL;
+									}
+								}
+								else
+								{
+									free(device_system->stateful_devices);
+									device_system->stateful_devices = NULL;
+								}
+								break;
+							}
+						}
+						break;
+
+					case dtmd_device_action_change:
+						if ((found_device_type != dtmd_info_unknown) && (device->type == found_device_type))
+						{
+							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
+							{
+								if (device_system_monitor_add_item(device_system->monitors[monitor_index], device, action) < 0)
+								{
+									goto device_system_worker_function_error_3;
+								}
+							}
+
+							switch (device->type)
+							{
+							case dtmd_info_device:
+								device_system_free_device(device_system->devices[device_index]->device);
+								device_system->devices[device_index]->device = device;
+								break;
+
+							case dtmd_info_partition:
+								device_system_free_device(device_system->devices[device_index]->partitions[partition_index]);
+								device_system->devices[device_index]->partitions[partition_index] = device;
+								break;
+
+							case dtmd_info_stateful_device:
+								device_system_free_device(device_system->stateful_devices[device_index]);
+								device_system->stateful_devices[device_index] = device;
+								break;
+							}
+						}
+						break;
+
+					case dtmd_device_action_unknown:
+					default:
+						break;
+					}
+
+					pthread_mutex_unlock(&(device_system->control_mutex));
 					break;
 
 				case dtmd_device_action_unknown:
@@ -2000,21 +2317,51 @@ static void* device_system_worker_function(void *arg)
 			*/
 
 			case -1:
-				goto device_system_worker_function_error;
+				goto device_system_worker_function_error_1;
 				/* break; */
 			}
 		}
 	}
 
-device_system_worker_function_error:
-	// Signal about error
-	//handle->callback(handle->callback_arg, NULL);
-
 device_system_worker_function_exit:
-	// Signal about exit
-	//data = 0;
-	//write(handle->feedback[1], &data, sizeof(char));
+	pthread_mutex_lock(&(device_system->control_mutex));
 
+	data = 2;
+
+	for (parent_index = 0; parent_index < device_system->monitor_count; ++parent_index)
+	{
+		write(device_system->monitors[parent_index]->data_pipe[1], &data, 1);
+	}
+
+	pthread_mutex_unlock(&(device_system->control_mutex));
+
+	goto device_system_worker_function_terminate;
+
+device_system_worker_function_error_4:
+	free(device_item);
+
+device_system_worker_function_error_3:
+	device_system_free_device(device);
+
+	goto device_system_worker_function_error_1_locked;
+
+device_system_worker_function_error_2:
+	device_system_free_device(device);
+
+device_system_worker_function_error_1:
+	pthread_mutex_lock(&(device_system->control_mutex));
+
+device_system_worker_function_error_1_locked:
+	data = 0;
+
+	for (parent_index = 0; parent_index < device_system->monitor_count; ++parent_index)
+	{
+		write(device_system->monitors[parent_index]->data_pipe[1], &data, 1);
+	}
+
+	pthread_mutex_unlock(&(device_system->control_mutex));
+
+device_system_worker_function_terminate:
 	pthread_exit(0);
 }
 
@@ -2487,6 +2834,8 @@ int device_system_get_monitor_fd(dtmd_device_monitor_t *monitor)
 
 int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t **device, dtmd_device_action_type_t *action)
 {
+	char data;
+	int rc;
 	dtmd_monitor_item_t *delete_item;
 
 	if ((monitor == NULL)
@@ -2501,30 +2850,45 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 		goto device_system_monitor_get_device_error_1;
 	}
 
-	if (monitor->first != NULL)
+	rc = read(monitor->data_pipe[0], &data, 1);
+	if (rc != 1)
 	{
-		delete_item = monitor->first;
-
-		if (monitor->first != monitor->last)
-		{
-			monitor->first = monitor->first->next;
-		}
-		else
-		{
-			monitor->first = NULL;
-			monitor->last  = NULL;
-		}
-
-		*device = delete_item->item;
-		*action = delete_item->action;
-		free(delete_item);
-
-		pthread_mutex_unlock(&(monitor->system->control_mutex));
-
-		return 1;
+		goto device_system_monitor_get_device_error_2;
 	}
-	else
+
+	switch (data)
 	{
+	case 0: // error
+		/*goto device_system_monitor_get_device_error_2; */
+		break;
+
+	case 1: // data
+		if (monitor->first != NULL)
+		{
+			delete_item = monitor->first;
+
+			if (monitor->first != monitor->last)
+			{
+				monitor->first = monitor->first->next;
+			}
+			else
+			{
+				monitor->first = NULL;
+				monitor->last  = NULL;
+			}
+
+			*device = delete_item->item;
+			*action = delete_item->action;
+			free(delete_item);
+
+			pthread_mutex_unlock(&(monitor->system->control_mutex));
+
+			return 1;
+		}
+
+		// NOTE: passthrough
+
+	case 2: // exit
 		*device = NULL;
 		*action = dtmd_device_action_unknown;
 		pthread_mutex_unlock(&(monitor->system->control_mutex));
@@ -2532,10 +2896,8 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 		return 0;
 	}
 
-/*
 device_system_monitor_get_device_error_2:
 	pthread_mutex_unlock(&(monitor->system->control_mutex));
-*/
 
 device_system_monitor_get_device_error_1:
 	return -1;
