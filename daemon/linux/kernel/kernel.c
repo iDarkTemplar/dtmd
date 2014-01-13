@@ -1588,12 +1588,343 @@ static void device_system_free_monitor_item(dtmd_monitor_item_t *item)
 	free(item);
 }
 
+static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dtmd_device_action_type_t *action)
+{
+	struct sockaddr_nl kernel;
+	struct iovec io;
+	char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
+	char reply[IFLIST_REPLY_BUFFER];
+	ssize_t len;
+	struct msghdr rtnl_reply;
+	struct iovec io_reply;
+
+	ssize_t pos;
+	struct ucred *cred;
+	struct cmsghdr *cmsg;
+
+	dtmd_device_action_type_t action_type = dtmd_device_action_unknown;
+	char *devtype = NULL;
+	char *devname = NULL;
+	char *subsystem = NULL;
+	char *devpath = NULL;
+	dtmd_info_t *device_info;
+	char file_name[PATH_MAX + 1];
+	char *device_type;
+
+	char *last_delim;
+
+	memset(&kernel, 0, sizeof(kernel));
+	kernel.nl_family = AF_NETLINK;
+
+	memset(&io_reply, 0, sizeof(io_reply));
+	memset(&rtnl_reply, 0, sizeof(rtnl_reply));
+
+	io.iov_base = reply;
+	io.iov_len = IFLIST_REPLY_BUFFER;
+	rtnl_reply.msg_iov = &io;
+	rtnl_reply.msg_iovlen = 1;
+	rtnl_reply.msg_name = &kernel;
+	rtnl_reply.msg_namelen = sizeof(kernel);
+	rtnl_reply.msg_control = &cred_msg;
+	rtnl_reply.msg_controllen = sizeof(cred_msg);
+
+	len = recvmsg(fd, &rtnl_reply, 0);
+	if (len > 0)
+	{
+		if ((kernel.nl_family != AF_NETLINK)
+			|| (kernel.nl_pid != 0)
+			|| (kernel.nl_groups != NETLINK_GROUP_KERNEL))
+		{
+			goto device_system_monitor_receive_device_exit_1;
+		}
+
+		cmsg = CMSG_FIRSTHDR(&rtnl_reply);
+		if ((cmsg == NULL)|| (cmsg->cmsg_type != SCM_CREDENTIALS))
+		{
+			goto device_system_monitor_receive_device_exit_1;
+		}
+
+		cred = (struct ucred*) CMSG_DATA(cmsg);
+
+		if ((cred->pid != 0)
+			|| (cred->uid != 0)
+			|| (cred->gid != 0))
+		{
+			goto device_system_monitor_receive_device_exit_1;
+		}
+
+		pos = 0;
+
+		while (pos < len)
+		{
+			if (strncmp(&(reply[pos]), NETLINK_STRING_ACTION, strlen(NETLINK_STRING_ACTION)) == 0)
+			{
+				if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_ADD) == 0)
+				{
+					action_type = dtmd_device_action_add;
+				}
+				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_ONLINE) == 0)
+				{
+					action_type = dtmd_device_action_online;
+				}
+				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_REMOVE) == 0)
+				{
+					action_type = dtmd_device_action_remove;
+				}
+				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_OFFLINE) == 0)
+				{
+					action_type = dtmd_device_action_offline;
+				}
+				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_CHANGE) == 0)
+				{
+					action_type = dtmd_device_action_change;
+				}
+			}
+			else if (strncmp(&(reply[pos]), NETLINK_STRING_SUBSYSTEM, strlen(NETLINK_STRING_SUBSYSTEM)) == 0)
+			{
+				subsystem = &(reply[pos + strlen(NETLINK_STRING_SUBSYSTEM)]);
+			}
+			else if (strncmp(&(reply[pos]), NETLINK_STRING_DEVNAME, strlen(NETLINK_STRING_DEVNAME)) == 0)
+			{
+				devname = &(reply[pos + strlen(NETLINK_STRING_DEVNAME)]);
+			}
+			else if (strncmp(&(reply[pos]), NETLINK_STRING_DEVTYPE, strlen(NETLINK_STRING_DEVTYPE)) == 0)
+			{
+				devtype = &(reply[pos + strlen(NETLINK_STRING_DEVTYPE)]);
+			}
+			else if (strncmp(&(reply[pos]), NETLINK_STRING_DEVPATH, strlen(NETLINK_STRING_DEVPATH)) == 0)
+			{
+				devpath = &(reply[pos + strlen(NETLINK_STRING_DEVPATH)]);
+			}
+
+			pos += strlen(&(reply[pos])) + 1;
+		}
+
+		if ((action_type == dtmd_device_action_unknown)
+			|| (devtype == NULL)
+			|| (devname == NULL)
+			|| (subsystem == NULL)
+			|| (devpath == NULL)
+			|| (strcmp(subsystem, NETLINK_STRING_SUBSYSTEM_BLOCK) != 0)
+			|| ((strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) != 0)
+				&& (strcmp(devtype, NETLINK_STRING_DEVTYPE_PARTITION) != 0)))
+		{
+			goto device_system_monitor_receive_device_exit_1;
+		}
+
+		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
+		if (device_info == NULL)
+		{
+			goto device_system_monitor_receive_device_error_1;
+		}
+
+		switch (action_type)
+		{
+		case dtmd_device_action_add:
+		case dtmd_device_action_online:
+		case dtmd_device_action_change:
+			if (strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 4 > PATH_MAX)
+			{
+				goto device_system_monitor_receive_device_error_2;
+			}
+
+			strcpy(file_name, block_sys_dir);
+			strcat(file_name, devpath);
+			strcat(file_name, "/");
+			strcat(file_name, filename_device_type);
+			device_type = read_string_from_file(file_name);
+
+			if (device_type == NULL)
+			{
+				strcpy(&(file_name[strlen(block_sys_dir) + strlen(devpath)]), "/../");
+				strcat(file_name, filename_device_type);
+				device_type = read_string_from_file(file_name);
+			}
+
+			if (device_type == NULL)
+			{
+				goto device_system_monitor_receive_device_error_2;
+			}
+
+			device_info->media_type = device_type_from_string(device_type);
+			free(device_type);
+
+			if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
+			{
+				switch (device_info->media_type)
+				{
+				case dtmd_removable_media_removable_disk:
+				case dtmd_removable_media_sd_card:
+					device_info->type = dtmd_info_device;
+					break;
+
+				case dtmd_removable_media_cdrom:
+					device_info->type = dtmd_info_stateful_device;
+					break;
+
+				default:
+					device_info->type = dtmd_info_unknown;
+					break;
+				}
+			}
+			else
+			{
+				device_info->type = dtmd_info_partition;
+			}
+			break;
+
+		case dtmd_device_action_remove:
+		case dtmd_device_action_offline:
+			if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
+			{
+				device_info->type = dtmd_info_unknown;
+			}
+			else
+			{
+				device_info->type = dtmd_info_partition;
+			}
+			device_info->media_type = dtmd_removable_media_unknown_or_persistent;
+			break;
+		}
+
+		device_info->path = (char*) malloc(strlen(devices_dir) + strlen(devname) + 2);
+		if (device_info->path == NULL)
+		{
+			goto device_system_monitor_receive_device_error_2;
+		}
+
+		strcpy((char*) device_info->path, devices_dir);
+		strcat((char*) device_info->path, "/");
+		strcat((char*) device_info->path, devname);
+
+		switch (action_type)
+		{
+		case dtmd_device_action_add:
+		case dtmd_device_action_online:
+		case dtmd_device_action_change:
+			switch (device_info->type)
+			{
+			case dtmd_info_partition:
+				device_info->state = dtmd_removable_media_state_unknown;
+
+				if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
+					|| (device_info->fstype == NULL))
+				{
+					goto device_system_monitor_receive_device_error_3;
+				}
+				break;
+
+			case dtmd_info_stateful_device:
+				switch (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)))
+				{
+				case 0:
+					device_info->state = dtmd_removable_media_state_empty;
+					break;
+
+				case 1:
+					if (device_info->fstype == NULL)
+					{
+						device_info->state = dtmd_removable_media_state_clear;
+					}
+					else
+					{
+						device_info->state = dtmd_removable_media_state_ok;
+					}
+					break;
+
+				case -1:
+					goto device_system_monitor_receive_device_error_3;
+				}
+				break;
+
+			default:
+				device_info->fstype = NULL;
+				device_info->label  = NULL;
+				device_info->state  = dtmd_removable_media_state_unknown;
+				break;
+			}
+			break;
+
+		default:
+			device_info->fstype = NULL;
+			device_info->label  = NULL;
+			device_info->state  = dtmd_removable_media_state_unknown;
+			break;
+		}
+
+		switch (device_info->type)
+		{
+		case dtmd_info_partition:
+			last_delim = strrchr(devpath, '/');
+			if (last_delim == NULL)
+			{
+				goto device_system_monitor_receive_device_error_3;
+			}
+
+			*last_delim = 0;
+			last_delim = strrchr(devpath, '/');
+			if (last_delim == NULL)
+			{
+				goto device_system_monitor_receive_device_error_3;
+			}
+
+			device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(last_delim) + 1);
+			if (device_info->path_parent == NULL)
+			{
+				goto device_system_monitor_receive_device_error_3;
+			}
+
+			strcpy((char*) device_info->path_parent, devices_dir);
+			strcat((char*) device_info->path_parent, last_delim);
+			break;
+
+		default:
+			device_info->path_parent = NULL;
+			break;
+		}
+
+		device_info->private_data = NULL;
+
+		*device = device_info;
+		*action = action_type;
+		return 1;
+	}
+	else if (len < 0)
+	{
+		goto device_system_monitor_receive_device_error_1;
+	}
+
+device_system_monitor_receive_device_exit_1:
+	return 0;
+
+device_system_monitor_receive_device_error_3:
+	if (device_info->fstype != NULL)
+	{
+		free((char*) device_info->fstype);
+	}
+
+	if (device_info->label != NULL)
+	{
+		free((char*) device_info->label);
+	}
+
+	free((char*) device_info->path);
+
+device_system_monitor_receive_device_error_2:
+	free(device_info);
+
+device_system_monitor_receive_device_error_1:
+	return -1;
+}
+
 static void* device_system_worker_function(void *arg)
 {
 	dtmd_device_system_t *device_system;
 	struct pollfd fds[2];
 	char data;
 	int rc;
+	dtmd_info_t *device;
+	dtmd_device_action_type_t action;
 
 	device_system = (dtmd_device_system_t*) arg;
 
@@ -1637,6 +1968,41 @@ static void* device_system_worker_function(void *arg)
 		if (fds[1].revents & POLLIN)
 		{
 			// TODO: read device and notify
+			rc = device_system_monitor_receive_device(fds[1].fd, &device, &action);
+			switch (rc)
+			{
+			case 1:
+				// TODO: write
+				switch (action)
+				{
+				case dtmd_device_action_add:
+				case dtmd_device_action_online:
+					break;
+
+				case dtmd_device_action_remove:
+				case dtmd_device_action_offline:
+					break;
+
+				case dtmd_device_action_change:
+					break;
+
+				case dtmd_device_action_unknown:
+				default:
+					break;
+				}
+
+				device_system_free_device(device);
+				break;
+
+			/*
+			case 0:
+				break;
+			*/
+
+			case -1:
+				goto device_system_worker_function_error;
+				/* break; */
+			}
 		}
 	}
 
@@ -2024,17 +2390,27 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 		goto device_system_start_monitoring_error_2;
 	}
 
+	if (pthread_mutex_lock(&(system->control_mutex)) != 0)
+	{
+		goto device_system_start_monitoring_error_3;
+	}
+
 	tmp = realloc(system->monitors, (system->monitor_count + 1) * sizeof(dtmd_device_monitor_t*));
 	if (tmp == NULL)
 	{
-		goto device_system_start_monitoring_error_3;
+		goto device_system_start_monitoring_error_4;
 	}
 
 	system->monitors = (dtmd_device_monitor_t**) tmp;
 	system->monitors[system->monitor_count] = monitor;
 	++(system->monitor_count);
 
+	pthread_mutex_unlock(&(system->control_mutex));
+
 	return monitor;
+
+device_system_start_monitoring_error_4:
+	pthread_mutex_unlock(&(system->control_mutex));
 
 device_system_start_monitoring_error_3:
 	close(monitor->data_pipe[0]);
@@ -2164,345 +2540,6 @@ device_system_monitor_get_device_error_2:
 device_system_monitor_get_device_error_1:
 	return -1;
 }
-
-/*
-int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t **device, dtmd_device_action_type_t *action)
-{
-	struct sockaddr_nl kernel;
-	struct iovec io;
-	char cred_msg[CMSG_SPACE(sizeof(struct ucred))];
-	char reply[IFLIST_REPLY_BUFFER];
-	ssize_t len;
-	struct msghdr rtnl_reply;
-	struct iovec io_reply;
-
-	ssize_t pos;
-	struct ucred *cred;
-	struct cmsghdr *cmsg;
-
-	dtmd_device_action_type_t action_type = dtmd_device_action_unknown;
-	char *devtype = NULL;
-	char *devname = NULL;
-	char *subsystem = NULL;
-	char *devpath = NULL;
-	dtmd_info_t *device_info;
-	char file_name[PATH_MAX + 1];
-	char *device_type;
-
-	char *last_delim;
-
-	if ((monitor == NULL)
-		|| (device == NULL)
-		|| (action == NULL))
-	{
-		goto device_system_monitor_get_device_error_1;
-	}
-
-	memset(&kernel, 0, sizeof(kernel));
-	kernel.nl_family = AF_NETLINK;
-
-	memset(&io_reply, 0, sizeof(io_reply));
-	memset(&rtnl_reply, 0, sizeof(rtnl_reply));
-
-	io.iov_base = reply;
-	io.iov_len = IFLIST_REPLY_BUFFER;
-	rtnl_reply.msg_iov = &io;
-	rtnl_reply.msg_iovlen = 1;
-	rtnl_reply.msg_name = &kernel;
-	rtnl_reply.msg_namelen = sizeof(kernel);
-	rtnl_reply.msg_control = &cred_msg;
-	rtnl_reply.msg_controllen = sizeof(cred_msg);
-
-	len = recvmsg(monitor->fd, &rtnl_reply, 0);
-	if (len > 0)
-	{
-		if ((kernel.nl_family != AF_NETLINK)
-			|| (kernel.nl_pid != 0)
-			|| (kernel.nl_groups != NETLINK_GROUP_KERNEL))
-		{
-			goto device_system_monitor_get_device_exit_1;
-		}
-
-		cmsg = CMSG_FIRSTHDR(&rtnl_reply);
-		if ((cmsg == NULL)|| (cmsg->cmsg_type != SCM_CREDENTIALS))
-		{
-			goto device_system_monitor_get_device_exit_1;
-		}
-
-		cred = (struct ucred*) CMSG_DATA(cmsg);
-
-		if ((cred->pid != 0)
-			|| (cred->uid != 0)
-			|| (cred->gid != 0))
-		{
-			goto device_system_monitor_get_device_exit_1;
-		}
-
-		pos = 0;
-
-		while (pos < len)
-		{
-			if (strncmp(&(reply[pos]), NETLINK_STRING_ACTION, strlen(NETLINK_STRING_ACTION)) == 0)
-			{
-				if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_ADD) == 0)
-				{
-					action_type = dtmd_device_action_add;
-				}
-				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_ONLINE) == 0)
-				{
-					action_type = dtmd_device_action_online;
-				}
-				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_REMOVE) == 0)
-				{
-					action_type = dtmd_device_action_remove;
-				}
-				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_OFFLINE) == 0)
-				{
-					action_type = dtmd_device_action_offline;
-				}
-				else if (strcmp(&(reply[pos + strlen(NETLINK_STRING_ACTION)]), NETLINK_STRING_ACTION_CHANGE) == 0)
-				{
-					action_type = dtmd_device_action_change;
-				}
-			}
-			else if (strncmp(&(reply[pos]), NETLINK_STRING_SUBSYSTEM, strlen(NETLINK_STRING_SUBSYSTEM)) == 0)
-			{
-				subsystem = &(reply[pos + strlen(NETLINK_STRING_SUBSYSTEM)]);
-			}
-			else if (strncmp(&(reply[pos]), NETLINK_STRING_DEVNAME, strlen(NETLINK_STRING_DEVNAME)) == 0)
-			{
-				devname = &(reply[pos + strlen(NETLINK_STRING_DEVNAME)]);
-			}
-			else if (strncmp(&(reply[pos]), NETLINK_STRING_DEVTYPE, strlen(NETLINK_STRING_DEVTYPE)) == 0)
-			{
-				devtype = &(reply[pos + strlen(NETLINK_STRING_DEVTYPE)]);
-			}
-			else if (strncmp(&(reply[pos]), NETLINK_STRING_DEVPATH, strlen(NETLINK_STRING_DEVPATH)) == 0)
-			{
-				devpath = &(reply[pos + strlen(NETLINK_STRING_DEVPATH)]);
-			}
-
-			pos += strlen(&(reply[pos])) + 1;
-		}
-
-		if ((action_type == dtmd_device_action_unknown)
-			|| (devtype == NULL)
-			|| (devname == NULL)
-			|| (subsystem == NULL)
-			|| (devpath == NULL)
-			|| (strcmp(subsystem, NETLINK_STRING_SUBSYSTEM_BLOCK) != 0)
-			|| ((strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) != 0)
-				&& (strcmp(devtype, NETLINK_STRING_DEVTYPE_PARTITION) != 0)))
-		{
-			goto device_system_monitor_get_device_exit_1;
-		}
-
-		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-		if (device_info == NULL)
-		{
-			goto device_system_monitor_get_device_error_1;
-		}
-
-		switch (action_type)
-		{
-		case dtmd_device_action_add:
-		case dtmd_device_action_online:
-		case dtmd_device_action_change:
-			if (strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 4 > PATH_MAX)
-			{
-				goto device_system_monitor_get_device_error_2;
-			}
-
-			strcpy(file_name, block_sys_dir);
-			strcat(file_name, devpath);
-			strcat(file_name, "/");
-			strcat(file_name, filename_device_type);
-			device_type = read_string_from_file(file_name);
-
-			if (device_type == NULL)
-			{
-				strcpy(&(file_name[strlen(block_sys_dir) + strlen(devpath)]), "/../");
-				strcat(file_name, filename_device_type);
-				device_type = read_string_from_file(file_name);
-			}
-
-			if (device_type == NULL)
-			{
-				goto device_system_monitor_get_device_error_2;
-			}
-
-			device_info->media_type = device_type_from_string(device_type);
-			free(device_type);
-
-			if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
-			{
-				switch (device_info->media_type)
-				{
-				case dtmd_removable_media_removable_disk:
-				case dtmd_removable_media_sd_card:
-					device_info->type = dtmd_info_device;
-					break;
-
-				case dtmd_removable_media_cdrom:
-					device_info->type = dtmd_info_stateful_device;
-					break;
-
-				default:
-					device_info->type = dtmd_info_unknown;
-					break;
-				}
-			}
-			else
-			{
-				device_info->type = dtmd_info_partition;
-			}
-			break;
-
-		case dtmd_device_action_remove:
-		case dtmd_device_action_offline:
-			if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
-			{
-				// TODO: on remove differ between device and stateful_device
-				device_info->type = dtmd_info_device;
-			}
-			else
-			{
-				device_info->type = dtmd_info_partition;
-			}
-			device_info->media_type = dtmd_removable_media_unknown_or_persistent;
-			break;
-		}
-
-		device_info->path = (char*) malloc(strlen(devices_dir) + strlen(devname) + 2);
-		if (device_info->path == NULL)
-		{
-			goto device_system_monitor_get_device_error_2;
-		}
-
-		strcpy((char*) device_info->path, devices_dir);
-		strcat((char*) device_info->path, "/");
-		strcat((char*) device_info->path, devname);
-
-		switch (action_type)
-		{
-		case dtmd_device_action_add:
-		case dtmd_device_action_online:
-		case dtmd_device_action_change:
-			switch (device_info->type)
-			{
-			case dtmd_info_partition:
-				device_info->state = dtmd_removable_media_state_unknown;
-
-				if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
-					|| (device_info->fstype == NULL))
-				{
-					goto device_system_monitor_get_device_error_3;
-				}
-				break;
-
-			case dtmd_info_stateful_device:
-				switch (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)))
-				{
-				case 0:
-					device_info->state = dtmd_removable_media_state_empty;
-					break;
-
-				case 1:
-					if (device_info->fstype == NULL)
-					{
-						device_info->state = dtmd_removable_media_state_clear;
-					}
-					else
-					{
-						device_info->state = dtmd_removable_media_state_ok;
-					}
-					break;
-
-				case -1:
-					goto device_system_monitor_get_device_error_3;
-				}
-				break;
-
-			default:
-				device_info->fstype = NULL;
-				device_info->label  = NULL;
-				device_info->state  = dtmd_removable_media_state_unknown;
-				break;
-			}
-			break;
-
-		default:
-			device_info->fstype = NULL;
-			device_info->label  = NULL;
-			device_info->state  = dtmd_removable_media_state_unknown;
-			break;
-		}
-
-		switch (device_info->type)
-		{
-		case dtmd_info_partition:
-			last_delim = strrchr(devpath, '/');
-			if (last_delim == NULL)
-			{
-				goto device_system_monitor_get_device_error_3;
-			}
-
-			*last_delim = 0;
-			last_delim = strrchr(devpath, '/');
-			if (last_delim == NULL)
-			{
-				goto device_system_monitor_get_device_error_3;
-			}
-
-			device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(last_delim) + 1);
-			if (device_info->path_parent == NULL)
-			{
-				goto device_system_monitor_get_device_error_3;
-			}
-
-			strcpy((char*) device_info->path_parent, devices_dir);
-			strcat((char*) device_info->path_parent, last_delim);
-			break;
-
-		default:
-			device_info->path_parent = NULL;
-			break;
-		}
-
-		device_info->private_data = NULL;
-
-		*device = device_info;
-		*action = action_type;
-		return 1;
-	}
-	else if (len < 0)
-	{
-		goto device_system_monitor_get_device_error_1;
-	}
-
-device_system_monitor_get_device_exit_1:
-	return 0;
-
-device_system_monitor_get_device_error_3:
-	if (device_info->fstype != NULL)
-	{
-		free((char*) device_info->fstype);
-	}
-
-	if (device_info->label != NULL)
-	{
-		free((char*) device_info->label);
-	}
-
-	free((char*) device_info->path);
-
-device_system_monitor_get_device_error_2:
-	free(device_info);
-
-device_system_monitor_get_device_error_1:
-	return -1;
-}
-*/
 
 void device_system_monitor_free_device(dtmd_device_monitor_t *monitor, dtmd_info_t *device)
 {

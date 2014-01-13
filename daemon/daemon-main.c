@@ -43,10 +43,6 @@
 
 #define DTMD_INVERTED_SOCKET_MASK 0
 
-/*
-	ATTR{events}=="media_change eject_request"
-*/
-
 static unsigned char continue_working = 1;
 static unsigned char daemonize        = 1;
 
