@@ -119,7 +119,7 @@ struct mount_option
 struct filesystem_options
 {
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	const unsigned char external;
+	const char * const external_fstype;
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	const char * const fstype;
 	const struct mount_option * const options;
@@ -190,7 +190,7 @@ static const struct filesystem_options filesystem_mount_options[] =
 {
 	{
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		0, /* NOT EXTERNAL MOUNT */
+		NULL, /* NOT EXTERNAL MOUNT */
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"vfat",
 		vfat_allow,
@@ -200,8 +200,16 @@ static const struct filesystem_options filesystem_mount_options[] =
 	},
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	{
-		1, /* EXTERNAL MOUNT */
+		"ntfs-3g", /* EXTERNAL MOUNT */
 		"ntfs-3g",
+		ntfs3g_allow,
+		"uid=",
+		"gid=",
+		"rw,nodev,nosuid,allow_other,dmask=0077"
+	},
+	{
+		"ntfs-3g", /* EXTERNAL MOUNT */
+		"ntfs",
 		ntfs3g_allow,
 		"uid=",
 		"gid=",
@@ -210,7 +218,7 @@ static const struct filesystem_options filesystem_mount_options[] =
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	{
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		0, /* NOT EXTERNAL MOUNT */
+		NULL, /* NOT EXTERNAL MOUNT */
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"iso9660",
 		iso9660_allow,
@@ -220,7 +228,7 @@ static const struct filesystem_options filesystem_mount_options[] =
 	},
 	{
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		0, /* NOT EXTERNAL MOUNT */
+		NULL, /* NOT EXTERNAL MOUNT */
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"udf",
 		udf_allow,
@@ -230,7 +238,7 @@ static const struct filesystem_options filesystem_mount_options[] =
 	},
 	{
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		0,
+		NULL,
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		NULL,
 		NULL,
@@ -468,7 +476,7 @@ static int invoke_mount_external(unsigned int client_number, const char *path, c
 	}
 
 	// calculate total length
-	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(fsopts->fstype) + 1 + strlen(path) + 1 + strlen(mount_path);
+	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(fsopts->external_fstype) + 1 + strlen(path) + 1 + strlen(mount_path);
 
 	if (mount_all_opts_len > 0)
 	{
@@ -486,7 +494,7 @@ static int invoke_mount_external(unsigned int client_number, const char *path, c
 
 	strcpy(mount_cmd, mount_ext_cmd);
 	strcat(mount_cmd, " -t ");
-	strcat(mount_cmd, fsopts->fstype);
+	strcat(mount_cmd, fsopts->external_fstype);
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, path);
 	strcat(mount_cmd, " ");
@@ -1110,7 +1118,7 @@ invoke_mount_exit_loop:
 	}
 
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	if (fsopts->external)
+	if (fsopts->external_fstype != NULL)
 	{
 		result = invoke_mount_external(client_number, path, mount_options, mount_path, fsopts);
 	}
@@ -1275,9 +1283,9 @@ invoke_unmount_exit_loop:
 		++fsopts;
 	}
 
-	if (fsopts->external)
+	if (fsopts->external_fstype != NULL)
 	{
-		result = invoke_unmount_external(client_number, path, local_mnt_point, local_fstype);
+		result = invoke_unmount_external(client_number, path, local_mnt_point, fsopts->external_fstype);
 	}
 	else
 	{

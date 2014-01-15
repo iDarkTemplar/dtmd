@@ -1454,6 +1454,8 @@ static void device_system_free_all_devices(dtmd_device_system_t *device_system)
 
 					free(device_system->devices[i]->partitions);
 				}
+
+				free(device_system->devices[i]);
 			}
 		}
 
@@ -2173,7 +2175,7 @@ static void* device_system_worker_function(void *arg)
 									break;
 
 								case dtmd_info_partition:
-									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[partition_index], action) < 0)
+									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[parent_index]->partitions[partition_index], action) < 0)
 									{
 										goto device_system_worker_function_error_3;
 									}
@@ -2206,7 +2208,7 @@ static void* device_system_worker_function(void *arg)
 
 								if (device_system->devices_count > 0)
 								{
-									device_system->devices[device_index] = device_system->devices[device_system->devices_count + 1];
+									device_system->devices[device_index] = device_system->devices[device_system->devices_count];
 
 									tmp = realloc(device_system->devices, device_system->devices_count * sizeof(dtmd_device_internal_t*));
 									if (tmp != NULL)
@@ -2226,28 +2228,28 @@ static void* device_system_worker_function(void *arg)
 								break;
 
 							case dtmd_info_partition:
-								device_system_free_device(device_system->devices[device_index]->partitions[partition_index]);
+								device_system_free_device(device_system->devices[parent_index]->partitions[partition_index]);
 
-								--(device_system->devices[device_index]->partitions_count);
+								--(device_system->devices[parent_index]->partitions_count);
 
-								if (device_system->devices[device_index]->partitions_count > 0)
+								if (device_system->devices[parent_index]->partitions_count > 0)
 								{
-									device_system->devices[device_index]->partitions[partition_index] = device_system->devices[device_index]->partitions[device_system->devices[device_index]->partitions_count + 1];
+									device_system->devices[parent_index]->partitions[partition_index] = device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count + 1];
 
-									tmp = realloc(device_system->devices[device_index]->partitions, device_system->devices[device_index]->partitions_count * sizeof(dtmd_info_t*));
+									tmp = realloc(device_system->devices[parent_index]->partitions, device_system->devices[parent_index]->partitions_count * sizeof(dtmd_info_t*));
 									if (tmp != NULL)
 									{
-										device_system->devices[device_index]->partitions = (dtmd_info_t**) tmp;
+										device_system->devices[parent_index]->partitions = (dtmd_info_t**) tmp;
 									}
 									else
 									{
-										device_system->devices[device_index]->partitions[device_system->devices[device_index]->partitions_count + 1] = NULL;
+										device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count + 1] = NULL;
 									}
 								}
 								else
 								{
-									free(device_system->devices[device_index]->partitions);
-									device_system->devices[device_index]->partitions = NULL;
+									free(device_system->devices[parent_index]->partitions);
+									device_system->devices[parent_index]->partitions = NULL;
 								}
 								break;
 
@@ -2278,6 +2280,8 @@ static void* device_system_worker_function(void *arg)
 								break;
 							}
 						}
+
+						device_system_free_device(device);
 						break;
 
 					case dtmd_device_action_change:
@@ -2299,8 +2303,8 @@ static void* device_system_worker_function(void *arg)
 								break;
 
 							case dtmd_info_partition:
-								device_system_free_device(device_system->devices[device_index]->partitions[partition_index]);
-								device_system->devices[device_index]->partitions[partition_index] = device;
+								device_system_free_device(device_system->devices[parent_index]->partitions[partition_index]);
+								device_system->devices[parent_index]->partitions[partition_index] = device;
 								break;
 
 							case dtmd_info_stateful_device:
@@ -2313,6 +2317,7 @@ static void* device_system_worker_function(void *arg)
 
 					case dtmd_device_action_unknown:
 					default:
+						device_system_free_device(device);
 						break;
 					}
 
@@ -2321,10 +2326,9 @@ static void* device_system_worker_function(void *arg)
 
 				case dtmd_device_action_unknown:
 				default:
+					device_system_free_device(device);
 					break;
 				}
-
-				device_system_free_device(device);
 				break;
 
 			/*
