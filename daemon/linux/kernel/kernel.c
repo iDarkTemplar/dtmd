@@ -77,8 +77,6 @@
 
 #define IFLIST_REPLY_BUFFER 8192
 
-// TODO: reference counting for some items of hierarchy?
-
 struct dtmd_device_enumeration
 {
 	dtmd_device_system_t *system;
@@ -133,6 +131,12 @@ struct dtmd_device_system
 	uint16_t monitor_count;
 	dtmd_device_monitor_t **monitors;
 };
+
+typedef struct dtmd_info_private
+{
+	dtmd_device_system_t *system;
+	uint32_t counter;
+} dtmd_info_private_t;
 
 static int read_int_from_file(const char *filename)
 {
@@ -312,27 +316,46 @@ helper_blkid_read_data_from_partition_error_1:
 
 static void device_system_free_device(dtmd_info_t *device)
 {
-	if (device->path != NULL)
+	uint32_t counter = 0;
+
+	if (device->private_data != NULL)
 	{
-		free((char*) device->path);
+		pthread_mutex_lock(&(((dtmd_info_private_t*)device->private_data)->system->control_mutex));
+
+		counter = --(((dtmd_info_private_t*)device->private_data)->counter);
+
+		pthread_mutex_unlock(&(((dtmd_info_private_t*)device->private_data)->system->control_mutex));
 	}
 
-	if (device->fstype != NULL)
+	if (counter == 0)
 	{
-		free((char*) device->fstype);
-	}
+		if (device->private_data != NULL)
+		{
+			free(device->private_data);
+		}
 
-	if (device->label != NULL)
-	{
-		free((char*) device->label);
-	}
+		if (device->path != NULL)
+		{
+			free((char*) device->path);
+		}
 
-	if (device->path_parent != NULL)
-	{
-		free((char*) device->path_parent);
-	}
+		if (device->fstype != NULL)
+		{
+			free((char*) device->fstype);
+		}
 
-	free(device);
+		if (device->label != NULL)
+		{
+			free((char*) device->label);
+		}
+
+		if (device->path_parent != NULL)
+		{
+			free((char*) device->path_parent);
+		}
+
+		free(device);
+	}
 }
 
 static int open_netlink_socket(void)
@@ -370,7 +393,7 @@ static int open_netlink_socket(void)
 	return fd;
 }
 
-static int helper_read_partition(const char *name, const char *device_name, const char *device_name_parent, dtmd_info_t **device)
+static int helper_read_partition(dtmd_device_system_t *device_system, const char *name, const char *device_name, const char *device_name_parent, dtmd_info_t **device)
 {
 	char *device_type;
 	struct stat stat_entry;
@@ -406,16 +429,25 @@ static int helper_read_partition(const char *name, const char *device_name, cons
 		goto helper_read_partition_error_1;
 	}
 
+	device_info->private_data = malloc(sizeof(dtmd_info_private_t));
+	if (device_info->private_data == NULL)
+	{
+		goto helper_read_partition_error_2;
+	}
+
+	((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
+	((dtmd_info_private_t*) device_info->private_data)->counter = 1;
+
 	device_info->path = (char*) malloc(strlen(devices_dir) + strlen(device_name) + 2);
 	if (device_info->path == NULL)
 	{
-		goto helper_read_partition_error_2;
+		goto helper_read_partition_error_3;
 	}
 
 	device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(device_name_parent) + 2);
 	if (device_info->path_parent == NULL)
 	{
-		goto helper_read_partition_error_3;
+		goto helper_read_partition_error_4;
 	}
 
 	device_info->type = dtmd_info_partition;
@@ -430,7 +462,6 @@ static int helper_read_partition(const char *name, const char *device_name, cons
 
 	device_info->media_type   = media_type;
 	device_info->state        = dtmd_removable_media_state_unknown;
-	device_info->private_data = NULL;
 
 	if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
 	    || (device_info->fstype == NULL))
@@ -445,7 +476,7 @@ static int helper_read_partition(const char *name, const char *device_name, cons
 			free((char*) device_info->label);
 		}
 
-		goto helper_read_partition_error_4;
+		goto helper_read_partition_error_5;
 	}
 
 	*device = device_info;
@@ -454,11 +485,14 @@ static int helper_read_partition(const char *name, const char *device_name, cons
 helper_read_partition_exit_1:
 	return 0;
 
-helper_read_partition_error_4:
+helper_read_partition_error_5:
 	free((char*) device_info->path_parent);
 
-helper_read_partition_error_3:
+helper_read_partition_error_4:
 	free((char*) device_info->path);
+
+helper_read_partition_error_3:
+	free(device_info->private_data);
 
 helper_read_partition_error_2:
 	free(device_info);
@@ -467,7 +501,7 @@ helper_read_partition_error_1:
 	return -1;
 }
 
-static int helper_read_device(const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
+static int helper_read_device(dtmd_device_system_t *device_system, const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
 {
 	char *device_type;
 	struct stat stat_entry;
@@ -513,10 +547,19 @@ static int helper_read_device(const char *name, const char *device_name, int che
 			goto helper_read_device_error_1;
 		}
 
+		device_info->private_data = malloc(sizeof(dtmd_info_private_t));
+		if (device_info->private_data == NULL)
+		{
+			goto helper_read_device_error_2;
+		}
+
+		((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
+		((dtmd_info_private_t*) device_info->private_data)->counter = 1;
+
 		device_info->path = (char*) malloc(strlen(devices_dir) + strlen(device_name) + 2);
 		if (device_info->path == NULL)
 		{
-			goto helper_read_device_error_2;
+			goto helper_read_device_error_3;
 		}
 
 		strcpy((char*) device_info->path, devices_dir);
@@ -525,7 +568,6 @@ static int helper_read_device(const char *name, const char *device_name, int che
 
 		device_info->media_type   = media_type;
 		device_info->path_parent  = NULL;
-		device_info->private_data = NULL;
 
 		switch (media_type)
 		{
@@ -559,7 +601,7 @@ static int helper_read_device(const char *name, const char *device_name, int che
 				break;
 
 			case -1:
-				goto helper_read_device_error_3;
+				goto helper_read_device_error_4;
 			}
 
 			*device = device_info;
@@ -570,8 +612,11 @@ static int helper_read_device(const char *name, const char *device_name, int che
 helper_read_device_exit_1:
 	return 0;
 
-helper_read_device_error_3:
+helper_read_device_error_4:
 	free((char*) device_info->path);
+
+helper_read_device_error_3:
+	free(device_info->private_data);
 
 helper_read_device_error_2:
 	free(device_info);
@@ -756,7 +801,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 		strcat(file_name, "/");
 
-		switch (helper_read_device(file_name, dirent_device->d_name, 1, &device))
+		switch (helper_read_device(device_system, file_name, dirent_device->d_name, 1, &device))
 		{
 		case 1: // device
 			switch (device_system_init_add_stateless_device(device_system, device))
@@ -828,7 +873,8 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				strcat(file_name, dirent_device->d_name);
 				strcat(file_name, "/");
 
-				switch (helper_read_partition(file_name,
+				switch (helper_read_partition(device_system,
+					file_name,
 					dirent_device_partition->d_name,
 					dirent_device->d_name,
 					&device))
@@ -1056,7 +1102,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 						strcat(file_name, "/");
 
-						switch (helper_read_device(file_name, dirent_usb_target_device->d_name, 0, &device))
+						switch (helper_read_device(device_system, file_name, dirent_usb_target_device->d_name, 0, &device))
 						{
 						case 1: // device
 							switch (device_system_init_add_stateless_device(device_system, device))
@@ -1140,7 +1186,8 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 								strcat(file_name, dirent_usb_target_device->d_name);
 								strcat(file_name, "/");
 
-								switch (helper_read_partition(file_name,
+								switch (helper_read_partition(device_system,
+									file_name,
 									dirent_usb_target_device_blocks->d_name,
 									dirent_usb_target_device->d_name,
 									&device))
@@ -1264,7 +1311,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 			strcat(file_name, "/");
 
-			switch (helper_read_device(file_name, dirent_mmc_device->d_name, 0, &device))
+			switch (helper_read_device(device_system, file_name, dirent_mmc_device->d_name, 0, &device))
 			{
 			case 1: // device
 				switch (device_system_init_add_stateless_device(device_system, device))
@@ -1341,7 +1388,8 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					strcat(file_name, dirent_mmc_device->d_name);
 					strcat(file_name, "/");
 
-					switch (helper_read_partition(file_name,
+					switch (helper_read_partition(device_system,
+						file_name,
 						dirent_mmc_device_blocks->d_name,
 						dirent_mmc_device->d_name,
 						&device))
@@ -1478,106 +1526,13 @@ static void device_system_free_all_devices(dtmd_device_system_t *device_system)
 
 static dtmd_info_t* device_system_copy_device(dtmd_info_t *device)
 {
-	dtmd_info_t *copy;
+	pthread_mutex_lock(&(((dtmd_info_private_t*)device->private_data)->system->control_mutex));
 
-	copy = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
-	if (copy == NULL)
-	{
-		goto device_system_copy_device_error_1;
-	}
+	++(((dtmd_info_private_t*)device->private_data)->counter);
 
-	copy->type = device->type;
+	pthread_mutex_unlock(&(((dtmd_info_private_t*)device->private_data)->system->control_mutex));
 
-	if (device->path != NULL)
-	{
-		copy->path = strdup(device->path);
-		if (copy->path == NULL)
-		{
-			goto device_system_copy_device_error_2;
-		}
-	}
-	else
-	{
-		copy->path = NULL;
-	}
-
-	copy->media_type = device->media_type;
-
-	if (device->fstype != NULL)
-	{
-		copy->fstype = strdup(device->fstype);
-		if (copy->fstype == NULL)
-		{
-			goto device_system_copy_device_error_3;
-		}
-	}
-	else
-	{
-		copy->fstype = NULL;
-	}
-
-	if (device->label != NULL)
-	{
-		copy->label = strdup(device->label);
-		if (copy->label == NULL)
-		{
-			goto device_system_copy_device_error_4;
-		}
-	}
-	else
-	{
-		copy->label = NULL;
-	}
-
-	if (device->path_parent != NULL)
-	{
-		copy->path_parent = strdup(device->path_parent);
-		if (copy->path_parent == NULL)
-		{
-			goto device_system_copy_device_error_5;
-		}
-	}
-	else
-	{
-		copy->path_parent = NULL;
-	}
-
-	copy->state = device->state;
-	copy->private_data = NULL;
-
-	return copy;
-
-/*
-device_system_copy_device_error_6:
-	if (copy->path_parent != NULL)
-	{
-		free((char*) copy->path_parent);
-	}
-*/
-
-device_system_copy_device_error_5:
-	if (copy->label != NULL)
-	{
-		free((char*) copy->label);
-	}
-
-device_system_copy_device_error_4:
-	if (copy->fstype != NULL)
-	{
-		free((char*) copy->fstype);
-	}
-
-device_system_copy_device_error_3:
-	if (copy->path != NULL)
-	{
-		free((char*) copy->path);
-	}
-
-device_system_copy_device_error_2:
-	free(copy);
-
-device_system_copy_device_error_1:
-	return NULL;
+	return device;
 }
 
 static void device_system_free_monitor_item(dtmd_monitor_item_t *item)
@@ -2027,6 +1982,15 @@ static void* device_system_worker_function(void *arg)
 				case dtmd_device_action_remove:
 				case dtmd_device_action_offline:
 				case dtmd_device_action_change:
+					device->private_data = malloc(sizeof(dtmd_info_private_t));
+					if (device->private_data == NULL)
+					{
+						goto device_system_worker_function_error_2;
+					}
+
+					((dtmd_info_private_t*) device->private_data)->system  = device_system;
+					((dtmd_info_private_t*) device->private_data)->counter = 1;
+
 					if (pthread_mutex_lock(&(device_system->control_mutex)) != 0)
 					{
 						goto device_system_worker_function_error_2;
@@ -2388,6 +2352,7 @@ device_system_worker_function_terminate:
 dtmd_device_system_t* device_system_init(void)
 {
 	dtmd_device_system_t *device_system;
+	pthread_mutexattr_t mutex_attr;
 	/* char data = 0; */
 
 	device_system = (dtmd_device_system_t*) malloc(sizeof(dtmd_device_system_t));
@@ -2411,40 +2376,55 @@ dtmd_device_system_t* device_system_init(void)
 		goto device_system_init_error_2;
 	}
 
-	if (device_system_init_fill_devices(device_system) < 0)
+	if (pthread_mutexattr_init(&mutex_attr) != 0)
 	{
 		goto device_system_init_error_3;
 	}
 
-	if (pipe(device_system->worker_control_pipe) < 0)
-	{
-		goto device_system_init_error_3;
-	}
-
-	if (pthread_mutex_init(&(device_system->control_mutex), NULL) != 0)
+	if (pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE) != 0)
 	{
 		goto device_system_init_error_4;
 	}
 
-	if ((pthread_create(&(device_system->worker_thread), NULL, &device_system_worker_function, device_system)) != 0)
+	if (pthread_mutex_init(&(device_system->control_mutex), &mutex_attr) != 0)
+	{
+		goto device_system_init_error_4;
+	}
+
+	if (device_system_init_fill_devices(device_system) < 0)
 	{
 		goto device_system_init_error_5;
 	}
 
+	if (pipe(device_system->worker_control_pipe) < 0)
+	{
+		goto device_system_init_error_5;
+	}
+
+	if ((pthread_create(&(device_system->worker_thread), NULL, &device_system_worker_function, device_system)) != 0)
+	{
+		goto device_system_init_error_6;
+	}
+
+	pthread_mutexattr_destroy(&mutex_attr);
+
 	return device_system;
 
 /*
-device_system_init_error_6:
+device_system_init_error_7:
 	write(device_system->worker_control_pipe[1], &data, sizeof(char));
 	pthread_join(device_system->worker_thread, NULL);
 */
+
+device_system_init_error_6:
+	close(device_system->worker_control_pipe[0]);
+	close(device_system->worker_control_pipe[1]);
 
 device_system_init_error_5:
 	pthread_mutex_destroy(&(device_system->control_mutex));
 
 device_system_init_error_4:
-	close(device_system->worker_control_pipe[0]);
-	close(device_system->worker_control_pipe[1]);
+	pthread_mutexattr_destroy(&mutex_attr);
 
 device_system_init_error_3:
 	device_system_free_all_devices(device_system);
@@ -2532,12 +2512,12 @@ void device_system_deinit(dtmd_device_system_t *system)
 			free(system->monitors);
 		}
 
-		pthread_mutex_destroy(&(system->control_mutex));
-
 		close(system->worker_control_pipe[0]);
 		close(system->worker_control_pipe[1]);
 
 		device_system_free_all_devices(system);
+
+		pthread_mutex_destroy(&(system->control_mutex));
 
 		free(system);
 	}
