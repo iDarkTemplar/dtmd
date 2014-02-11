@@ -21,13 +21,16 @@ include(CPack)
 # installation directory configuration
 set(INST_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories")
 set(DATA_PREFIX "${INST_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories")
+set(CONFIG_DIR "/etc" CACHE PATH "Config files directory")
 set(HEADERS_PREFIX "${INST_PREFIX}/include" CACHE PATH "Prefix prepended to headers install directories")
 set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
 message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
+message(STATUS "To change config directory use -DCONFIG_DIR=path")
 
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
+add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT")
@@ -139,8 +142,8 @@ if (OS_LINUX)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
 endif (OS_LINUX)
 
-set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/dtmd-internal.h daemon/system_module.h )
+set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystems.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystems.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -238,6 +241,7 @@ install(TARGETS dtmd         RUNTIME DESTINATION bin)
 install(FILES "dtmd.h" DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-misc.h" DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-library.h" DESTINATION "${HEADERS_PREFIX}")
+install(FILES "daemon/dtmd.conf" DESTINATION "${CONFIG_DIR}")
 
 if (NOT DEFINED DISABLE_CXX)
 	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${INSTALL_DIR_LIB} )

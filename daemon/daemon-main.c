@@ -38,6 +38,7 @@
 #include "daemon/actions.h"
 #include "daemon/mnt_funcs.h"
 #include "daemon/system_module.h"
+#include "daemon/config_file.h"
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
@@ -451,6 +452,8 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
+	read_config();
+
 	while ((rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)) > 0)
 	{
 		switch (dtmd_dev_device->type)
@@ -815,6 +818,7 @@ exit_7:
 	remove_all_media();
 	remove_all_stateful_media();
 	close(mountfd);
+	free_config();
 
 exit_6:
 	device_system_stop_monitoring(dtmd_dev_mon);
