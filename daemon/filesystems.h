@@ -21,13 +21,15 @@
 #ifndef FILESYSTEMS_H
 #define FILESYSTEMS_H
 
+#include "daemon/config_file.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* NOTE: invoke_unmount and invoke_unmount_all can take -1 as client number meaning the client is daemon itself */
 
-int invoke_mount(int client_number, const char *path, const char *mount_options);
+int invoke_mount(int client_number, const char *path, const char *mount_options, enum mount_by_value_enum mount_type);
 int invoke_unmount(int client_number, const char *path);
 
 int invoke_unmount_all(int client_number);

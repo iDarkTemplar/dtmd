@@ -159,7 +159,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_mount) == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1]);
+		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1], mount_by_value);
 
 		if (rc > 0)
 		{

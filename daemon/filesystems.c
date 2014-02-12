@@ -23,7 +23,6 @@
 #include "daemon/dtmd-internal.h"
 #include "daemon/lists.h"
 #include "daemon/mnt_funcs.h"
-#include "daemon/config_file.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -978,19 +977,90 @@ invoke_mount_internal_error_1:
 	return result;
 }
 
-int invoke_mount(int client_number, const char *path, const char *mount_options)
+static char* calculate_path(const char *path, const char *label, enum mount_by_value_enum *mount_type)
+{
+	const char *mount_dev_start;
+
+	int mount_dev_len;
+	int mount_path_len;
+
+	char *mount_path;
+
+	// calculate mount point
+	switch (*mount_type)
+	{
+	case mount_by_device_label:
+		if (label != NULL)
+		{
+			mount_dev_len = strlen(label);
+			if (mount_dev_len > 0)
+			{
+				break;
+			}
+		}
+
+		*mount_type = mount_by_device_name;
+		// NOTE: passthrough
+
+	case mount_by_device_name:
+		mount_dev_start = strrchr(path, '/');
+		if (mount_dev_start == NULL)
+		{
+			return NULL;
+		}
+
+		++mount_dev_start;
+		mount_dev_len = strlen(mount_dev_start);
+
+		if (mount_dev_len == 0)
+		{
+			return NULL;
+		}
+		break;
+
+	default:
+		return NULL;
+	}
+
+	mount_path_len = strlen(dtmd_internal_mount_dir);
+	mount_dev_len += mount_path_len + 1;
+
+	mount_path = (char*) malloc(mount_dev_len + 1);
+	if (mount_path == NULL)
+	{
+		return NULL;
+	}
+
+	memcpy(mount_path, dtmd_internal_mount_dir, mount_path_len);
+	mount_path[mount_path_len] = '/';
+
+	switch (*mount_type)
+	{
+	case mount_by_device_label:
+		memcpy(&mount_path[mount_path_len + 1], label, mount_dev_len - mount_path_len - 1);
+		break;
+
+	case mount_by_device_name:
+		memcpy(&mount_path[mount_path_len + 1], mount_dev_start, mount_dev_len - mount_path_len - 1);
+		break;
+	}
+
+	mount_path[mount_dev_len] = 0;
+
+	return mount_path;
+}
+
+int invoke_mount(int client_number, const char *path, const char *mount_options, enum mount_by_value_enum mount_type)
 {
 	int result;
 	unsigned int dev, part;
 	const struct filesystem_options *fsopts;
-	const char *mount_dev_start;
-	int mount_dev_len;
 
 	char *mount_path;
-	int mount_path_len;
 
 	const char *local_mnt_point;
 	const char *local_fstype;
+	const char *local_label;
 
 	for (dev = 0; dev < media_count; ++dev)
 	{
@@ -1008,6 +1078,7 @@ invoke_mount_exit_loop:
 	{
 		local_mnt_point = media[dev]->partition[part]->mnt_point;
 		local_fstype    = media[dev]->partition[part]->fstype;
+		local_label     = media[dev]->partition[part]->label;
 	}
 	else
 	{
@@ -1027,6 +1098,7 @@ invoke_mount_exit_loop:
 
 		local_mnt_point = stateful_media[dev]->mnt_point;
 		local_fstype    = stateful_media[dev]->fstype;
+		local_label     = stateful_media[dev]->label;
 	}
 
 	if (local_mnt_point != NULL)
@@ -1058,52 +1130,43 @@ invoke_mount_exit_loop:
 		mount_options = fsopts->defaults;
 	}
 
-	// calculate mount point
-	mount_dev_start = strrchr(path, '/');
-	if (mount_dev_start == NULL)
+	for (;;)
 	{
-		result = -1;
-		goto invoke_mount_error_1;
-	}
-
-	++mount_dev_start;
-	mount_dev_len = strlen(mount_dev_start);
-
-	if (mount_dev_len == 0)
-	{
-		result = -1;
-		goto invoke_mount_error_1;
-	}
-
-	mount_path_len = strlen(dtmd_internal_mount_dir);
-	mount_dev_len += mount_path_len + 1;
-
-	mount_path = (char*) malloc(mount_dev_len + 1);
-	if (mount_path == NULL)
-	{
-		result = -1;
-		goto invoke_mount_error_1;
-	}
-
-	memcpy(mount_path, dtmd_internal_mount_dir, mount_path_len);
-	mount_path[mount_path_len] = '/';
-	memcpy(&mount_path[mount_path_len + 1], mount_dev_start, mount_dev_len - mount_path_len - 1);
-	mount_path[mount_dev_len] = 0;
-
-	// check mount point
-	result = point_mount_count(mount_path, 1);
-	if (result != 0)
-	{
-		if (result < 0)
+		mount_path = calculate_path(path, local_label, &mount_type);
+		if (mount_path == NULL)
 		{
 			result = -1;
-		}
-		else
-		{
-			result = 0;
+			goto invoke_mount_error_1;
 		}
 
-		goto invoke_mount_error_2;
+		// check mount point
+		result = point_mount_count(mount_path, 1);
+		if (result != 0)
+		{
+			if (result < 0)
+			{
+				result = -1;
+				goto invoke_mount_error_2;
+			}
+			else
+			{
+				switch (mount_type)
+				{
+				case mount_by_device_label:
+					mount_type = mount_by_device_name;
+					break;
+
+				case mount_by_device_name:
+					result = 0;
+					goto invoke_mount_error_2;
+				}
+			}
+
+			free(mount_path);
+			continue;
+		}
+
+		break;
 	}
 
 	if (get_dir_state(mount_path) == dir_state_not_dir)
