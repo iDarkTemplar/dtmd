@@ -25,8 +25,12 @@
 extern "C" {
 #endif
 
-int invoke_mount(unsigned int client_number, const char *path, const char *mount_options);
-int invoke_unmount(unsigned int client_number, const char *path);
+/* NOTE: invoke_unmount and invoke_unmount_all can take -1 as client number meaning the client is daemon itself */
+
+int invoke_mount(int client_number, const char *path, const char *mount_options);
+int invoke_unmount(int client_number, const char *path);
+
+int invoke_unmount_all(int client_number);
 
 #ifdef __cplusplus
 }

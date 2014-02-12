@@ -39,6 +39,7 @@
 #include "daemon/mnt_funcs.h"
 #include "daemon/system_module.h"
 #include "daemon/config_file.h"
+#include "daemon/filesystems.h"
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
@@ -806,7 +807,6 @@ int main(int argc, char **argv)
 	}
 
 exit_8:
-	// TODO: unmount all media on exit?
 	remove_empty_dirs(dtmd_internal_mount_dir);
 	unlink(dtmd_internal_mtab_temporary);
 
@@ -815,6 +815,12 @@ exit_8:
 exit_7:
 	// first remove clients, because remove_all_* produces notifications
 	remove_all_clients();
+
+	if (unmount_on_exit)
+	{
+		invoke_unmount_all(-1);
+	}
+
 	remove_all_media();
 	remove_all_stateful_media();
 	close(mountfd);

@@ -29,7 +29,7 @@
 extern "C" {
 #endif
 
-int invoke_command(unsigned int client_number, dtmd_command_t *cmd);
+int invoke_command(int client_number, dtmd_command_t *cmd);
 
 int notify_add_disk(const char *path, dtmd_removable_media_type_t type);
 int notify_remove_disk(const char *path);

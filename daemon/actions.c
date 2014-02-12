@@ -25,17 +25,17 @@
 #include <stdio.h>
 #include <string.h>
 
-static int print_devices_count(unsigned int client_number);
+static int print_devices_count(int client_number);
 
-static int print_device(unsigned int client_number, unsigned int device);
+static int print_device(int client_number, unsigned int device);
 
-static int print_partition(unsigned int client_number, unsigned int device, unsigned int partition);
+static int print_partition(int client_number, unsigned int device, unsigned int partition);
 
-static int print_stateful_devices_count(unsigned int client_number);
+static int print_stateful_devices_count(int client_number);
 
-static int print_stateful_device(unsigned int client_number, unsigned int device);
+static int print_stateful_device(int client_number, unsigned int device);
 
-int invoke_command(unsigned int client_number, dtmd_command_t *cmd)
+int invoke_command(int client_number, dtmd_command_t *cmd)
 {
 	unsigned int i;
 	unsigned int j;
@@ -333,7 +333,7 @@ int notify_unmount(const char *path, const char *mount_point)
 	return 0;
 }
 
-static int print_devices_count(unsigned int client_number)
+static int print_devices_count(int client_number)
 {
 	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%d\")\n",
 		media_count) < 0)
@@ -344,7 +344,7 @@ static int print_devices_count(unsigned int client_number)
 	return 0;
 }
 
-static int print_device(unsigned int client_number, unsigned int device)
+static int print_device(int client_number, unsigned int device)
 {
 #ifndef NDEBUG
 	if (device > media_count)
@@ -364,7 +364,7 @@ static int print_device(unsigned int client_number, unsigned int device)
 	return 0;
 }
 
-static int print_partition(unsigned int client_number, unsigned int device, unsigned int partition)
+static int print_partition(int client_number, unsigned int device, unsigned int partition)
 {
 #ifndef NDEBUG
 	if ((device > media_count) || (partition > media[device]->partitions_count))
@@ -393,7 +393,7 @@ static int print_partition(unsigned int client_number, unsigned int device, unsi
 	return 0;
 }
 
-static int print_stateful_devices_count(unsigned int client_number)
+static int print_stateful_devices_count(int client_number)
 {
 	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_devices "(\"%d\")\n",
 		stateful_media_count) < 0)
@@ -404,7 +404,7 @@ static int print_stateful_devices_count(unsigned int client_number)
 	return 0;
 }
 
-static int print_stateful_device(unsigned int client_number, unsigned int device)
+static int print_stateful_device(int client_number, unsigned int device)
 {
 #ifndef NDEBUG
 	if (device > stateful_media_count)

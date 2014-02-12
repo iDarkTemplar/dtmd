@@ -31,7 +31,7 @@
 
 #define config_filename CONFIG_DIR "/dtmd.conf"
 
-int unmount_on_exit = 1;
+int unmount_on_exit = 0;
 enum mount_by_value_enum mount_by_value = mount_by_device_name;
 
 static const char *config_unmount_on_exit = "unmount_on_exit";
