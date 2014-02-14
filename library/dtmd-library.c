@@ -59,31 +59,38 @@ struct dtmd_library
 	char buffer[dtmd_command_max_length + 1];
 };
 
-typedef struct dtmd_helper_dprintf_params_list_device
+typedef enum dtmd_helper_result
+{
+	dtmd_helper_result_ok,
+	dtmd_helper_result_exit,
+	dtmd_helper_result_error
+} dtmd_helper_result_t;
+
+typedef struct dtmd_helper_params_list_device
 {
 	const char *device_path;
-} dtmd_helper_dprintf_params_list_device_t;
+} dtmd_helper_params_list_device_t;
 
-typedef struct dtmd_helper_dprintf_params_list_partition
+typedef struct dtmd_helper_params_list_partition
 {
 	const char *partition_path;
-} dtmd_helper_dprintf_params_list_partition_t;
+} dtmd_helper_params_list_partition_t;
 
-typedef struct dtmd_helper_dprintf_params_list_stateful_device
+typedef struct dtmd_helper_params_list_stateful_device
 {
 	const char *device_path;
-} dtmd_helper_dprintf_params_list_stateful_device_t;
+} dtmd_helper_params_list_stateful_device_t;
 
-typedef struct dtmd_helper_dprintf_params_mount
+typedef struct dtmd_helper_params_mount
 {
 	const char *path;
 	const char *mount_options;
-} dtmd_helper_dprintf_params_mount_t;
+} dtmd_helper_params_mount_t;
 
-typedef struct dtmd_helper_dprintf_params_unmount
+typedef struct dtmd_helper_params_unmount
 {
 	const char *path;
-} dtmd_helper_dprintf_params_unmount_t;
+} dtmd_helper_params_unmount_t;
 
 typedef struct dtmd_helper_state_enum_devices
 {
@@ -154,17 +161,24 @@ static int dtmd_helper_dprintf_list_stateful_device(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args);
 
-static int dtmd_helper_exit_enum_devices(dtmd_t *handle, void *state);
-static void dtmd_helper_exit_clear_enum_devices(void *state);
+static dtmd_helper_result_t dtmd_helper_process_enum_devices(dtmd_t *handle, dtmd_command_t *cmd, void *params, dtmd_helper_state_enum_devices_t *state);
+static dtmd_helper_result_t dtmd_helper_process_list_device(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_device_t *params, dtmd_helper_state_list_device_t *state);
+static dtmd_helper_result_t dtmd_helper_process_list_partition(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_partition_t *params, dtmd_helper_state_list_partition_t *state);
+static dtmd_helper_result_t dtmd_helper_process_list_stateful_device(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_stateful_device_t *params, dtmd_helper_state_list_stateful_device_t *state);
+static dtmd_helper_result_t dtmd_helper_process_mount(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_mount_t *params, void *state);
+static dtmd_helper_result_t dtmd_helper_process_unmount(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_unmount_t *params, void *state);
 
-static int dtmd_helper_exit_list_device(dtmd_t *handle, void *state);
-static void dtmd_helper_exit_clear_list_device(void *state);
+static int dtmd_helper_exit_enum_devices(dtmd_t *handle, dtmd_helper_state_enum_devices_t *state);
+static void dtmd_helper_exit_clear_enum_devices(dtmd_helper_state_enum_devices_t *state);
 
-static int dtmd_helper_exit_list_partition(dtmd_t *handle, void *state);
-static void dtmd_helper_exit_clear_list_partition(void *state);
+static int dtmd_helper_exit_list_device(dtmd_t *handle, dtmd_helper_state_list_device_t *state);
+static void dtmd_helper_exit_clear_list_device(dtmd_helper_state_list_device_t *state);
 
-static int dtmd_helper_exit_list_stateful_device(dtmd_t *handle, void *state);
-static void dtmd_helper_exit_clear_list_stateful_device(void *state);
+static int dtmd_helper_exit_list_partition(dtmd_t *handle, dtmd_helper_state_list_partition_t *state);
+static void dtmd_helper_exit_clear_list_partition(dtmd_helper_state_list_partition_t *state);
+
+static int dtmd_helper_exit_list_stateful_device(dtmd_t *handle, dtmd_helper_state_list_stateful_device_t *state);
+static void dtmd_helper_exit_clear_list_stateful_device(dtmd_helper_state_list_stateful_device_t *state);
 
 static int dtmd_helper_exit_mount(dtmd_t *handle, void *state);
 static void dtmd_helper_exit_clear_mount(void *state);
@@ -412,7 +426,7 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 	struct timespec time_cur, time_end;
 	char *eol;
 
-	unsigned int partition;
+	dtmd_helper_result_t result_code;
 
 	dtmd_helper_state_enum_devices_t state;
 
@@ -475,318 +489,17 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 				goto dtmd_enum_all_error_1;
 			}
 
-			if (state.got_started)
-			{
-				if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
-					&& (dtmd_helper_is_helper_enum_all(cmd)))
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					handle->library_state = dtmd_state_default;
-					goto dtmd_enum_all_exit_1;
-				}
-
-				if ((strcmp(cmd->cmd, dtmd_response_argument_devices) == 0)
-					&& (cmd->args_count == 1)
-					&& (cmd->args[0] != NULL)
-					&& (state.got_devices_count == 0))
-				{
-					state.got_devices_count = 1;
-
-					if (dtmd_helper_string_to_int(cmd->args[0], &(state.expected_devices_count)) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_enum_all_error_1;
-					}
-
-					if (state.expected_devices_count > 0)
-					{
-						state.result_devices = (dtmd_device_t**) malloc(sizeof(dtmd_device_t*)*(state.expected_devices_count));
-						if (state.result_devices == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_memory_error;
-							goto dtmd_enum_all_error_1;
-						}
-
-						for (state.result_count = 0; state.result_count < state.expected_devices_count; ++state.result_count)
-						{
-							state.result_devices[state.result_count] = NULL;
-						}
-					}
-
-					state.result_count = 0;
-				}
-				else if ((strcmp(cmd->cmd, dtmd_response_argument_device) == 0)
-					&& (cmd->args_count == 3)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL))
-				{
-					if (state.result_count > 0)
-					{
-						if (!dtmd_helper_validate_device(state.result_devices[state.result_count-1]))
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_invalid_state;
-							goto dtmd_enum_all_error_1;
-						}
-					}
-
-					++(state.result_count);
-
-					if (state.result_count > state.expected_devices_count)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_input_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices[state.result_count-1] = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
-					if (state.result_devices[state.result_count-1] == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices[state.result_count-1]->path = NULL;
-					state.result_devices[state.result_count-1]->partition = NULL;
-					state.result_devices[state.result_count-1]->partitions_count = 0;
-
-					state.result_devices[state.result_count-1]->type = dtmd_string_to_device_type(cmd->args[1]);
-					if (state.result_devices[state.result_count-1]->type == dtmd_removable_media_unknown_or_persistent)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices[state.result_count-1]->path = cmd->args[0];
-					cmd->args[0] = NULL;
-
-					if (!dtmd_helper_string_to_int(cmd->args[2], &(state.result_devices[state.result_count-1]->partitions_count)))
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					if (state.result_devices[state.result_count-1]->partitions_count > 0)
-					{
-						state.result_devices[state.result_count-1]->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*(state.result_devices[state.result_count-1]->partitions_count));
-						if (state.result_devices[state.result_count-1]->partition == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_memory_error;
-							goto dtmd_enum_all_error_1;
-						}
-
-						for (partition = 0; partition < state.result_devices[state.result_count-1]->partitions_count; ++partition)
-						{
-							state.result_devices[state.result_count-1]->partition[partition] = NULL;
-						}
-					}
-				}
-				else if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
-					&& (cmd->args_count == 6)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[3] != NULL))
-				{
-					if (state.result_count == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					if (strcmp(cmd->args[3], state.result_devices[state.result_count-1]->path) != 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					for (partition = 0; partition < state.result_devices[state.result_count-1]->partitions_count; ++partition)
-					{
-						if (state.result_devices[state.result_count-1]->partition[partition] == NULL)
-						{
-							break;
-						}
-					}
-
-					if (partition >= state.result_devices[state.result_count-1]->partitions_count)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices[state.result_count-1]->partition[partition] = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
-					if (state.result_devices[state.result_count-1]->partition[partition] == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices[state.result_count-1]->partition[partition]->path      = cmd->args[0];
-					state.result_devices[state.result_count-1]->partition[partition]->fstype    = cmd->args[1];
-					state.result_devices[state.result_count-1]->partition[partition]->label     = cmd->args[2];
-					state.result_devices[state.result_count-1]->partition[partition]->mnt_point = cmd->args[4];
-					state.result_devices[state.result_count-1]->partition[partition]->mnt_opts  = cmd->args[5];
-
-					cmd->args[0] = NULL;
-					cmd->args[1] = NULL;
-					cmd->args[2] = NULL;
-					cmd->args[4] = NULL;
-					cmd->args[5] = NULL;
-				}
-				else if ((strcmp(cmd->cmd, dtmd_response_argument_stateful_devices) == 0)
-					&& (cmd->args_count == 1)
-					&& (cmd->args[0] != NULL)
-					&& (state.got_stateful_devices_count == 0))
-				{
-					state.got_stateful_devices_count = 1;
-
-					if (dtmd_helper_string_to_int(cmd->args[0], &(state.expected_stateful_devices_count)) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_enum_all_error_1;
-					}
-
-					if (state.expected_stateful_devices_count > 0)
-					{
-						state.result_devices_stateful = (dtmd_stateful_device_t**) malloc(sizeof(dtmd_stateful_device_t*)*(state.expected_stateful_devices_count));
-						if (state.result_devices_stateful == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_memory_error;
-							goto dtmd_enum_all_error_1;
-						}
-
-						for (state.result_stateful_count = 0; state.result_stateful_count < state.expected_stateful_devices_count; ++(state.result_stateful_count))
-						{
-							state.result_devices_stateful[state.result_stateful_count] = NULL;
-						}
-					}
-
-					state.result_stateful_count = 0;
-				}
-				else if ((strcmp(cmd->cmd, dtmd_response_argument_stateful_device) == 0)
-					&& (cmd->args_count == 7)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL))
-				{
-					++(state.result_stateful_count);
-
-					if (state.result_stateful_count > state.expected_stateful_devices_count)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_input_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices_stateful[state.result_stateful_count-1] = (dtmd_stateful_device_t*) malloc(sizeof(dtmd_stateful_device_t));
-					if (state.result_devices_stateful[state.result_stateful_count-1] == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices_stateful[state.result_stateful_count-1]->path      = NULL;
-					state.result_devices_stateful[state.result_stateful_count-1]->fstype    = NULL;
-					state.result_devices_stateful[state.result_stateful_count-1]->label     = NULL;
-					state.result_devices_stateful[state.result_stateful_count-1]->mnt_point = NULL;
-					state.result_devices_stateful[state.result_stateful_count-1]->mnt_opts  = NULL;
-
-					state.result_devices_stateful[state.result_stateful_count-1]->type = dtmd_string_to_device_type(cmd->args[1]);
-					if (state.result_devices_stateful[state.result_stateful_count-1]->type == dtmd_removable_media_unknown_or_persistent)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices_stateful[state.result_stateful_count-1]->state = dtmd_string_to_device_state(cmd->args[2]);
-					if (state.result_devices_stateful[state.result_stateful_count-1]->state == dtmd_removable_media_state_unknown)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_enum_all_error_1;
-					}
-
-					state.result_devices_stateful[state.result_stateful_count-1]->path      = cmd->args[0];
-					state.result_devices_stateful[state.result_stateful_count-1]->fstype    = cmd->args[3];
-					state.result_devices_stateful[state.result_stateful_count-1]->label     = cmd->args[4];
-					state.result_devices_stateful[state.result_stateful_count-1]->mnt_point = cmd->args[5];
-					state.result_devices_stateful[state.result_stateful_count-1]->mnt_opts  = cmd->args[6];
-
-					cmd->args[0] = NULL;
-					cmd->args[3] = NULL;
-					cmd->args[4] = NULL;
-					cmd->args[5] = NULL;
-					cmd->args[6] = NULL;
-
-					if (!dtmd_helper_validate_stateful_device(state.result_devices_stateful[state.result_stateful_count-1]))
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_enum_all_error_1;
-					}
-				}
-				else
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_invalid_state;
-					goto dtmd_enum_all_error_1;
-				}
-			}
-			else
-			{
-				if ((handle->library_state == dtmd_state_default)
-					&& (dtmd_helper_is_helper_enum_all(cmd)))
-				{
-					if (strcmp(cmd->cmd, dtmd_response_started) == 0)
-					{
-						state.got_started = 1;
-						handle->library_state = dtmd_state_in_enum_all;
-					}
-					else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_command_failed;
-						handle->library_state = dtmd_state_default;
-						goto dtmd_enum_all_exit_1;
-					}
-				}
-				else
-				{
-					res = dtmd_helper_handle_cmd(handle, cmd);
-
-					if (res != dtmd_ok)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = res;
-
-						if (dtmd_helper_is_state_invalid(res))
-						{
-							goto dtmd_enum_all_error_1;
-						}
-						else
-						{
-							goto dtmd_enum_all_exit_1;
-						}
-					}
-				}
-			}
-
+			result_code = dtmd_helper_process_enum_devices(handle, cmd, NULL, &state);
 			dtmd_free_command(cmd);
+
+			switch (result_code)
+			{
+			case dtmd_helper_result_exit:
+				goto dtmd_enum_all_exit_1;
+
+			case dtmd_helper_result_error:
+				goto dtmd_enum_all_error_1;
+			}
 		}
 
 		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
@@ -842,9 +555,9 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 	struct timespec time_cur, time_end;
 	char *eol;
 
-	unsigned int partition;
+	dtmd_helper_result_t result_code;
 
-	dtmd_helper_dprintf_params_list_device_t dprintf_params;
+	dtmd_helper_params_list_device_t params;
 	dtmd_helper_state_list_device_t state;
 
 	if (handle == NULL)
@@ -877,9 +590,9 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 		}
 	}
 
-	dprintf_params.device_path = device_path;
+	params.device_path = device_path;
 
-	if (dtmd_helper_dprintf_list_device(handle, &dprintf_params) < 0)
+	if (dtmd_helper_dprintf_list_device(handle, &params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_list_device_error_1;
@@ -903,174 +616,17 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 				goto dtmd_list_device_error_1;
 			}
 
-			if (state.got_started)
-			{
-				if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
-					&& (dtmd_helper_is_helper_list_device(cmd))
-					&& (strcmp(cmd->args[1], device_path) == 0))
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					handle->library_state = dtmd_state_default;
-					goto dtmd_list_device_exit_1;
-				}
-
-				if ((strcmp(cmd->cmd, dtmd_response_argument_device) == 0)
-					&& (cmd->args_count == 3)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL)
-					&& (state.result_device == NULL))
-				{
-					state.result_device = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
-					if (state.result_device == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_list_device_error_1;
-					}
-
-					state.result_device->path = NULL;
-					state.result_device->partition = NULL;
-					state.result_device->partitions_count = 0;
-
-					state.result_device->type = dtmd_string_to_device_type(cmd->args[1]);
-					if (state.result_device->type == dtmd_removable_media_unknown_or_persistent)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_list_device_error_1;
-					}
-
-					state.result_device->path = cmd->args[0];
-					cmd->args[0] = NULL;
-
-					if (!dtmd_helper_string_to_int(cmd->args[2], &(state.result_device->partitions_count)))
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_1;
-					}
-
-					if (state.result_device->partitions_count > 0)
-					{
-						state.result_device->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*(state.result_device->partitions_count));
-						if (state.result_device->partition == NULL)
-						{
-							dtmd_free_command(cmd);
-							handle->result_state = dtmd_memory_error;
-							goto dtmd_list_device_error_1;
-						}
-
-						for (partition = 0; partition < state.result_device->partitions_count; ++partition)
-						{
-							state.result_device->partition[partition] = NULL;
-						}
-					}
-				}
-				else if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
-					&& (cmd->args_count == 6)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[3] != NULL))
-				{
-					if (state.result_device == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_1;
-					}
-
-					if (strcmp(cmd->args[3], state.result_device->path) != 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_1;
-					}
-
-					for (partition = 0; partition < state.result_device->partitions_count; ++partition)
-					{
-						if (state.result_device->partition[partition] == NULL)
-						{
-							break;
-						}
-					}
-
-					if (partition >= state.result_device->partitions_count)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_device_error_1;
-					}
-
-					state.result_device->partition[partition] = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
-					if (state.result_device->partition[partition] == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_list_device_error_1;
-					}
-
-					state.result_device->partition[partition]->path      = cmd->args[0];
-					state.result_device->partition[partition]->fstype    = cmd->args[1];
-					state.result_device->partition[partition]->label     = cmd->args[2];
-					state.result_device->partition[partition]->mnt_point = cmd->args[4];
-					state.result_device->partition[partition]->mnt_opts  = cmd->args[5];
-
-					cmd->args[0] = NULL;
-					cmd->args[1] = NULL;
-					cmd->args[2] = NULL;
-					cmd->args[4] = NULL;
-					cmd->args[5] = NULL;
-				}
-				else
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_invalid_state;
-					goto dtmd_list_device_error_1;
-				}
-			}
-			else
-			{
-				if ((handle->library_state == dtmd_state_default)
-					&& (dtmd_helper_is_helper_list_device(cmd))
-					&& (strcmp(cmd->args[1], device_path) == 0))
-				{
-					if (strcmp(cmd->cmd, dtmd_response_started) == 0)
-					{
-						state.got_started = 1;
-						handle->library_state = dtmd_state_in_list_device;
-					}
-					else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_command_failed;
-						handle->library_state = dtmd_state_default;
-						goto dtmd_list_device_exit_1;
-					}
-				}
-				else
-				{
-					res = dtmd_helper_handle_cmd(handle, cmd);
-
-					if (res != dtmd_ok)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = res;
-
-						if (dtmd_helper_is_state_invalid(res))
-						{
-							goto dtmd_list_device_error_1;
-						}
-						else
-						{
-							goto dtmd_list_device_exit_1;
-						}
-					}
-				}
-			}
-
+			result_code = dtmd_helper_process_list_device(handle, cmd, &params, &state);
 			dtmd_free_command(cmd);
+
+			switch (result_code)
+			{
+			case dtmd_helper_result_exit:
+				goto dtmd_list_device_exit_1;
+
+			case dtmd_helper_result_error:
+				goto dtmd_list_device_error_1;
+			}
 		}
 
 		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
@@ -1120,7 +676,9 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 	struct timespec time_cur, time_end;
 	char *eol;
 
-	dtmd_helper_dprintf_params_list_partition_t dprintf_params;
+	dtmd_helper_result_t result_code;
+
+	dtmd_helper_params_list_partition_t params;
 	dtmd_helper_state_list_partition_t state;
 
 	if (handle == NULL)
@@ -1153,9 +711,9 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 		}
 	}
 
-	dprintf_params.partition_path = partition_path;
+	params.partition_path = partition_path;
 
-	if (dtmd_helper_dprintf_list_partition(handle, &dprintf_params) < 0)
+	if (dtmd_helper_dprintf_list_partition(handle, &params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_list_partition_error_1;
@@ -1179,100 +737,17 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 				goto dtmd_list_partition_error_1;
 			}
 
-			if (state.got_started)
-			{
-				if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
-					&& (dtmd_helper_is_helper_list_partition(cmd))
-					&& (strcmp(cmd->args[1], partition_path) == 0))
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					handle->library_state = dtmd_state_default;
-					goto dtmd_list_partition_exit_1;
-				}
-
-				if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
-					&& (cmd->args_count == 6)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[3] != NULL)
-					&& (state.result_partition == NULL))
-				{
-					if (strcmp(cmd->args[0], partition_path) != 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_partition_error_1;
-					}
-
-					state.result_partition = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
-					if (state.result_partition == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_list_partition_error_1;
-					}
-
-					state.result_partition->path      = cmd->args[0];
-					state.result_partition->fstype    = cmd->args[1];
-					state.result_partition->label     = cmd->args[2];
-					state.result_partition->mnt_point = cmd->args[4];
-					state.result_partition->mnt_opts  = cmd->args[5];
-
-					cmd->args[0] = NULL;
-					cmd->args[1] = NULL;
-					cmd->args[2] = NULL;
-					cmd->args[4] = NULL;
-					cmd->args[5] = NULL;
-				}
-				else
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_invalid_state;
-					goto dtmd_list_partition_error_1;
-				}
-			}
-			else
-			{
-				if ((handle->library_state == dtmd_state_default)
-					&& (dtmd_helper_is_helper_list_partition(cmd))
-					&& (strcmp(cmd->args[1], partition_path) == 0))
-				{
-					if (strcmp(cmd->cmd, dtmd_response_started) == 0)
-					{
-						state.got_started = 1;
-						handle->library_state = dtmd_state_in_list_partition;
-					}
-					else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_command_failed;
-						handle->library_state = dtmd_state_default;
-						goto dtmd_list_partition_exit_1;
-					}
-				}
-				else
-				{
-					res = dtmd_helper_handle_cmd(handle, cmd);
-
-					if (res != dtmd_ok)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = res;
-
-						if (dtmd_helper_is_state_invalid(res))
-						{
-							goto dtmd_list_partition_error_1;
-						}
-						else
-						{
-							goto dtmd_list_partition_exit_1;
-						}
-					}
-				}
-			}
-
+			result_code = dtmd_helper_process_list_partition(handle, cmd, &params, &state);
 			dtmd_free_command(cmd);
+
+			switch (result_code)
+			{
+			case dtmd_helper_result_exit:
+				goto dtmd_list_partition_exit_1;
+
+			case dtmd_helper_result_error:
+				goto dtmd_list_partition_error_1;
+			}
 		}
 
 		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
@@ -1322,7 +797,9 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 	struct timespec time_cur, time_end;
 	char *eol;
 
-	dtmd_helper_dprintf_params_list_stateful_device_t dprintf_params;
+	dtmd_helper_result_t result_code;
+
+	dtmd_helper_params_list_stateful_device_t params;
 	dtmd_helper_state_list_stateful_device_t state;
 
 	if (handle == NULL)
@@ -1355,9 +832,9 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 		}
 	}
 
-	dprintf_params.device_path = device_path;
+	params.device_path = device_path;
 
-	if (dtmd_helper_dprintf_list_stateful_device(handle, &dprintf_params) < 0)
+	if (dtmd_helper_dprintf_list_stateful_device(handle, &params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_list_stateful_device_error_1;
@@ -1381,122 +858,17 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 				goto dtmd_list_stateful_device_error_1;
 			}
 
-			if (state.got_started)
-			{
-				if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
-					&& (dtmd_helper_is_helper_list_stateful_device(cmd))
-					&& (strcmp(cmd->args[1], device_path) == 0))
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					handle->library_state = dtmd_state_default;
-					goto dtmd_list_stateful_device_exit_1;
-				}
-
-				if ((strcmp(cmd->cmd, dtmd_response_argument_stateful_device) == 0)
-					&& (cmd->args_count == 7)
-					&& (cmd->args[0] != NULL)
-					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL)
-					&& (state.result_stateful_device == NULL))
-				{
-					if (strcmp(cmd->args[0], device_path) != 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_io_error;
-						goto dtmd_list_stateful_device_error_1;
-					}
-
-					state.result_stateful_device = (dtmd_stateful_device_t*) malloc(sizeof(dtmd_stateful_device_t));
-					if (state.result_stateful_device == NULL)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_memory_error;
-						goto dtmd_list_stateful_device_error_1;
-					}
-
-					state.result_stateful_device->path      = NULL;
-					state.result_stateful_device->fstype    = NULL;
-					state.result_stateful_device->label     = NULL;
-					state.result_stateful_device->mnt_point = NULL;
-					state.result_stateful_device->mnt_opts  = NULL;
-
-					state.result_stateful_device->type = dtmd_string_to_device_type(cmd->args[1]);
-					if (state.result_stateful_device->type == dtmd_removable_media_unknown_or_persistent)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_list_stateful_device_error_1;
-					}
-
-					state.result_stateful_device->state = dtmd_string_to_device_state(cmd->args[2]);
-					if (state.result_stateful_device->state == dtmd_removable_media_state_unknown)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_invalid_state;
-						goto dtmd_list_stateful_device_error_1;
-					}
-
-					state.result_stateful_device->path      = cmd->args[0];
-					state.result_stateful_device->fstype    = cmd->args[3];
-					state.result_stateful_device->label     = cmd->args[4];
-					state.result_stateful_device->mnt_point = cmd->args[5];
-					state.result_stateful_device->mnt_opts  = cmd->args[6];
-
-					cmd->args[0] = NULL;
-					cmd->args[3] = NULL;
-					cmd->args[4] = NULL;
-					cmd->args[5] = NULL;
-					cmd->args[6] = NULL;
-				}
-				else
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_invalid_state;
-					goto dtmd_list_stateful_device_error_1;
-				}
-			}
-			else
-			{
-				if ((handle->library_state == dtmd_state_default)
-					&& (dtmd_helper_is_helper_list_stateful_device(cmd))
-					&& (strcmp(cmd->args[1], device_path) == 0))
-				{
-					if (strcmp(cmd->cmd, dtmd_response_started) == 0)
-					{
-						state.got_started = 1;
-						handle->library_state = dtmd_state_in_list_stateful_device;
-					}
-					else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_command_failed;
-						handle->library_state = dtmd_state_default;
-						goto dtmd_list_stateful_device_exit_1;
-					}
-				}
-				else
-				{
-					res = dtmd_helper_handle_cmd(handle, cmd);
-
-					if (res != dtmd_ok)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = res;
-
-						if (dtmd_helper_is_state_invalid(res))
-						{
-							goto dtmd_list_stateful_device_error_1;
-						}
-						else
-						{
-							goto dtmd_list_stateful_device_exit_1;
-						}
-					}
-				}
-			}
-
+			result_code = dtmd_helper_process_list_stateful_device(handle, cmd, &params, &state);
 			dtmd_free_command(cmd);
+
+			switch (result_code)
+			{
+			case dtmd_helper_result_exit:
+				goto dtmd_list_stateful_device_exit_1;
+
+			case dtmd_helper_result_error:
+				goto dtmd_list_stateful_device_error_1;
+			}
 		}
 
 		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
@@ -1546,7 +918,9 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 	struct timespec time_cur, time_end;
 	char *eol;
 
-	dtmd_helper_dprintf_params_mount_t dprintf_params;
+	dtmd_helper_result_t result_code;
+
+	dtmd_helper_params_mount_t params;
 
 	if (handle == NULL)
 	{
@@ -1578,10 +952,10 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 		}
 	}
 
-	dprintf_params.path = path;
-	dprintf_params.mount_options = mount_options;
+	params.path = path;
+	params.mount_options = mount_options;
 
-	if (dtmd_helper_dprintf_mount(handle, &dprintf_params) < 0)
+	if (dtmd_helper_dprintf_mount(handle, &params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_mount_error_1;
@@ -1602,46 +976,17 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 				goto dtmd_mount_error_1;
 			}
 
-			if ((handle->library_state == dtmd_state_default)
-				&& (dtmd_helper_is_helper_mount(cmd))
-				&& (strcmp(cmd->args[1], path) == 0)
-				&& (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], mount_options) == 0))
-					|| (cmd->args[2] == NULL)))
-			{
-				if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					goto dtmd_mount_exit_1;
-				}
-				else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_command_failed;
-					goto dtmd_mount_exit_1;
-				}
-			}
-			else
-			{
-				res = dtmd_helper_handle_cmd(handle, cmd);
-
-				if (res != dtmd_ok)
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = res;
-
-					if (dtmd_helper_is_state_invalid(res))
-					{
-						goto dtmd_mount_error_1;
-					}
-					else
-					{
-						goto dtmd_mount_exit_1;
-					}
-				}
-			}
-
+			result_code = dtmd_helper_process_mount(handle, cmd, &params, NULL);
 			dtmd_free_command(cmd);
+
+			switch (result_code)
+			{
+			case dtmd_helper_result_exit:
+				goto dtmd_mount_exit_1;
+
+			case dtmd_helper_result_error:
+				goto dtmd_mount_error_1;
+			}
 		}
 
 		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
@@ -1680,7 +1025,9 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 	struct timespec time_cur, time_end;
 	char *eol;
 
-	dtmd_helper_dprintf_params_unmount_t dprintf_params;
+	dtmd_helper_result_t result_code;
+
+	dtmd_helper_params_unmount_t params;
 
 	if (handle == NULL)
 	{
@@ -1712,9 +1059,9 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 		}
 	}
 
-	dprintf_params.path = path;
+	params.path = path;
 
-	if (dtmd_helper_dprintf_unmount(handle, &dprintf_params) < 0)
+	if (dtmd_helper_dprintf_unmount(handle, &params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_unmount_error_1;
@@ -1735,44 +1082,17 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 				goto dtmd_unmount_error_1;
 			}
 
-			if ((handle->library_state == dtmd_state_default)
-			    && (dtmd_helper_is_helper_unmount(cmd))
-			    && (strcmp(cmd->args[1], path) == 0))
-			{
-				if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					goto dtmd_unmount_exit_1;
-				}
-				else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_command_failed;
-					goto dtmd_unmount_exit_1;
-				}
-			}
-			else
-			{
-				res = dtmd_helper_handle_cmd(handle, cmd);
-
-				if (res != dtmd_ok)
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = res;
-
-					if (dtmd_helper_is_state_invalid(res))
-					{
-						goto dtmd_unmount_error_1;
-					}
-					else
-					{
-						goto dtmd_unmount_exit_1;
-					}
-				}
-			}
-
+			result_code = dtmd_helper_process_unmount(handle, cmd, &params, NULL);
 			dtmd_free_command(cmd);
+
+			switch (result_code)
+			{
+			case dtmd_helper_result_exit:
+				goto dtmd_unmount_exit_1;
+
+			case dtmd_helper_result_error:
+				goto dtmd_unmount_error_1;
+			}
 		}
 
 		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
@@ -2365,61 +1685,812 @@ static int dtmd_helper_dprintf_enum_devices(dtmd_t *handle, void *args)
 static int dtmd_helper_dprintf_list_device(dtmd_t *handle, void *args)
 {
 	return dprintf(handle->socket_fd, dtmd_command_list_device "(\"%s\")\n",
-		((dtmd_helper_dprintf_params_list_device_t*) args)->device_path);
+		((dtmd_helper_params_list_device_t*) args)->device_path);
 }
 
 static int dtmd_helper_dprintf_list_partition(dtmd_t *handle, void *args)
 {
 	return dprintf(handle->socket_fd, dtmd_command_list_partition "(\"%s\")\n",
-		((dtmd_helper_dprintf_params_list_partition_t*) args)->partition_path);
+		((dtmd_helper_params_list_partition_t*) args)->partition_path);
 }
 
 static int dtmd_helper_dprintf_list_stateful_device(dtmd_t *handle, void *args)
 {
 	return dprintf(handle->socket_fd, dtmd_command_list_stateful_device "(\"%s\")\n",
-		((dtmd_helper_dprintf_params_list_stateful_device_t*) args)->device_path);
+		((dtmd_helper_params_list_stateful_device_t*) args)->device_path);
 }
 
 static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args)
 {
 	return dprintf(handle->socket_fd, dtmd_command_mount "(\"%s\", %s%s%s)\n",
-		((dtmd_helper_dprintf_params_mount_t*) args)->path,
-		(((dtmd_helper_dprintf_params_mount_t*) args)->mount_options != NULL) ? ("\"") : (""),
-		(((dtmd_helper_dprintf_params_mount_t*) args)->mount_options != NULL) ? (((dtmd_helper_dprintf_params_mount_t*) args)->mount_options) : ("nil"),
-		(((dtmd_helper_dprintf_params_mount_t*) args)->mount_options != NULL) ? ("\"") : (""));
+		((dtmd_helper_params_mount_t*) args)->path,
+		(((dtmd_helper_params_mount_t*) args)->mount_options != NULL) ? ("\"") : (""),
+		(((dtmd_helper_params_mount_t*) args)->mount_options != NULL) ? (((dtmd_helper_params_mount_t*) args)->mount_options) : ("nil"),
+		(((dtmd_helper_params_mount_t*) args)->mount_options != NULL) ? ("\"") : (""));
 }
 
 static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args)
 {
 	return dprintf(handle->socket_fd, dtmd_command_unmount "(\"%s\")\n",
-		((dtmd_helper_dprintf_params_unmount_t*) args)->path);
+		((dtmd_helper_params_unmount_t*) args)->path);
 }
 
-static int dtmd_helper_exit_enum_devices(dtmd_t *handle, void *state)
+static dtmd_helper_result_t dtmd_helper_process_enum_devices(dtmd_t *handle, dtmd_command_t *cmd, void *params, dtmd_helper_state_enum_devices_t *state)
+{
+	dtmd_result_t res;
+	unsigned int partition;
+
+	if (state->got_started)
+	{
+		if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
+			&& (dtmd_helper_is_helper_enum_all(cmd)))
+		{
+			handle->result_state = dtmd_ok;
+			handle->library_state = dtmd_state_default;
+			return dtmd_helper_result_exit;
+		}
+
+		if ((strcmp(cmd->cmd, dtmd_response_argument_devices) == 0)
+			&& (cmd->args_count == 1)
+			&& (cmd->args[0] != NULL)
+			&& (state->got_devices_count == 0))
+		{
+			state->got_devices_count = 1;
+
+			if (dtmd_helper_string_to_int(cmd->args[0], &(state->expected_devices_count)) == 0)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			if (state->expected_devices_count > 0)
+			{
+				state->result_devices = (dtmd_device_t**) malloc(sizeof(dtmd_device_t*)*(state->expected_devices_count));
+				if (state->result_devices == NULL)
+				{
+					handle->result_state = dtmd_memory_error;
+					return dtmd_helper_result_error;
+				}
+
+				for (state->result_count = 0; state->result_count < state->expected_devices_count; ++state->result_count)
+				{
+					state->result_devices[state->result_count] = NULL;
+				}
+			}
+
+			state->result_count = 0;
+		}
+		else if ((strcmp(cmd->cmd, dtmd_response_argument_device) == 0)
+			&& (cmd->args_count == 3)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[2] != NULL))
+		{
+			if (state->result_count > 0)
+			{
+				if (!dtmd_helper_validate_device(state->result_devices[state->result_count-1]))
+				{
+					handle->result_state = dtmd_invalid_state;
+					return dtmd_helper_result_error;
+				}
+			}
+
+			++(state->result_count);
+
+			if (state->result_count > state->expected_devices_count)
+			{
+				handle->result_state = dtmd_input_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices[state->result_count-1] = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
+			if (state->result_devices[state->result_count-1] == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices[state->result_count-1]->path = NULL;
+			state->result_devices[state->result_count-1]->partition = NULL;
+			state->result_devices[state->result_count-1]->partitions_count = 0;
+
+			state->result_devices[state->result_count-1]->type = dtmd_string_to_device_type(cmd->args[1]);
+			if (state->result_devices[state->result_count-1]->type == dtmd_removable_media_unknown_or_persistent)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices[state->result_count-1]->path = cmd->args[0];
+			cmd->args[0] = NULL;
+
+			if (!dtmd_helper_string_to_int(cmd->args[2], &(state->result_devices[state->result_count-1]->partitions_count)))
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			if (state->result_devices[state->result_count-1]->partitions_count > 0)
+			{
+				state->result_devices[state->result_count-1]->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*(state->result_devices[state->result_count-1]->partitions_count));
+				if (state->result_devices[state->result_count-1]->partition == NULL)
+				{
+					handle->result_state = dtmd_memory_error;
+					return dtmd_helper_result_error;
+				}
+
+				for (partition = 0; partition < state->result_devices[state->result_count-1]->partitions_count; ++partition)
+				{
+					state->result_devices[state->result_count-1]->partition[partition] = NULL;
+				}
+			}
+		}
+		else if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
+			&& (cmd->args_count == 6)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[3] != NULL))
+		{
+			if (state->result_count == 0)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			if (strcmp(cmd->args[3], state->result_devices[state->result_count-1]->path) != 0)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			for (partition = 0; partition < state->result_devices[state->result_count-1]->partitions_count; ++partition)
+			{
+				if (state->result_devices[state->result_count-1]->partition[partition] == NULL)
+				{
+					break;
+				}
+			}
+
+			if (partition >= state->result_devices[state->result_count-1]->partitions_count)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices[state->result_count-1]->partition[partition] = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
+			if (state->result_devices[state->result_count-1]->partition[partition] == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices[state->result_count-1]->partition[partition]->path      = cmd->args[0];
+			state->result_devices[state->result_count-1]->partition[partition]->fstype    = cmd->args[1];
+			state->result_devices[state->result_count-1]->partition[partition]->label     = cmd->args[2];
+			state->result_devices[state->result_count-1]->partition[partition]->mnt_point = cmd->args[4];
+			state->result_devices[state->result_count-1]->partition[partition]->mnt_opts  = cmd->args[5];
+
+			cmd->args[0] = NULL;
+			cmd->args[1] = NULL;
+			cmd->args[2] = NULL;
+			cmd->args[4] = NULL;
+			cmd->args[5] = NULL;
+		}
+		else if ((strcmp(cmd->cmd, dtmd_response_argument_stateful_devices) == 0)
+			&& (cmd->args_count == 1)
+			&& (cmd->args[0] != NULL)
+			&& (state->got_stateful_devices_count == 0))
+		{
+			state->got_stateful_devices_count = 1;
+
+			if (dtmd_helper_string_to_int(cmd->args[0], &(state->expected_stateful_devices_count)) == 0)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			if (state->expected_stateful_devices_count > 0)
+			{
+				state->result_devices_stateful = (dtmd_stateful_device_t**) malloc(sizeof(dtmd_stateful_device_t*)*(state->expected_stateful_devices_count));
+				if (state->result_devices_stateful == NULL)
+				{
+					handle->result_state = dtmd_memory_error;
+					return dtmd_helper_result_error;
+				}
+
+				for (state->result_stateful_count = 0; state->result_stateful_count < state->expected_stateful_devices_count; ++(state->result_stateful_count))
+				{
+					state->result_devices_stateful[state->result_stateful_count] = NULL;
+				}
+			}
+
+			state->result_stateful_count = 0;
+		}
+		else if ((strcmp(cmd->cmd, dtmd_response_argument_stateful_device) == 0)
+			&& (cmd->args_count == 7)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[2] != NULL))
+		{
+			++(state->result_stateful_count);
+
+			if (state->result_stateful_count > state->expected_stateful_devices_count)
+			{
+				handle->result_state = dtmd_input_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices_stateful[state->result_stateful_count-1] = (dtmd_stateful_device_t*) malloc(sizeof(dtmd_stateful_device_t));
+			if (state->result_devices_stateful[state->result_stateful_count-1] == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices_stateful[state->result_stateful_count-1]->path      = NULL;
+			state->result_devices_stateful[state->result_stateful_count-1]->fstype    = NULL;
+			state->result_devices_stateful[state->result_stateful_count-1]->label     = NULL;
+			state->result_devices_stateful[state->result_stateful_count-1]->mnt_point = NULL;
+			state->result_devices_stateful[state->result_stateful_count-1]->mnt_opts  = NULL;
+
+			state->result_devices_stateful[state->result_stateful_count-1]->type = dtmd_string_to_device_type(cmd->args[1]);
+			if (state->result_devices_stateful[state->result_stateful_count-1]->type == dtmd_removable_media_unknown_or_persistent)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices_stateful[state->result_stateful_count-1]->state = dtmd_string_to_device_state(cmd->args[2]);
+			if (state->result_devices_stateful[state->result_stateful_count-1]->state == dtmd_removable_media_state_unknown)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_devices_stateful[state->result_stateful_count-1]->path      = cmd->args[0];
+			state->result_devices_stateful[state->result_stateful_count-1]->fstype    = cmd->args[3];
+			state->result_devices_stateful[state->result_stateful_count-1]->label     = cmd->args[4];
+			state->result_devices_stateful[state->result_stateful_count-1]->mnt_point = cmd->args[5];
+			state->result_devices_stateful[state->result_stateful_count-1]->mnt_opts  = cmd->args[6];
+
+			cmd->args[0] = NULL;
+			cmd->args[3] = NULL;
+			cmd->args[4] = NULL;
+			cmd->args[5] = NULL;
+			cmd->args[6] = NULL;
+
+			if (!dtmd_helper_validate_stateful_device(state->result_devices_stateful[state->result_stateful_count-1]))
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+		}
+		else
+		{
+			handle->result_state = dtmd_invalid_state;
+			return dtmd_helper_result_error;
+		}
+	}
+	else
+	{
+		if ((handle->library_state == dtmd_state_default)
+			&& (dtmd_helper_is_helper_enum_all(cmd)))
+		{
+			if (strcmp(cmd->cmd, dtmd_response_started) == 0)
+			{
+				state->got_started = 1;
+				handle->library_state = dtmd_state_in_enum_all;
+			}
+			else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			{
+				handle->result_state = dtmd_command_failed;
+				handle->library_state = dtmd_state_default;
+				return dtmd_helper_result_exit;
+			}
+		}
+		else
+		{
+			res = dtmd_helper_handle_cmd(handle, cmd);
+
+			if (res != dtmd_ok)
+			{
+				handle->result_state = res;
+
+				if (dtmd_helper_is_state_invalid(res))
+				{
+					return dtmd_helper_result_error;
+				}
+				else
+				{
+					return dtmd_helper_result_exit;
+				}
+			}
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static dtmd_helper_result_t dtmd_helper_process_list_device(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_device_t *params, dtmd_helper_state_list_device_t *state)
+{
+	dtmd_result_t res;
+	unsigned int partition;
+
+	if (state->got_started)
+	{
+		if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
+			&& (dtmd_helper_is_helper_list_device(cmd))
+			&& (strcmp(cmd->args[1], params->device_path) == 0))
+		{
+			handle->result_state = dtmd_ok;
+			handle->library_state = dtmd_state_default;
+			return dtmd_helper_result_exit;
+		}
+
+		if ((strcmp(cmd->cmd, dtmd_response_argument_device) == 0)
+			&& (cmd->args_count == 3)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[2] != NULL)
+			&& (state->result_device == NULL))
+		{
+			state->result_device = (dtmd_device_t*) malloc(sizeof(dtmd_device_t));
+			if (state->result_device == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_device->path = NULL;
+			state->result_device->partition = NULL;
+			state->result_device->partitions_count = 0;
+
+			state->result_device->type = dtmd_string_to_device_type(cmd->args[1]);
+			if (state->result_device->type == dtmd_removable_media_unknown_or_persistent)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_device->path = cmd->args[0];
+			cmd->args[0] = NULL;
+
+			if (!dtmd_helper_string_to_int(cmd->args[2], &(state->result_device->partitions_count)))
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			if (state->result_device->partitions_count > 0)
+			{
+				state->result_device->partition = (dtmd_partition_t**) malloc(sizeof(dtmd_partition_t*)*(state->result_device->partitions_count));
+				if (state->result_device->partition == NULL)
+				{
+					handle->result_state = dtmd_memory_error;
+					return dtmd_helper_result_error;
+				}
+
+				for (partition = 0; partition < state->result_device->partitions_count; ++partition)
+				{
+					state->result_device->partition[partition] = NULL;
+				}
+			}
+		}
+		else if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
+			&& (cmd->args_count == 6)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[3] != NULL))
+		{
+			if (state->result_device == NULL)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			if (strcmp(cmd->args[3], state->result_device->path) != 0)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			for (partition = 0; partition < state->result_device->partitions_count; ++partition)
+			{
+				if (state->result_device->partition[partition] == NULL)
+				{
+					break;
+				}
+			}
+
+			if (partition >= state->result_device->partitions_count)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_device->partition[partition] = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
+			if (state->result_device->partition[partition] == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_device->partition[partition]->path      = cmd->args[0];
+			state->result_device->partition[partition]->fstype    = cmd->args[1];
+			state->result_device->partition[partition]->label     = cmd->args[2];
+			state->result_device->partition[partition]->mnt_point = cmd->args[4];
+			state->result_device->partition[partition]->mnt_opts  = cmd->args[5];
+
+			cmd->args[0] = NULL;
+			cmd->args[1] = NULL;
+			cmd->args[2] = NULL;
+			cmd->args[4] = NULL;
+			cmd->args[5] = NULL;
+		}
+		else
+		{
+			handle->result_state = dtmd_invalid_state;
+			return dtmd_helper_result_error;
+		}
+	}
+	else
+	{
+		if ((handle->library_state == dtmd_state_default)
+			&& (dtmd_helper_is_helper_list_device(cmd))
+			&& (strcmp(cmd->args[1], params->device_path) == 0))
+		{
+			if (strcmp(cmd->cmd, dtmd_response_started) == 0)
+			{
+				state->got_started = 1;
+				handle->library_state = dtmd_state_in_list_device;
+			}
+			else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			{
+				handle->result_state = dtmd_command_failed;
+				handle->library_state = dtmd_state_default;
+				return dtmd_helper_result_exit;
+			}
+		}
+		else
+		{
+			res = dtmd_helper_handle_cmd(handle, cmd);
+
+			if (res != dtmd_ok)
+			{
+				handle->result_state = res;
+
+				if (dtmd_helper_is_state_invalid(res))
+				{
+					return dtmd_helper_result_error;
+				}
+				else
+				{
+					return dtmd_helper_result_exit;
+				}
+			}
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static dtmd_helper_result_t dtmd_helper_process_list_partition(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_partition_t *params, dtmd_helper_state_list_partition_t *state)
+{
+	dtmd_result_t res;
+
+	if (state->got_started)
+	{
+		if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
+			&& (dtmd_helper_is_helper_list_partition(cmd))
+			&& (strcmp(cmd->args[1], params->partition_path) == 0))
+		{
+			handle->result_state = dtmd_ok;
+			handle->library_state = dtmd_state_default;
+			return dtmd_helper_result_exit;
+		}
+
+		if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
+			&& (cmd->args_count == 6)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[3] != NULL)
+			&& (state->result_partition == NULL))
+		{
+			if (strcmp(cmd->args[0], params->partition_path) != 0)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_partition = (dtmd_partition_t*) malloc(sizeof(dtmd_partition_t));
+			if (state->result_partition == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_partition->path      = cmd->args[0];
+			state->result_partition->fstype    = cmd->args[1];
+			state->result_partition->label     = cmd->args[2];
+			state->result_partition->mnt_point = cmd->args[4];
+			state->result_partition->mnt_opts  = cmd->args[5];
+
+			cmd->args[0] = NULL;
+			cmd->args[1] = NULL;
+			cmd->args[2] = NULL;
+			cmd->args[4] = NULL;
+			cmd->args[5] = NULL;
+		}
+		else
+		{
+			handle->result_state = dtmd_invalid_state;
+			return dtmd_helper_result_error;
+		}
+	}
+	else
+	{
+		if ((handle->library_state == dtmd_state_default)
+			&& (dtmd_helper_is_helper_list_partition(cmd))
+			&& (strcmp(cmd->args[1], params->partition_path) == 0))
+		{
+			if (strcmp(cmd->cmd, dtmd_response_started) == 0)
+			{
+				state->got_started = 1;
+				handle->library_state = dtmd_state_in_list_partition;
+			}
+			else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			{
+				handle->result_state = dtmd_command_failed;
+				handle->library_state = dtmd_state_default;
+				return dtmd_helper_result_exit;
+			}
+		}
+		else
+		{
+			res = dtmd_helper_handle_cmd(handle, cmd);
+
+			if (res != dtmd_ok)
+			{
+				handle->result_state = res;
+
+				if (dtmd_helper_is_state_invalid(res))
+				{
+					return dtmd_helper_result_error;
+				}
+				else
+				{
+					return dtmd_helper_result_exit;
+				}
+			}
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static dtmd_helper_result_t dtmd_helper_process_list_stateful_device(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_stateful_device_t *params, dtmd_helper_state_list_stateful_device_t *state)
+{
+	dtmd_result_t res;
+
+	if (state->got_started)
+	{
+		if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
+			&& (dtmd_helper_is_helper_list_stateful_device(cmd))
+			&& (strcmp(cmd->args[1], params->device_path) == 0))
+		{
+			handle->result_state = dtmd_ok;
+			handle->library_state = dtmd_state_default;
+			return dtmd_helper_result_exit;
+		}
+
+		if ((strcmp(cmd->cmd, dtmd_response_argument_stateful_device) == 0)
+			&& (cmd->args_count == 7)
+			&& (cmd->args[0] != NULL)
+			&& (cmd->args[1] != NULL)
+			&& (cmd->args[2] != NULL)
+			&& (state->result_stateful_device == NULL))
+		{
+			if (strcmp(cmd->args[0], params->device_path) != 0)
+			{
+				handle->result_state = dtmd_io_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_stateful_device = (dtmd_stateful_device_t*) malloc(sizeof(dtmd_stateful_device_t));
+			if (state->result_stateful_device == NULL)
+			{
+				handle->result_state = dtmd_memory_error;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_stateful_device->path      = NULL;
+			state->result_stateful_device->fstype    = NULL;
+			state->result_stateful_device->label     = NULL;
+			state->result_stateful_device->mnt_point = NULL;
+			state->result_stateful_device->mnt_opts  = NULL;
+
+			state->result_stateful_device->type = dtmd_string_to_device_type(cmd->args[1]);
+			if (state->result_stateful_device->type == dtmd_removable_media_unknown_or_persistent)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_stateful_device->state = dtmd_string_to_device_state(cmd->args[2]);
+			if (state->result_stateful_device->state == dtmd_removable_media_state_unknown)
+			{
+				handle->result_state = dtmd_invalid_state;
+				return dtmd_helper_result_error;
+			}
+
+			state->result_stateful_device->path      = cmd->args[0];
+			state->result_stateful_device->fstype    = cmd->args[3];
+			state->result_stateful_device->label     = cmd->args[4];
+			state->result_stateful_device->mnt_point = cmd->args[5];
+			state->result_stateful_device->mnt_opts  = cmd->args[6];
+
+			cmd->args[0] = NULL;
+			cmd->args[3] = NULL;
+			cmd->args[4] = NULL;
+			cmd->args[5] = NULL;
+			cmd->args[6] = NULL;
+		}
+		else
+		{
+			handle->result_state = dtmd_invalid_state;
+			return dtmd_helper_result_error;
+		}
+	}
+	else
+	{
+		if ((handle->library_state == dtmd_state_default)
+			&& (dtmd_helper_is_helper_list_stateful_device(cmd))
+			&& (strcmp(cmd->args[1], params->device_path) == 0))
+		{
+			if (strcmp(cmd->cmd, dtmd_response_started) == 0)
+			{
+				state->got_started = 1;
+				handle->library_state = dtmd_state_in_list_stateful_device;
+			}
+			else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			{
+				handle->result_state = dtmd_command_failed;
+				handle->library_state = dtmd_state_default;
+				return dtmd_helper_result_exit;
+			}
+		}
+		else
+		{
+			res = dtmd_helper_handle_cmd(handle, cmd);
+
+			if (res != dtmd_ok)
+			{
+				handle->result_state = res;
+
+				if (dtmd_helper_is_state_invalid(res))
+				{
+					return dtmd_helper_result_error;
+				}
+				else
+				{
+					return dtmd_helper_result_exit;
+				}
+			}
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static dtmd_helper_result_t dtmd_helper_process_mount(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_mount_t *params, void *state)
+{
+	dtmd_result_t res;
+
+	if ((handle->library_state == dtmd_state_default)
+		&& (dtmd_helper_is_helper_mount(cmd))
+		&& (strcmp(cmd->args[1], params->path) == 0)
+		&& (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], params->mount_options) == 0))
+			|| ((cmd->args[2] == NULL) && (params->mount_options == NULL))))
+	{
+		if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
+		{
+			handle->result_state = dtmd_ok;
+			return dtmd_helper_result_exit;
+		}
+		else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+		{
+			handle->result_state = dtmd_command_failed;
+			return dtmd_helper_result_exit;
+		}
+	}
+	else
+	{
+		res = dtmd_helper_handle_cmd(handle, cmd);
+
+		if (res != dtmd_ok)
+		{
+			handle->result_state = res;
+
+			if (dtmd_helper_is_state_invalid(res))
+			{
+				return dtmd_helper_result_error;
+			}
+			else
+			{
+				return dtmd_helper_result_exit;
+			}
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static dtmd_helper_result_t dtmd_helper_process_unmount(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_unmount_t *params, void *state)
+{
+	dtmd_result_t res;
+
+	if ((handle->library_state == dtmd_state_default)
+		&& (dtmd_helper_is_helper_unmount(cmd))
+		&& (strcmp(cmd->args[1], params->path) == 0))
+	{
+		if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
+		{
+			handle->result_state = dtmd_ok;
+			return dtmd_helper_result_exit;
+		}
+		else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+		{
+			handle->result_state = dtmd_command_failed;
+			return dtmd_helper_result_exit;
+		}
+	}
+	else
+	{
+		res = dtmd_helper_handle_cmd(handle, cmd);
+
+		if (res != dtmd_ok)
+		{
+			handle->result_state = res;
+
+			if (dtmd_helper_is_state_invalid(res))
+			{
+				return dtmd_helper_result_error;
+			}
+			else
+			{
+				return dtmd_helper_result_exit;
+			}
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static int dtmd_helper_exit_enum_devices(dtmd_t *handle, dtmd_helper_state_enum_devices_t *state)
 {
 	if (handle->result_state == dtmd_ok)
 	{
-		if ((!(((dtmd_helper_state_enum_devices_t*) state)->got_devices_count))
-			|| (!(((dtmd_helper_state_enum_devices_t*) state)->got_stateful_devices_count))
-			|| ((((dtmd_helper_state_enum_devices_t*) state)->result_count) != (((dtmd_helper_state_enum_devices_t*) state)->expected_devices_count))
-			|| ((((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count) != (((dtmd_helper_state_enum_devices_t*) state)->expected_stateful_devices_count)))
+		if ((!(state->got_devices_count))
+			|| (!(state->got_stateful_devices_count))
+			|| ((state->result_count) != (state->expected_devices_count))
+			|| ((state->result_stateful_count) != (state->expected_stateful_devices_count)))
 		{
 			handle->result_state = dtmd_invalid_state;
 			return 0;
 		}
 
-		if ((((dtmd_helper_state_enum_devices_t*) state)->expected_devices_count > 0)
-			&& (((dtmd_helper_state_enum_devices_t*) state)->result_devices != NULL)
-			&& ((((dtmd_helper_state_enum_devices_t*) state)->result_devices[((dtmd_helper_state_enum_devices_t*) state)->result_count-1] == NULL)
-				|| (!dtmd_helper_validate_device(((dtmd_helper_state_enum_devices_t*) state)->result_devices[((dtmd_helper_state_enum_devices_t*) state)->result_count-1]))))
+		if ((state->expected_devices_count > 0)
+			&& (state->result_devices != NULL)
+			&& ((state->result_devices[state->result_count-1] == NULL)
+				|| (!dtmd_helper_validate_device(state->result_devices[state->result_count-1]))))
 		{
 			handle->result_state = dtmd_invalid_state;
 			return 0;
 		}
 
-		if ((((dtmd_helper_state_enum_devices_t*) state)->expected_stateful_devices_count > 0)
-			&& (((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful != NULL)
-			&& (((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful[((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count-1] == NULL))
+		if ((state->expected_stateful_devices_count > 0)
+			&& (state->result_devices_stateful != NULL)
+			&& (state->result_devices_stateful[state->result_stateful_count-1] == NULL))
 		{
 			handle->result_state = dtmd_invalid_state;
 			return 0;
@@ -2433,43 +2504,43 @@ static int dtmd_helper_exit_enum_devices(dtmd_t *handle, void *state)
 	return 1;
 }
 
-static void dtmd_helper_exit_clear_enum_devices(void *state)
+static void dtmd_helper_exit_clear_enum_devices(dtmd_helper_state_enum_devices_t *state)
 {
 	unsigned int device;
 
-	if (((dtmd_helper_state_enum_devices_t*) state)->result_devices != NULL)
+	if (state->result_devices != NULL)
 	{
-		for (device = 0; device < ((dtmd_helper_state_enum_devices_t*) state)->result_count; ++device)
+		for (device = 0; device < state->result_count; ++device)
 		{
-			if (((dtmd_helper_state_enum_devices_t*) state)->result_devices[device] != NULL)
+			if (state->result_devices[device] != NULL)
 			{
-				dtmd_helper_free_device(((dtmd_helper_state_enum_devices_t*) state)->result_devices[device]);
+				dtmd_helper_free_device(state->result_devices[device]);
 			}
 		}
 
-		free(((dtmd_helper_state_enum_devices_t*) state)->result_devices);
+		free(state->result_devices);
 	}
 
-	if (((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful != NULL)
+	if (state->result_devices_stateful != NULL)
 	{
-		for (device = 0; device < ((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count; ++device)
+		for (device = 0; device < state->result_stateful_count; ++device)
 		{
-			if (((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful[device] != NULL)
+			if (state->result_devices_stateful[device] != NULL)
 			{
-				dtmd_helper_free_stateful_device(((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful[device]);
+				dtmd_helper_free_stateful_device(state->result_devices_stateful[device]);
 			}
 		}
 
-		free(((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful);
+		free(state->result_devices_stateful);
 	}
 
-	((dtmd_helper_state_enum_devices_t*) state)->result_devices          = NULL;
-	((dtmd_helper_state_enum_devices_t*) state)->result_count            = 0;
-	((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful = NULL;
-	((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count   = 0;
+	state->result_devices          = NULL;
+	state->result_count            = 0;
+	state->result_devices_stateful = NULL;
+	state->result_stateful_count   = 0;
 }
 
-static int dtmd_helper_exit_list_device(dtmd_t *handle, void *state)
+static int dtmd_helper_exit_list_device(dtmd_t *handle, dtmd_helper_state_list_device_t *state)
 {
 	if (handle->result_state == dtmd_ok)
 	{
@@ -2488,7 +2559,7 @@ static int dtmd_helper_exit_list_device(dtmd_t *handle, void *state)
 	return 1;
 }
 
-static void dtmd_helper_exit_clear_list_device(void *state)
+static void dtmd_helper_exit_clear_list_device(dtmd_helper_state_list_device_t *state)
 {
 	if (((dtmd_helper_state_list_device_t*) state)->result_device != NULL)
 	{
@@ -2498,7 +2569,7 @@ static void dtmd_helper_exit_clear_list_device(void *state)
 	((dtmd_helper_state_list_device_t*) state)->result_device = NULL;
 }
 
-static int dtmd_helper_exit_list_partition(dtmd_t *handle, void *state)
+static int dtmd_helper_exit_list_partition(dtmd_t *handle, dtmd_helper_state_list_partition_t *state)
 {
 	if (handle->result_state == dtmd_ok)
 	{
@@ -2517,7 +2588,7 @@ static int dtmd_helper_exit_list_partition(dtmd_t *handle, void *state)
 	return 1;
 }
 
-static void dtmd_helper_exit_clear_list_partition(void *state)
+static void dtmd_helper_exit_clear_list_partition(dtmd_helper_state_list_partition_t *state)
 {
 	if (((dtmd_helper_state_list_partition_t*) state)->result_partition != NULL)
 	{
@@ -2527,7 +2598,7 @@ static void dtmd_helper_exit_clear_list_partition(void *state)
 	((dtmd_helper_state_list_partition_t*) state)->result_partition = NULL;
 }
 
-static int dtmd_helper_exit_list_stateful_device(dtmd_t *handle, void *state)
+static int dtmd_helper_exit_list_stateful_device(dtmd_t *handle, dtmd_helper_state_list_stateful_device_t *state)
 {
 	if (handle->result_state == dtmd_ok)
 	{
@@ -2546,7 +2617,7 @@ static int dtmd_helper_exit_list_stateful_device(dtmd_t *handle, void *state)
 	return 1;
 }
 
-static void dtmd_helper_exit_clear_list_stateful_device(void *state)
+static void dtmd_helper_exit_clear_list_stateful_device(dtmd_helper_state_list_stateful_device_t *state)
 {
 	if (((dtmd_helper_state_list_stateful_device_t*) state)->result_stateful_device != NULL)
 	{
