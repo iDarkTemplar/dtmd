@@ -59,6 +59,32 @@ struct dtmd_library
 	char buffer[dtmd_command_max_length + 1];
 };
 
+typedef struct dtmd_helper_dprintf_params_list_device
+{
+	const char *device_path;
+} dtmd_helper_dprintf_params_list_device_t;
+
+typedef struct dtmd_helper_dprintf_params_list_partition
+{
+	const char *partition_path;
+} dtmd_helper_dprintf_params_list_partition_t;
+
+typedef struct dtmd_helper_dprintf_params_list_stateful_device
+{
+	const char *device_path;
+} dtmd_helper_dprintf_params_list_stateful_device_t;
+
+typedef struct dtmd_helper_dprintf_params_mount
+{
+	const char *path;
+	const char *mount_options;
+} dtmd_helper_dprintf_params_mount_t;
+
+typedef struct dtmd_helper_dprintf_params_unmount
+{
+	const char *path;
+} dtmd_helper_dprintf_params_unmount_t;
+
 static void* dtmd_worker_function(void *arg);
 
 static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dtmd_command_t *cmd);
@@ -89,6 +115,13 @@ static int dtmd_helper_validate_stateful_device(dtmd_stateful_device_t *stateful
 
 static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
+
+static int dtmd_helper_dprintf_list_devices(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_list_device(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_list_partition(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_list_stateful_device(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args);
 
 dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
 {
@@ -371,7 +404,7 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 		}
 	}
 
-	if (dprintf(handle->socket_fd, dtmd_command_enum_all "()\n") < 0)
+	if (dtmd_helper_dprintf_list_devices(handle, NULL) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_enum_all_error_1;
@@ -838,6 +871,8 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 	dtmd_device_t *result_device = NULL;
 	unsigned int partition;
 
+	dtmd_helper_dprintf_params_list_device_t dprintf_params;
+
 	if (handle == NULL)
 	{
 		return dtmd_library_not_initialized;
@@ -868,7 +903,9 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 		}
 	}
 
-	if (dprintf(handle->socket_fd, dtmd_command_list_device "(\"%s\")\n", device_path) < 0)
+	dprintf_params.device_path = device_path;
+
+	if (dtmd_helper_dprintf_list_device(handle, &dprintf_params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_list_device_error_1;
@@ -1123,6 +1160,8 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 	int got_started = 0;
 	dtmd_partition_t *result_partition = NULL;
 
+	dtmd_helper_dprintf_params_list_partition_t dprintf_params;
+
 	if (handle == NULL)
 	{
 		return dtmd_library_not_initialized;
@@ -1153,7 +1192,9 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 		}
 	}
 
-	if (dprintf(handle->socket_fd, dtmd_command_list_partition "(\"%s\")\n", partition_path) < 0)
+	dprintf_params.partition_path = partition_path;
+
+	if (dtmd_helper_dprintf_list_partition(handle, &dprintf_params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_list_partition_error_1;
@@ -1334,6 +1375,8 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 	int got_started = 0;
 	dtmd_stateful_device_t *result_stateful_device = NULL;
 
+	dtmd_helper_dprintf_params_list_stateful_device_t dprintf_params;
+
 	if (handle == NULL)
 	{
 		return dtmd_library_not_initialized;
@@ -1364,7 +1407,9 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 		}
 	}
 
-	if (dprintf(handle->socket_fd, dtmd_command_list_stateful_device "(\"%s\")\n", device_path) < 0)
+	dprintf_params.device_path = device_path;
+
+	if (dtmd_helper_dprintf_list_stateful_device(handle, &dprintf_params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_list_stateful_device_error_1;
@@ -1565,6 +1610,8 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 	struct timespec time_cur, time_end;
 	char *eol;
 
+	dtmd_helper_dprintf_params_mount_t dprintf_params;
+
 	if (handle == NULL)
 	{
 		return dtmd_library_not_initialized;
@@ -1595,11 +1642,10 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 		}
 	}
 
-	if (dprintf(handle->socket_fd, dtmd_command_mount "(\"%s\", %s%s%s)\n", path,
-		(mount_options != NULL) ? ("\"") : (""),
-		(mount_options != NULL) ? (mount_options) : ("nil"),
-		(mount_options != NULL) ? ("\"") : ("")
-		) < 0)
+	dprintf_params.path = path;
+	dprintf_params.mount_options = mount_options;
+
+	if (dtmd_helper_dprintf_mount(handle, &dprintf_params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_mount_error_1;
@@ -1698,6 +1744,8 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 	struct timespec time_cur, time_end;
 	char *eol;
 
+	dtmd_helper_dprintf_params_unmount_t dprintf_params;
+
 	if (handle == NULL)
 	{
 		return dtmd_library_not_initialized;
@@ -1728,7 +1776,9 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 		}
 	}
 
-	if (dprintf(handle->socket_fd, dtmd_command_unmount "(\"%s\")\n", path) < 0)
+	dprintf_params.path = path;
+
+	if (dtmd_helper_dprintf_unmount(handle, &dprintf_params) < 0)
 	{
 		handle->result_state = dtmd_io_error;
 		goto dtmd_unmount_error_1;
@@ -2369,4 +2419,42 @@ static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct t
 	handle->buffer[handle->cur_pos] = 0;
 
 	return dtmd_ok;
+}
+
+static int dtmd_helper_dprintf_list_devices(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_enum_all "()\n");
+}
+
+static int dtmd_helper_dprintf_list_device(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_list_device "(\"%s\")\n",
+		((dtmd_helper_dprintf_params_list_device_t*) args)->device_path);
+}
+
+static int dtmd_helper_dprintf_list_partition(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_list_partition "(\"%s\")\n",
+		((dtmd_helper_dprintf_params_list_partition_t*) args)->partition_path);
+}
+
+static int dtmd_helper_dprintf_list_stateful_device(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_list_stateful_device "(\"%s\")\n",
+		((dtmd_helper_dprintf_params_list_stateful_device_t*) args)->device_path);
+}
+
+static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_mount "(\"%s\", %s%s%s)\n",
+		((dtmd_helper_dprintf_params_mount_t*) args)->path,
+		(((dtmd_helper_dprintf_params_mount_t*) args)->mount_options != NULL) ? ("\"") : (""),
+		(((dtmd_helper_dprintf_params_mount_t*) args)->mount_options != NULL) ? (((dtmd_helper_dprintf_params_mount_t*) args)->mount_options) : ("nil"),
+		(((dtmd_helper_dprintf_params_mount_t*) args)->mount_options != NULL) ? ("\"") : (""));
+}
+
+static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_unmount "(\"%s\")\n",
+		((dtmd_helper_dprintf_params_unmount_t*) args)->path);
 }
