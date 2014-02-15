@@ -324,7 +324,7 @@ dtmd_worker_function_exit:
 
 dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *device_count, dtmd_device_t ***result, unsigned int *stateful_device_count, dtmd_stateful_device_t ***result_stateful)
 {
-	char data = 1;
+	char data = 0;
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
@@ -439,7 +439,8 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 					&& (cmd->args_count == 3)
 					&& (cmd->args[0] != NULL)
 					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL))
+					&& (cmd->args[2] != NULL)
+					&& (got_devices_count != 0))
 				{
 					if (result_count > 0)
 					{
@@ -510,7 +511,8 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 					&& (cmd->args_count == 6)
 					&& (cmd->args[0] != NULL)
 					&& (cmd->args[1] != NULL)
-					&& (cmd->args[3] != NULL))
+					&& (cmd->args[3] != NULL)
+					&& (got_devices_count != 0))
 				{
 					if (result_count == 0)
 					{
@@ -597,7 +599,8 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 					&& (cmd->args_count == 7)
 					&& (cmd->args[0] != NULL)
 					&& (cmd->args[1] != NULL)
-					&& (cmd->args[2] != NULL))
+					&& (cmd->args[2] != NULL)
+					&& (got_stateful_devices_count != 0))
 				{
 					++result_stateful_count;
 
@@ -732,6 +735,7 @@ dtmd_enum_all_exit_1:
 			|| (result_stateful_count != expected_stateful_devices_count))
 		{
 			handle->result_state = dtmd_invalid_state;
+			goto dtmd_enum_all_error_1;
 		}
 
 		if ((expected_devices_count > 0)
@@ -745,7 +749,8 @@ dtmd_enum_all_exit_1:
 
 		if ((expected_stateful_devices_count > 0)
 			&& (result_devices_stateful != NULL)
-			&& (result_devices_stateful[result_stateful_count-1] == NULL))
+			&& ((result_devices_stateful[result_stateful_count-1] == NULL)
+				|| (!dtmd_helper_validate_stateful_device(result_devices_stateful[result_stateful_count-1]))))
 		{
 			handle->result_state = dtmd_invalid_state;
 			goto dtmd_enum_all_error_1;
@@ -791,7 +796,6 @@ dtmd_enum_all_exit_1:
 	}
 
 	sem_post(&(handle->caller_socket));
-
 	return handle->result_state;
 
 dtmd_enum_all_error_1:
@@ -821,7 +825,11 @@ dtmd_enum_all_error_1:
 		free(result_devices_stateful);
 	}
 
-	data = 0;
+	*result                = NULL;
+	*device_count          = 0;
+	*result_stateful       = NULL;
+	*stateful_device_count = 0;
+
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
 	return handle->result_state;
@@ -829,7 +837,7 @@ dtmd_enum_all_error_1:
 
 dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_path, dtmd_device_t **result)
 {
-	char data = 1;
+	char data = 0;
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
@@ -1098,7 +1106,6 @@ dtmd_list_device_exit_1:
 	}
 
 	sem_post(&(handle->caller_socket));
-
 	return handle->result_state;
 
 dtmd_list_device_error_1:
@@ -1107,7 +1114,6 @@ dtmd_list_device_error_1:
 		dtmd_helper_free_device(result_device);
 	}
 
-	data = 0;
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
 	return handle->result_state;
@@ -1115,7 +1121,7 @@ dtmd_list_device_error_1:
 
 dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *partition_path, dtmd_partition_t **result)
 {
-	char data = 1;
+	char data = 0;
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
@@ -1309,7 +1315,6 @@ dtmd_list_partition_exit_1:
 	}
 
 	sem_post(&(handle->caller_socket));
-
 	return handle->result_state;
 
 dtmd_list_partition_error_1:
@@ -1318,7 +1323,8 @@ dtmd_list_partition_error_1:
 		dtmd_helper_free_partition(result_partition);
 	}
 
-	data = 0;
+	*result = NULL;
+
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
 	return handle->result_state;
@@ -1326,7 +1332,7 @@ dtmd_list_partition_error_1:
 
 dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char *device_path, dtmd_stateful_device_t **result)
 {
-	char data = 1;
+	char data = 0;
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
@@ -1542,7 +1548,6 @@ dtmd_list_stateful_device_exit_1:
 	}
 
 	sem_post(&(handle->caller_socket));
-
 	return handle->result_state;
 
 dtmd_list_stateful_device_error_1:
@@ -1551,7 +1556,8 @@ dtmd_list_stateful_device_error_1:
 		dtmd_helper_free_stateful_device(result_stateful_device);
 	}
 
-	data = 0;
+	*result = NULL;
+
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
 	return handle->result_state;
@@ -1559,7 +1565,7 @@ dtmd_list_stateful_device_error_1:
 
 dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_options)
 {
-	char data = 1;
+	char data = 0;
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
@@ -1624,7 +1630,7 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 				&& (dtmd_helper_is_helper_mount(cmd))
 				&& (strcmp(cmd->args[1], path) == 0)
 				&& (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], mount_options) == 0))
-					|| (cmd->args[2] == NULL)))
+					|| ((cmd->args[2] == NULL) && (mount_options == NULL))))
 			{
 				if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
 				{
@@ -1684,7 +1690,6 @@ dtmd_mount_exit_1:
 	return handle->result_state;
 
 dtmd_mount_error_1:
-	data = 0;
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
 	return handle->result_state;
@@ -1692,7 +1697,7 @@ dtmd_mount_error_1:
 
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 {
-	char data = 1;
+	char data = 0;
 	dtmd_command_t *cmd;
 	dtmd_result_t res;
 	struct timespec time_cur, time_end;
@@ -1811,7 +1816,6 @@ dtmd_unmount_exit_1:
 	return handle->result_state;
 
 dtmd_unmount_error_1:
-	data = 0;
 	write(handle->pipes[1], &data, sizeof(char));
 	sem_post(&(handle->caller_socket));
 	return handle->result_state;
