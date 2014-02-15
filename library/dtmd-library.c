@@ -1369,7 +1369,8 @@ static dtmd_helper_result_t dtmd_helper_process_enum_devices(dtmd_t *handle, dtm
 			&& (cmd->args_count == 3)
 			&& (cmd->args[0] != NULL)
 			&& (cmd->args[1] != NULL)
-			&& (cmd->args[2] != NULL))
+			&& (cmd->args[2] != NULL)
+			&& (state->got_devices_count != 0))
 		{
 			if (state->result_count > 0)
 			{
@@ -1434,7 +1435,8 @@ static dtmd_helper_result_t dtmd_helper_process_enum_devices(dtmd_t *handle, dtm
 			&& (cmd->args_count == 6)
 			&& (cmd->args[0] != NULL)
 			&& (cmd->args[1] != NULL)
-			&& (cmd->args[3] != NULL))
+			&& (cmd->args[3] != NULL)
+			&& (state->got_devices_count != 0))
 		{
 			if (state->result_count == 0)
 			{
@@ -1515,7 +1517,8 @@ static dtmd_helper_result_t dtmd_helper_process_enum_devices(dtmd_t *handle, dtm
 			&& (cmd->args_count == 7)
 			&& (cmd->args[0] != NULL)
 			&& (cmd->args[1] != NULL)
-			&& (cmd->args[2] != NULL))
+			&& (cmd->args[2] != NULL)
+			&& (state->got_stateful_devices_count != 0))
 		{
 			++(state->result_stateful_count);
 
@@ -2104,7 +2107,8 @@ static int dtmd_helper_exit_enum_devices(dtmd_t *handle, void *state)
 
 		if ((((dtmd_helper_state_enum_devices_t*) state)->expected_stateful_devices_count > 0)
 			&& (((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful != NULL)
-			&& (((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful[((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count-1] == NULL))
+			&& ((((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful[((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count-1] == NULL)
+				|| (!dtmd_helper_validate_stateful_device(((dtmd_helper_state_enum_devices_t*) state)->result_devices_stateful[((dtmd_helper_state_enum_devices_t*) state)->result_stateful_count-1]))))
 		{
 			handle->result_state = dtmd_invalid_state;
 			return 0;
