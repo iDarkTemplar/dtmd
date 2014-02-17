@@ -1022,7 +1022,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 		return NULL;
 	}
 
-	mount_path_len = strlen(dtmd_internal_mount_dir);
+	mount_path_len = strlen((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
 	mount_dev_len += mount_path_len + 1;
 
 	mount_path = (char*) malloc(mount_dev_len + 1);
@@ -1031,7 +1031,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 		return NULL;
 	}
 
-	memcpy(mount_path, dtmd_internal_mount_dir, mount_path_len);
+	memcpy(mount_path, (mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir, mount_path_len);
 	mount_path[mount_path_len] = '/';
 
 	switch (*mount_type)

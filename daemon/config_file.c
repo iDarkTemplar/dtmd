@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 #ifndef CONFIG_DIR
 #error CONFIG_DIR is not defined
@@ -33,6 +34,7 @@
 
 int unmount_on_exit = 0;
 enum mount_by_value_enum mount_by_value = mount_by_device_name;
+char *mount_dir = NULL;
 
 static const char *config_unmount_on_exit = "unmount_on_exit";
 static const char *config_unmount_on_exit_yes = "yes";
@@ -42,35 +44,46 @@ static const char *config_mount_by = "mount_by";
 static const char *config_mount_by_name = "name";
 static const char *config_mount_by_label = "label";
 
-static void process_config_value(const char *key_start, size_t key_length, const char *value_start, size_t value_length)
+static const char *config_mount_dir = "mount_dir";
+
+static void process_config_value(const char *key, const char *value)
 {
-	if ((key_length == strlen(config_unmount_on_exit))
-		&& (strncmp(key_start, config_unmount_on_exit, key_length) == 0))
+	struct stat st;
+
+	if (strcmp(key, config_unmount_on_exit) == 0)
 	{
-		if ((value_length == strlen(config_unmount_on_exit_yes))
-			&& (strncmp(value_start, config_unmount_on_exit_yes, value_length) == 0))
+		if (strcmp(value, config_unmount_on_exit_yes) == 0)
 		{
 			unmount_on_exit = 1;
 		}
-		else if ((value_length == strlen(config_unmount_on_exit_no))
-			&& (strncmp(value_start, config_unmount_on_exit_no, value_length)) == 0)
+		else if (strcmp(value, config_unmount_on_exit_no) == 0)
 		{
 			unmount_on_exit = 0;
 		}
 	}
 
-	if ((key_length == strlen(config_mount_by))
-		&& (strncmp(key_start, config_mount_by, key_length) == 0))
+	if (strcmp(key, config_mount_by) == 0)
 	{
-		if ((value_length == strlen(config_mount_by_name))
-			&& (strncmp(value_start, config_mount_by_name, value_length) == 0))
+		if (strcmp(value, config_mount_by_name) == 0)
 		{
 			mount_by_value = mount_by_device_name;
 		}
-		else if ((value_length == strlen(config_mount_by_label))
-			&& (strncmp(value_start, config_mount_by_label, value_length)) == 0)
+		else if (strcmp(value, config_mount_by_label) == 0)
 		{
 			mount_by_value = mount_by_device_label;
+		}
+	}
+
+	if (strcmp(key, config_mount_dir) == 0)
+	{
+		if ((stat(value, &st) == 0) && (S_ISDIR(st.st_mode)))
+		{
+			if (mount_dir != NULL)
+			{
+				free(mount_dir);
+			}
+
+			mount_dir = strdup(value);
 		}
 	}
 }
@@ -100,7 +113,11 @@ void read_config(void)
 
 		for (i = 0; i < read_size; ++i)
 		{
-			if ((isalnum(buffer[i])) || (buffer[i] == '_'))
+			if ((isalnum(buffer[i]))
+				|| (buffer[i] == '_')
+				|| (buffer[i] == '-')
+				|| (buffer[i] == '.')
+				|| (buffer[i] == '/'))
 			{
 				if (key_start == -1)
 				{
@@ -179,7 +196,10 @@ void read_config(void)
 
 		if (value_end != -1)
 		{
-			process_config_value(&(buffer[key_start]), key_end - key_start, &(buffer[value_start]), value_end - value_start);
+			buffer[key_end] = 0;
+			buffer[value_end] = 0;
+
+			process_config_value(&(buffer[key_start]), &(buffer[value_start]));
 		}
 	}
 
@@ -193,4 +213,9 @@ void read_config(void)
 
 void free_config(void)
 {
+	if (mount_dir != NULL)
+	{
+		free(mount_dir);
+		mount_dir = NULL;
+	}
 }

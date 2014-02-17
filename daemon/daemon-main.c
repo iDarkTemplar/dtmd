@@ -807,7 +807,7 @@ int main(int argc, char **argv)
 	}
 
 exit_8:
-	remove_empty_dirs(dtmd_internal_mount_dir);
+	remove_empty_dirs((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
 	unlink(dtmd_internal_mtab_temporary);
 
 	free(pollfds);
