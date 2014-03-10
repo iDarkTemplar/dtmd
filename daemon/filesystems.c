@@ -140,9 +140,6 @@ static const struct mount_option vfat_allow[] =
 	{ "iocharset=",   1 },
 	{ "showexec",     0 },
 	{ "blocksize=",   1 },
-	{ "umask=",       1 },
-	{ "dmask=",       1 },
-	{ "fmask=",       1 },
 	{ "allow_utime=", 1 },
 	{ "check=",       1 },
 	{ "conv=",        1 },
@@ -185,6 +182,8 @@ static const struct mount_option udf_allow[] =
 	{ "undelete",   0 },
 	{ NULL,         0 }
 };
+
+// TODO: move default mount options into config?
 
 static const struct filesystem_options filesystem_mount_options[] =
 {
