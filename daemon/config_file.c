@@ -36,6 +36,15 @@ int unmount_on_exit = 0;
 enum mount_by_value_enum mount_by_value = mount_by_device_name;
 char *mount_dir = NULL;
 
+struct default_mount_opts
+{
+	char *fs_type;
+	char *opts;
+};
+
+struct default_mount_opts **default_mount_opts_array = NULL;
+unsigned int default_mount_opts_array_size = 0;
+
 static const char *config_unmount_on_exit = "unmount_on_exit";
 static const char *config_unmount_on_exit_yes = "yes";
 static const char *config_unmount_on_exit_no = "no";
@@ -46,35 +55,126 @@ static const char *config_mount_by_label = "label";
 
 static const char *config_mount_dir = "mount_dir";
 
-static void process_config_value(const char *key, const char *value)
+static const char *config_default_mount_opts = "default_mount_opts_";
+
+static int insert_mount_opts_into_array(char *fs_name, char *fs_opts)
+{
+	void *tmp;
+	struct default_mount_opts *array_item;
+	unsigned int item = 0;
+
+	for ( ; item < default_mount_opts_array_size; ++item)
+	{
+		if (strcmp(fs_name, default_mount_opts_array[item]->fs_type) == 0)
+		{
+			break;
+		}
+	}
+
+	if (item < default_mount_opts_array_size)
+	{
+		free(fs_name);
+		free(default_mount_opts_array[item]->opts);
+		default_mount_opts_array[item]->opts = fs_opts;
+
+		return 0;
+	}
+	else
+	{
+		array_item = (struct default_mount_opts*) malloc(sizeof(struct default_mount_opts));
+		if (array_item == NULL)
+		{
+			goto insert_mount_opts_into_array_error_1;
+		}
+
+		tmp = realloc(default_mount_opts_array, (default_mount_opts_array_size + 1) * (sizeof(struct default_mount_opts*)));
+		if (tmp == NULL)
+		{
+			goto insert_mount_opts_into_array_error_2;
+		}
+
+		default_mount_opts_array = (struct default_mount_opts**) tmp;
+		++default_mount_opts_array_size;
+		array_item->fs_type = fs_name;
+		array_item->opts = fs_opts;
+		default_mount_opts_array[default_mount_opts_array_size - 1] = array_item;
+
+		return 1;
+	}
+
+insert_mount_opts_into_array_error_2:
+	free(array_item);
+
+insert_mount_opts_into_array_error_1:
+	free(fs_name);
+	free(fs_opts);
+
+	return -1;
+}
+
+static void free_mount_opts_array(void)
+{
+	unsigned int item = 0;
+
+	if (default_mount_opts_array != NULL)
+	{
+		for ( ; item < default_mount_opts_array_size; ++item)
+		{
+			if (default_mount_opts_array[item] != NULL)
+			{
+				if (default_mount_opts_array[item]->fs_type != NULL)
+				{
+					free(default_mount_opts_array[item]->fs_type);
+				}
+
+				if (default_mount_opts_array[item]->opts != NULL)
+				{
+					free(default_mount_opts_array[item]->opts);
+				}
+
+				free(default_mount_opts_array[item]);
+			}
+		}
+
+		free(default_mount_opts_array);
+		default_mount_opts_array = NULL;
+		default_mount_opts_array_size = 0;
+	}
+}
+
+static int process_config_value(const char *key, const char *value)
 {
 	struct stat st;
+	char *fs_name;
+	char *fs_opts;
 
 	if (strcmp(key, config_unmount_on_exit) == 0)
 	{
 		if (strcmp(value, config_unmount_on_exit_yes) == 0)
 		{
 			unmount_on_exit = 1;
+			return 1;
 		}
 		else if (strcmp(value, config_unmount_on_exit_no) == 0)
 		{
 			unmount_on_exit = 0;
+			return 1;
 		}
 	}
-
-	if (strcmp(key, config_mount_by) == 0)
+	else if (strcmp(key, config_mount_by) == 0)
 	{
 		if (strcmp(value, config_mount_by_name) == 0)
 		{
 			mount_by_value = mount_by_device_name;
+			return 1;
 		}
 		else if (strcmp(value, config_mount_by_label) == 0)
 		{
 			mount_by_value = mount_by_device_label;
+			return 1;
 		}
 	}
-
-	if (strcmp(key, config_mount_dir) == 0)
+	else if (strcmp(key, config_mount_dir) == 0)
 	{
 		if ((stat(value, &st) == 0) && (S_ISDIR(st.st_mode)))
 		{
@@ -84,11 +184,45 @@ static void process_config_value(const char *key, const char *value)
 			}
 
 			mount_dir = strdup(value);
+			if (mount_dir != NULL)
+			{
+				return 1;
+			}
 		}
 	}
+	else if (strncmp(key, config_default_mount_opts, strlen(config_default_mount_opts)) == 0)
+	{
+		if (strlen(key) > strlen(config_default_mount_opts))
+		{
+			if ((strlen(value) > 1)
+				&& (value[0] == '\"')
+				&& (value[strlen(value) - 1] == '\"'))
+			{
+				fs_name = strdup(&(key[strlen(config_default_mount_opts)]));
+
+				if (fs_name != NULL)
+				{
+					fs_opts = malloc(strlen(value) - 1);
+					if (fs_opts != NULL)
+					{
+						memcpy(fs_opts, &(value[1]), strlen(value) - 2);
+						fs_opts[strlen(value) - 2] = 0;
+
+						return insert_mount_opts_into_array(fs_name, fs_opts);
+					}
+					else
+					{
+						free(fs_name);
+					}
+				}
+			}
+		}
+	}
+
+	return -1;
 }
 
-void read_config(void)
+int read_config(void)
 {
 	FILE *file;
 	char *buffer = NULL;
@@ -98,11 +232,13 @@ void read_config(void)
 	ssize_t key_start, key_end;
 	ssize_t equal_start;
 	ssize_t value_start, value_end;
+	int inside_quotes = 0;
+	int rc = 0;
 
 	file = fopen(config_filename, "r");
 	if (file == NULL)
 	{
-		return;
+		return 0;
 	}
 
 	while ((read_size = getline(&buffer, &buffer_size, file)) > 0)
@@ -117,8 +253,17 @@ void read_config(void)
 				|| (buffer[i] == '_')
 				|| (buffer[i] == '-')
 				|| (buffer[i] == '.')
-				|| (buffer[i] == '/'))
+				|| (buffer[i] == '/')
+				|| (buffer[i] == '\"')
+				|| ((inside_quotes != 0)
+					&& ((buffer[i] == ',')
+						|| (buffer[i] == '='))))
 			{
+				if (buffer[i] == '\"')
+				{
+					inside_quotes = !inside_quotes;
+				}
+
 				if (key_start == -1)
 				{
 					key_start = i;
@@ -138,7 +283,8 @@ void read_config(void)
 				else
 				{
 					// error on line
-					break;
+					rc = -1;
+					goto read_config_exit;
 				}
 			}
 			else if (buffer[i] == '=')
@@ -155,7 +301,8 @@ void read_config(void)
 				else
 				{
 					// error on line
-					break;
+					rc = -1;
+					goto read_config_exit;
 				}
 			}
 			else if ((isblank(buffer[i])) || (buffer[i] == '#'))
@@ -181,16 +328,18 @@ void read_config(void)
 				{
 					value_end = i;
 				}
-				else
+				else if (value_start != -1)
 				{
 					// error on line
-					break;
+					rc = -1;
+					goto read_config_exit;
 				}
 			}
 			else
 			{
 				// error on line
-				break;
+				rc = -1;
+				goto read_config_exit;
 			}
 		}
 
@@ -199,16 +348,23 @@ void read_config(void)
 			buffer[key_end] = 0;
 			buffer[value_end] = 0;
 
-			process_config_value(&(buffer[key_start]), &(buffer[value_start]));
+			if (process_config_value(&(buffer[key_start]), &(buffer[value_start])) < 0)
+			{
+				rc = -1;
+				goto read_config_exit;
+			}
 		}
 	}
 
+read_config_exit:
 	fclose(file);
 
 	if (buffer != NULL)
 	{
 		free(buffer);
 	}
+
+	return rc;
 }
 
 void free_config(void)
@@ -218,4 +374,27 @@ void free_config(void)
 		free(mount_dir);
 		mount_dir = NULL;
 	}
+
+	free_mount_opts_array();
+}
+
+const char* get_mount_options_for_fs_from_config(const char *fstype)
+{
+	unsigned int item = 0;
+
+	if (default_mount_opts_array != NULL)
+	{
+		for ( ; item < default_mount_opts_array_size; ++item)
+		{
+			if ((default_mount_opts_array[item] != NULL)
+				&& (default_mount_opts_array[item]->fs_type != NULL)
+				&& (default_mount_opts_array[item]->opts != NULL)
+				&& (strcmp(fstype, default_mount_opts_array[item]->fs_type) == 0))
+			{
+				return default_mount_opts_array[item]->opts;
+			}
+		}
+	}
+
+	return NULL;
 }

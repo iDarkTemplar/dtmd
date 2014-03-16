@@ -453,7 +453,16 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	read_config();
+	if (read_config() < 0)
+	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error reading config file\n");
+		}
+
+		result = -1;
+		goto exit_7;
+	}
 
 	while ((rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)) > 0)
 	{

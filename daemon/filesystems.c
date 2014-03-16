@@ -400,37 +400,40 @@ static int invoke_mount_external(int client_number, const char *path, const char
 	// check flags
 	opt_start = mount_options;
 
-	while (opt_start != NULL)
+	if (*opt_start != 0)
 	{
-		opt_end = strchr(opt_start, ',');
-
-		if (opt_end != NULL)
+		while (opt_start != NULL)
 		{
-			opt_len = opt_end - opt_start;
-			++opt_end;
-		}
-		else
-		{
-			opt_len = strlen(opt_start);
-		}
+			opt_end = strchr(opt_start, ',');
 
-		if (opt_len == 0)
-		{
-			result = 0;
-			goto invoke_mount_external_error_1;
+			if (opt_end != NULL)
+			{
+				opt_len = opt_end - opt_start;
+				++opt_end;
+			}
+			else
+			{
+				opt_len = strlen(opt_start);
+			}
+
+			if (opt_len == 0)
+			{
+				result = 0;
+				goto invoke_mount_external_error_1;
+			}
+
+			// check option
+			if (!is_option_allowed(opt_start, opt_len, fsopts))
+			{
+				result = 0;
+				goto invoke_mount_external_error_1;
+			}
+
+			mount_all_opts_len += opt_len;
+			++mount_all_opts_len_cur;
+
+			opt_start = opt_end;
 		}
-
-		// check option
-		if (!is_option_allowed(opt_start, opt_len, fsopts))
-		{
-			result = 0;
-			goto invoke_mount_external_error_1;
-		}
-
-		mount_all_opts_len += opt_len;
-		++mount_all_opts_len_cur;
-
-		opt_start = opt_end;
 	}
 
 	// add uid/gid
@@ -643,55 +646,58 @@ static int invoke_mount_internal(int client_number, const char *path, const char
 	// check flags
 	opt_start = mount_options;
 
-	while (opt_start != NULL)
+	if (*opt_start != 0)
 	{
-		opt_end = strchr(opt_start, ',');
+		while (opt_start != NULL)
+		{
+			opt_end = strchr(opt_start, ',');
 
-		if (opt_end != NULL)
-		{
-			opt_len = opt_end - opt_start;
-			++opt_end;
-		}
-		else
-		{
-			opt_len = strlen(opt_start);
-		}
-
-		if (opt_len == 0)
-		{
-			result = 0;
-			goto invoke_mount_internal_error_1;
-		}
-
-		// check option
-		if (!is_option_allowed(opt_start, opt_len, fsopts))
-		{
-			result = 0;
-			goto invoke_mount_internal_error_1;
-		}
-
-		mntflagslist = string_to_mount_flag_list;
-		while (mntflagslist->option != NULL)
-		{
-			if (opt_len == strlen(mntflagslist->option)
-				&& (strncmp(opt_start, mntflagslist->option, opt_len) == 0))
+			if (opt_end != NULL)
 			{
-				break;
+				opt_len = opt_end - opt_start;
+				++opt_end;
+			}
+			else
+			{
+				opt_len = strlen(opt_start);
 			}
 
-			++mntflagslist;
+			if (opt_len == 0)
+			{
+				result = 0;
+				goto invoke_mount_internal_error_1;
+			}
+
+			// check option
+			if (!is_option_allowed(opt_start, opt_len, fsopts))
+			{
+				result = 0;
+				goto invoke_mount_internal_error_1;
+			}
+
+			mntflagslist = string_to_mount_flag_list;
+			while (mntflagslist->option != NULL)
+			{
+				if (opt_len == strlen(mntflagslist->option)
+					&& (strncmp(opt_start, mntflagslist->option, opt_len) == 0))
+				{
+					break;
+				}
+
+				++mntflagslist;
+			}
+
+			if (mntflagslist->option == NULL)
+			{
+				mount_opts_len += opt_len;
+				++mount_opts_len_cur;
+			}
+
+			mount_all_opts_len += opt_len;
+			++mount_all_opts_len_cur;
+
+			opt_start = opt_end;
 		}
-
-		if (mntflagslist->option == NULL)
-		{
-			mount_opts_len += opt_len;
-			++mount_opts_len_cur;
-		}
-
-		mount_all_opts_len += opt_len;
-		++mount_all_opts_len_cur;
-
-		opt_start = opt_end;
 	}
 
 	// add uid/gid
@@ -1126,6 +1132,22 @@ invoke_mount_exit_loop:
 
 	if (mount_options == NULL)
 	{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		if (fsopts->external_fstype != NULL)
+		{
+			mount_options = get_mount_options_for_fs_from_config(fsopts->external_fstype);
+		}
+		else
+		{
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+			mount_options = get_mount_options_for_fs_from_config(fsopts->fstype);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	}
+
+	if (mount_options == NULL)
+	{
 		mount_options = fsopts->defaults;
 	}
 
@@ -1187,10 +1209,10 @@ invoke_mount_exit_loop:
 	}
 	else
 	{
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		result = invoke_mount_internal(client_number, path, mount_options, mount_path, fsopts);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	}
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-	result = invoke_mount_internal(client_number, path, mount_options, mount_path, fsopts);
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	free(mount_path);

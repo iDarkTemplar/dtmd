@@ -35,8 +35,10 @@ extern int unmount_on_exit;
 extern enum mount_by_value_enum mount_by_value;
 extern char *mount_dir;
 
-void read_config(void);
+int read_config(void);
 void free_config(void);
+
+const char* get_mount_options_for_fs_from_config(const char *fstype);
 
 #ifdef __cplusplus
 }
