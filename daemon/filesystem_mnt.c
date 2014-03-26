@@ -18,11 +18,13 @@
  *
  */
 
-#include "daemon/filesystems.h"
+#include "daemon/filesystem_mnt.h"
 
 #include "daemon/dtmd-internal.h"
 #include "daemon/lists.h"
 #include "daemon/mnt_funcs.h"
+
+#include "daemon/filesystem_opts.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -110,213 +112,10 @@ static const struct string_to_mount_flag string_to_mount_flag_list[] =
 	{ NULL,          0,              0 }
 };
 
-struct mount_option
-{
-	const char * const option;
-	const unsigned char has_param;
-};
-
-struct filesystem_options
-{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	const char * const external_fstype;
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-	const char * const fstype;
-	const struct mount_option * const options;
-	const char * const option_uid;
-	const char * const option_gid;
-	const char * const defaults;
-};
-
-static const struct mount_option vfat_allow[] =
-{
-	{ "flush",        0 },
-	{ "utf8=",        1 },
-	{ "shortname=",   1 },
-	{ "umask=",       1 },
-	{ "dmask=",       1 },
-	{ "fmask=",       1 },
-	{ "codepage=",    1 },
-	{ "iocharset=",   1 },
-	{ "showexec",     0 },
-	{ "blocksize=",   1 },
-	{ "allow_utime=", 1 },
-	{ "check=",       1 },
-	{ "conv=",        1 },
-	{ NULL,           0 }
-};
-
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-static const struct mount_option ntfs3g_allow[] =
-{
-	{ "umask=",        1 },
-	{ "dmask=",        1 },
-	{ "fmask=",        1 },
-	{ "iocharset=",    1 },
-	{ "utf8",          0 },
-	{ "windows_names", 0 },
-	{ "allow_other",   0 },
-	{ NULL,            0 }
-};
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-
-static const struct mount_option iso9660_allow[] =
-{
-	{ "norock",     0 },
-	{ "nojoliet",   0 },
-	{ "iocharset=", 1 },
-	{ "mode=",      1 },
-	{ "dmode=",     1 },
-	{ "utf8",       0 },
-	{ "block=",     1 },
-	{ "conv=",      1 },
-	{ NULL,         0 }
-};
-
-static const struct mount_option udf_allow[] =
-{
-	{ "iocharset=", 1 },
-	{ "umask=",     1 },
-	{ "mode=",      1 },
-	{ "dmode=",     1 },
-	{ "undelete",   0 },
-	{ NULL,         0 }
-};
-
-// TODO: move default mount options into config?
-
-static const struct filesystem_options filesystem_mount_options[] =
-{
-	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		NULL, /* NOT EXTERNAL MOUNT */
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-		"vfat",
-		vfat_allow,
-		"uid=",
-		"gid=",
-		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
-	},
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	{
-		"ntfs-3g", /* EXTERNAL MOUNT */
-		"ntfs-3g",
-		ntfs3g_allow,
-		"uid=",
-		"gid=",
-		"rw,nodev,nosuid,allow_other,dmask=0077"
-	},
-	{
-		"ntfs-3g", /* EXTERNAL MOUNT */
-		"ntfs",
-		ntfs3g_allow,
-		"uid=",
-		"gid=",
-		"rw,nodev,nosuid,allow_other,dmask=0077"
-	},
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		NULL, /* NOT EXTERNAL MOUNT */
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-		"iso9660",
-		iso9660_allow,
-		"uid=",
-		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
-	},
-	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		NULL, /* NOT EXTERNAL MOUNT */
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-		"udf",
-		udf_allow,
-		"uid=",
-		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
-	},
-	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		NULL,
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL
-	}
-};
-
-static const struct mount_option any_fs_allowed_list[] =
-{
-	{ "exec",       0 },
-	{ "noexec",     0 },
-	{ "nodev",      0 },
-	{ "nosuid",     0 },
-	{ "atime",      0 },
-	{ "noatime",    0 },
-	{ "nodiratime", 0 },
-	{ "ro",         0 },
-	{ "rw",         0 },
-	{ "sync",       0 },
-	{ "dirsync",    0 },
-	{ NULL,         0 }
-};
-
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 static const char * const mount_ext_cmd = "/bin/mount";
 static const char * const unmount_ext_cmd = "/bin/umount";
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-
-static int is_option_allowed(const char *option, unsigned int option_len, const struct filesystem_options *filesystem_list)
-{
-	const struct mount_option *option_list;
-	unsigned int minlen;
-	const struct mount_option *options_lists_array[2];
-	unsigned int array_index;
-
-	options_lists_array[0] = any_fs_allowed_list;
-	options_lists_array[1] = filesystem_list->options;
-
-	for (array_index = 0; array_index < sizeof(options_lists_array)/sizeof(options_lists_array[0]); ++array_index)
-	{
-		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
-		{
-			if (option_list->has_param)
-			{
-				minlen = strlen(option_list->option);
-
-				if ((option_len > minlen) && (strncmp(option, option_list->option, minlen) == 0))
-				{
-					return 1;
-				}
-			}
-			else
-			{
-				if ((strlen(option_list->option) == option_len) && (strncmp(option, option_list->option, option_len) == 0))
-				{
-					return 1;
-				}
-			}
-		}
-	}
-
-	if ((filesystem_list->option_uid != NULL)
-		&& (option_len > (minlen = strlen(filesystem_list->option_uid)))
-		&& (strncmp(option, filesystem_list->option_uid, minlen) == 0))
-	{
-		return 1;
-	}
-
-	if ((filesystem_list->option_gid != NULL)
-		&& (option_len > (minlen = strlen(filesystem_list->option_gid)))
-		&& (strncmp(option, filesystem_list->option_gid, minlen) == 0))
-	{
-		return 1;
-	}
-
-	return 0;
-}
 
 #if OS == Linux
 static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
@@ -378,7 +177,7 @@ static dir_state_t get_dir_state(const char *dirname)
 }
 
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-static int invoke_mount_external(int client_number, const char *path, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
+static int invoke_mount_external(int client_number, const char *path, const char *mount_options, const char *mount_path, const struct dtmd_filesystem_options *fsopts)
 {
 	unsigned int mount_all_opts_len = 0;
 	unsigned int mount_all_opts_len_cur = 0;
@@ -423,7 +222,7 @@ static int invoke_mount_external(int client_number, const char *path, const char
 			}
 
 			// check option
-			if (!is_option_allowed(opt_start, opt_len, fsopts))
+			if (!dtmd_is_option_allowed(opt_start, opt_len, fsopts))
 			{
 				result = 0;
 				goto invoke_mount_external_error_1;
@@ -619,7 +418,7 @@ invoke_mount_external_error_1:
 }
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-static int invoke_mount_internal(int client_number, const char *path, const char *mount_options, const char *mount_path, const struct filesystem_options *fsopts)
+static int invoke_mount_internal(int client_number, const char *path, const char *mount_options, const char *mount_path, const struct dtmd_filesystem_options *fsopts)
 {
 	const struct string_to_mount_flag *mntflagslist;
 
@@ -669,7 +468,7 @@ static int invoke_mount_internal(int client_number, const char *path, const char
 			}
 
 			// check option
-			if (!is_option_allowed(opt_start, opt_len, fsopts))
+			if (!dtmd_is_option_allowed(opt_start, opt_len, fsopts))
 			{
 				result = 0;
 				goto invoke_mount_internal_error_1;
@@ -1059,7 +858,7 @@ int invoke_mount(int client_number, const char *path, const char *mount_options,
 {
 	int result;
 	unsigned int dev, part;
-	const struct filesystem_options *fsopts;
+	const struct dtmd_filesystem_options *fsopts;
 
 	char *mount_path;
 
@@ -1112,22 +911,11 @@ invoke_mount_exit_loop:
 		goto invoke_mount_error_1;
 	}
 
-	fsopts = filesystem_mount_options;
-
-	for (;;)
+	fsopts = dtmd_get_fsopts_for_fstype(local_fstype);
+	if (fsopts == NULL)
 	{
-		if (fsopts->fstype == NULL)
-		{
-			result = 0;
-			goto invoke_mount_error_1;
-		}
-
-		if (strcmp(fsopts->fstype, local_fstype) == 0)
-		{
-			break;
-		}
-
-		++fsopts;
+		result = 0;
+		goto invoke_mount_error_1;
 	}
 
 	if (mount_options == NULL)
@@ -1302,25 +1090,12 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 {
 	int result;
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	const struct filesystem_options *fsopts;
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	const struct dtmd_filesystem_options *fsopts;
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	fsopts = filesystem_mount_options;
-
-	for (;;)
+	fsopts = dtmd_get_fsopts_for_fstype(fstype);
+	if (fsopts == NULL)
 	{
-		if (fsopts->fstype == NULL)
-		{
-			return 0;
-		}
-
-		if (strcmp(fsopts->fstype, fstype) == 0)
-		{
-			break;
-		}
-
-		++fsopts;
+		return 0;
 	}
 
 	if (fsopts->external_fstype != NULL)

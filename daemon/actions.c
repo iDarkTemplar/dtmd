@@ -20,7 +20,7 @@
 
 #include "daemon/actions.h"
 
-#include "daemon/filesystems.h"
+#include "daemon/filesystem_mnt.h"
 
 #include <stdio.h>
 #include <string.h>

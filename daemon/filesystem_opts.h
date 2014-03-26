@@ -18,24 +18,37 @@
  *
  */
 
-#ifndef FILESYSTEMS_H
-#define FILESYSTEMS_H
-
-#include "daemon/config_file.h"
+#ifndef FILESYSTEM_OPTS_H
+#define FILESYSTEM_OPTS_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* NOTE: invoke_unmount and invoke_unmount_all can take -1 as client number meaning the client is daemon itself */
+struct dtmd_mount_option
+{
+	const char * const option;
+	const unsigned char has_param;
+};
 
-int invoke_mount(int client_number, const char *path, const char *mount_options, enum mount_by_value_enum mount_type);
-int invoke_unmount(int client_number, const char *path);
+struct dtmd_filesystem_options
+{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	const char * const external_fstype;
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	const char * const fstype;
+	const struct dtmd_mount_option * const options;
+	const char * const option_uid;
+	const char * const option_gid;
+	const char * const defaults;
+};
 
-int invoke_unmount_all(int client_number);
+const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype);
+int dtmd_is_option_allowed(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list);
+int dtmd_are_options_supported(const char *filesystem, const char *options_list);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* FILESYSTEMS_H */
+#endif /* FILESYSTEM_OPTS_H */

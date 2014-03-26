@@ -39,7 +39,7 @@
 #include "daemon/mnt_funcs.h"
 #include "daemon/system_module.h"
 #include "daemon/config_file.h"
-#include "daemon/filesystems.h"
+#include "daemon/filesystem_mnt.h"
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
