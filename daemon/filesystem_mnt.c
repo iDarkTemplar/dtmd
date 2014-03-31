@@ -48,38 +48,8 @@ typedef enum dir_state
 	dir_state_not_empty
 } dir_state_t;
 
-/* option: flag and strings
-MS_BIND (Linux 2.4 onward)
-	bind
-MS_DIRSYNC (since Linux 2.5.19)
-	dirsync
-MS_MANDLOCK
-	mand / nomand
-MS_MOVE
-MS_NOATIME
-	noatime / atime
-MS_NODEV
-	nodev / dev
-MS_NODIRATIME
-	nodiratime / diratime
-MS_NOEXEC
-	noexec / exec
-MS_NOSUID
-	nosuid / suid
-MS_RDONLY
-	ro / rw
-MS_RELATIME (Since Linux 2.6.20)
-	relatime
-MS_REMOUNT
-	remount
-MS_SILENT (since Linux 2.6.17)
-	silent / loud
-MS_STRICTATIME (Since Linux 2.6.30)
-	strictatime
-MS_SYNCHRONOUS
-	sync
- */
-
+#if 1
+// TODO: remove
 struct string_to_mount_flag
 {
 	const char * const option;
@@ -111,6 +81,7 @@ static const struct string_to_mount_flag string_to_mount_flag_list[] =
 	{ "sync",        MS_SYNCHRONOUS, 1 },
 	{ NULL,          0,              0 }
 };
+#endif
 
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 static const char * const mount_ext_cmd = "/bin/mount";

@@ -18,13 +18,16 @@
  *
  */
 
-#ifndef FILESYSTEM_OPTS_H
-#define FILESYSTEM_OPTS_H
+#ifndef DTMD_FILESYSTEM_OPTS_H
+#define DTMD_FILESYSTEM_OPTS_H
+
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// TODO: remove structs from header
 struct dtmd_mount_option
 {
 	const char * const option;
@@ -43,12 +46,37 @@ struct dtmd_filesystem_options
 	const char * const defaults;
 };
 
+typedef enum dtmd_fsopts_result
+{
+	dtmd_fsopts_error = -1,
+	dtmd_fsopts_not_supported = 0,
+	dtmd_fsopts_internal_mount = 1,
+	dtmd_fsopts_external_mount = 2
+} dtmd_fsopts_result_t;
+
 const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype);
 int dtmd_is_option_allowed(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list);
 int dtmd_are_options_supported(const char *filesystem, const char *options_list);
+
+dtmd_fsopts_result_t dtmd_fsopts_get_info(const char *options_list,
+	const char *filesystem,
+	uid_t *uid,
+	gid_t *gid,
+	unsigned int *options_string_length,
+	unsigned int *mtab_options_string_length);
+
+int dtmd_fsopts_generate_string(const char *options_list,
+	const char *filesystem,
+	uid_t *uid,
+	gid_t *gid,
+	char *options_string_buffer,
+	unsigned int options_string_buffer_size,
+	char *mtab_options_string_buffer,
+	unsigned int mtab_options_string_buffer_size,
+	unsigned long *mount_flags);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* FILESYSTEM_OPTS_H */
+#endif /* DTMD_FILESYSTEM_OPTS_H */
