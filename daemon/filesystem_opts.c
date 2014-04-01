@@ -26,6 +26,7 @@
 #include <sys/mount.h>
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 /* option: flag and strings
 MS_BIND (Linux 2.4 onward)
@@ -61,9 +62,9 @@ MS_SYNCHRONOUS
 
 struct string_to_mount_flag
 {
-	const char * const option;
-	const unsigned long flag;
-	const unsigned char enabled;
+	const char *option;
+	unsigned long flag;
+	unsigned char enabled;
 };
 
 static const struct string_to_mount_flag string_to_mount_flag_list[] =
@@ -93,8 +94,8 @@ static const struct string_to_mount_flag string_to_mount_flag_list[] =
 #if 0
 struct dtmd_mount_option
 {
-	const char * const option;
-	const unsigned char has_param;
+	const char * option;
+	unsigned char has_param;
 };
 #endif
 static const struct dtmd_mount_option vfat_allow[] =
@@ -154,9 +155,7 @@ static const struct dtmd_mount_option udf_allow[] =
 #if 0
 struct dtmd_filesystem_options
 {
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	const char * const external_fstype;
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	const char * const fstype;
 	const struct dtmd_mount_option * const options;
 	const char * const option_uid;
@@ -354,7 +353,7 @@ int dtmd_is_option_allowed(const char *option, unsigned int option_len, const st
 	return 0;
 }
 
-static struct dtmd_mount_option* find_option_in_list(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
+static const struct dtmd_mount_option* find_option_in_list(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
 {
 	const struct dtmd_mount_option *option_list;
 	unsigned int minlen;
@@ -422,7 +421,7 @@ const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fst
 
 struct dtmd_internal_fsopts_item
 {
-	string_to_mount_flag option;
+	struct string_to_mount_flag option;
 	unsigned int option_full_len;
 	unsigned int option_len;
 };
@@ -503,7 +502,7 @@ static void free_options_list(dtmd_internal_fsopts_t *fsopts_list)
 static int convert_options_to_list(const char *options_list, const struct dtmd_filesystem_options *fsopts, uid_t *uid, gid_t *gid, dtmd_internal_fsopts_t *fsopts_list)
 {
 	const struct string_to_mount_flag *mntflagslist;
-	struct dtmd_mount_option *option_params;
+	const struct dtmd_mount_option *option_params;
 
 	const char *opt_start;
 	const char *opt_end;
@@ -694,37 +693,43 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 	return -1;
 }
 
-dtmd_fsopts_result_t dtmd_fsopts_get_info(const char *options_list,
+dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 	const char *filesystem,
 	uid_t *uid,
 	gid_t *gid,
+	unsigned int *options_full_string_length,
+	char *options_full_string_buffer,
+	unsigned int options_full_string_buffer_size,
 	unsigned int *options_string_length,
-	unsigned int *mtab_options_string_length)
+	char *options_string_buffer,
+	unsigned int options_string_buffer_size,
+	unsigned long *mount_flags)
 {
-	const struct string_to_mount_flag *mntflagslist;
+	dtmd_internal_fsopts_t options_structure;
 	const struct dtmd_filesystem_options *fsopts;
 
-	unsigned int mount_opts_len_cur = 0;
-	unsigned int mount_opts_len_count = 0;
-
-	unsigned int mount_all_opts_len_cur = 0;
-	unsigned int mount_all_opts_len_count = 0;
-
-	const char *opt_start;
-	const char *opt_end;
-	unsigned int opt_len;
-	int id_len;
 	dtmd_fsopts_result_t result;
+	int call_result;
+	const char *current_options;
+
+	unsigned int string_len_full = 0;
+	unsigned int string_len = 0;
+	unsigned int index;
+	unsigned int current_item_full = 0;
+	unsigned int current_item = 0;
+	unsigned long flags = 0;
+
+	init_options_list(&options_structure);
 
 	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
 
 	if (options_list != NULL)
 	{
-		opt_start = options_list;
+		current_options = options_list;
 	}
 	else if (fsopts != NULL)
 	{
-		opt_start = fsopts->defaults;
+		current_options = fsopts->defaults;
 	}
 	else
 	{
@@ -732,368 +737,335 @@ dtmd_fsopts_result_t dtmd_fsopts_get_info(const char *options_list,
 		goto dtmd_fsopts_get_info_error_1;
 	}
 
-	if (*opt_start != 0)
+	call_result = convert_options_to_list(current_options, fsopts, uid, gid, &options_structure);
+	switch (call_result)
 	{
-		while (opt_start != NULL)
-		{
-			opt_end = strchr(opt_start, ',');
+	case 0:
+		result = dtmd_fsopts_not_supported;
+		goto dtmd_fsopts_get_info_error_1;
 
-			if (opt_end != NULL)
+	case -1:
+		result = dtmd_fsopts_error;
+		goto dtmd_fsopts_get_info_error_1;
+
+	/*case 1:
+	default:
+		break;*/
+	}
+
+	if (options_structure.options != NULL)
+	{
+		for (index = 0; index < options_structure.options_count; ++index)
+		{
+			// full string
+			if (current_item_full > 0)
 			{
-				opt_len = opt_end - opt_start;
-				++opt_end;
+				if ((options_full_string_buffer != NULL)
+					&& (string_len_full + 1 <= options_full_string_buffer_size))
+				{
+					options_full_string_buffer[string_len_full] = ',';
+				}
+
+				++string_len_full;
+			}
+
+			if (options_full_string_buffer != NULL)
+			{
+				if (string_len_full + options_structure.options[index]->option_full_len <= options_full_string_buffer_size)
+				{
+					memcpy(&(options_full_string_buffer[string_len_full]),
+						options_structure.options[index]->option.option,
+						options_structure.options[index]->option_full_len);
+				}
+				else if (string_len_full < options_full_string_buffer_size)
+				{
+					memcpy(&(options_full_string_buffer[string_len_full]),
+						options_structure.options[index]->option.option,
+						options_full_string_buffer_size - string_len_full);
+				}
+			}
+
+			string_len_full += options_structure.options[index]->option_full_len;
+			++current_item_full;
+
+			// string
+			if (!options_structure.options[index]->option.flag)
+			{
+				if (current_item > 0)
+				{
+					if ((options_string_buffer != NULL)
+						&& (string_len + 1 <= options_string_buffer_size))
+					{
+						options_string_buffer[string_len] = ',';
+					}
+
+					++string_len;
+				}
+
+				if (options_string_buffer != NULL)
+				{
+					if (string_len + options_structure.options[index]->option_full_len <= options_string_buffer_size)
+					{
+						memcpy(&(options_string_buffer[string_len]),
+							options_structure.options[index]->option.option,
+							options_structure.options[index]->option_full_len);
+					}
+					else if (string_len < options_string_buffer_size)
+					{
+						memcpy(&(options_string_buffer[string_len]),
+							options_structure.options[index]->option.option,
+							options_string_buffer_size - string_len);
+					}
+				}
+
+				string_len += options_structure.options[index]->option_full_len;
+				++current_item;
 			}
 			else
 			{
-				opt_len = strlen(opt_start);
-			}
-
-			if (opt_len == 0)
-			{
-				result = dtmd_fsopts_not_supported;
-				goto dtmd_fsopts_get_info_error_1;
-			}
-
-			// check option
-			if (!dtmd_is_option_allowed(opt_start, opt_len, fsopts))
-			{
-				result = dtmd_fsopts_not_supported;
-				goto dtmd_fsopts_get_info_error_1;
-			}
-
-			mntflagslist = string_to_mount_flag_list;
-			while (mntflagslist->option != NULL)
-			{
-				if (opt_len == strlen(mntflagslist->option)
-					&& (strncmp(opt_start, mntflagslist->option, opt_len) == 0))
+				if (options_structure.options[index]->option.enabled)
 				{
-					break;
+					flags |= options_structure.options[index]->option.flag;
 				}
-
-				++mntflagslist;
+				else
+				{
+					flags &= ~(options_structure.options[index]->option.flag);
+				}
 			}
-
-			if ((mntflagslist->option == NULL)
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-				|| ((fsopts != NULL) && (fsopts->external_fstype != NULL))
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-				)
-			{
-				mount_opts_len_cur += opt_len;
-				++mount_opts_len_count;
-			}
-
-			mount_all_opts_len_cur += opt_len;
-			++mount_all_opts_len_count;
-
-			opt_start = opt_end;
 		}
 	}
 
-	// add uid/gid
-	if (fsopts != NULL)
+	// uid
+	if ((options_structure.option_uid.id_option_value != NULL)
+		&& (options_structure.option_uid.id_option != NULL))
 	{
-		if ((uid != NULL) && (fsopts->option_uid != NULL))
+		// full string
+		if (current_item_full > 0)
 		{
-			id_len = snprintf(NULL, 0, "%d", *uid);
-			if (id_len < 1)
+			if ((options_full_string_buffer != NULL)
+				&& (string_len_full + 1 <= options_full_string_buffer_size))
 			{
-				result = dtmd_fsopts_error;
-				goto dtmd_fsopts_get_info_error_1;
+				options_full_string_buffer[string_len_full] = ',';
 			}
 
-			mount_opts_len_cur += strlen(fsopts->option_uid) + id_len;
-			++mount_opts_len_count;
-
-			mount_all_opts_len_cur += strlen(fsopts->option_uid) + id_len;
-			++mount_all_opts_len_count;
+			++string_len_full;
 		}
 
-		if ((gid != NULL) && (fsopts->option_gid != NULL))
+		if (options_full_string_buffer != NULL)
 		{
-			id_len = snprintf(NULL, 0, "%d", *gid);
-			if (id_len < 1)
+			if (string_len_full + options_structure.option_uid.id_option_len <= options_full_string_buffer_size)
 			{
-				result = dtmd_fsopts_error;
-				goto dtmd_fsopts_get_info_error_1;
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_uid.id_option,
+					options_structure.option_uid.id_option_len);
+			}
+			else if (string_len_full < options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_uid.id_option,
+					options_full_string_buffer_size - string_len_full);
+			}
+		}
+
+		string_len_full += options_structure.option_uid.id_option_len;
+
+		if (options_full_string_buffer != NULL)
+		{
+			if (string_len_full + options_structure.option_uid.id_option_value_len <= options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_uid.id_option_value,
+					options_structure.option_uid.id_option_value_len);
+			}
+			else if (string_len_full < options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_uid.id_option_value,
+					options_full_string_buffer_size - string_len_full);
+			}
+		}
+
+		string_len_full += options_structure.option_uid.id_option_value_len;
+		++current_item_full;
+
+		// string
+		if (current_item > 0)
+		{
+			if ((options_string_buffer != NULL)
+				&& (string_len + 1 <= options_string_buffer_size))
+			{
+				options_string_buffer[string_len] = ',';
 			}
 
-			mount_opts_len_cur += strlen(fsopts->option_gid) + id_len;
-			++mount_opts_len_count;
-
-			mount_all_opts_len_cur += strlen(fsopts->option_gid) + id_len;
-			++mount_all_opts_len_count;
+			++string_len;
 		}
+
+		if (options_string_buffer != NULL)
+		{
+			if (string_len + options_structure.option_uid.id_option_len <= options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_uid.id_option,
+					options_structure.option_uid.id_option_len);
+			}
+			else if (string_len < options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_uid.id_option,
+					options_string_buffer_size - string_len);
+			}
+		}
+
+		string_len += options_structure.option_uid.id_option_len;
+
+		if (options_string_buffer != NULL)
+		{
+			if (string_len + options_structure.option_uid.id_option_value_len <= options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_uid.id_option_value,
+					options_structure.option_uid.id_option_value_len);
+			}
+			else if (string_len < options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_uid.id_option_value,
+					options_string_buffer_size - string_len);
+			}
+		}
+
+		string_len += options_structure.option_uid.id_option_value_len;
+		++current_item;
 	}
 
-	if (mount_opts_len_count > 1)
+	// gid
+	if ((options_structure.option_gid.id_option_value != NULL)
+		&& (options_structure.option_gid.id_option != NULL))
 	{
-		mount_opts_len_cur += mount_opts_len_count - 1;
+		// full string
+		if (current_item_full > 0)
+		{
+			if ((options_full_string_buffer != NULL)
+				&& (string_len_full + 1 <= options_full_string_buffer_size))
+			{
+				options_full_string_buffer[string_len_full] = ',';
+			}
+
+			++string_len_full;
+		}
+
+		if (options_full_string_buffer != NULL)
+		{
+			if (string_len_full + options_structure.option_gid.id_option_len <= options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_gid.id_option,
+					options_structure.option_gid.id_option_len);
+			}
+			else if (string_len_full < options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_gid.id_option,
+					options_full_string_buffer_size - string_len_full);
+			}
+		}
+
+		string_len_full += options_structure.option_gid.id_option_len;
+
+		if (options_full_string_buffer != NULL)
+		{
+			if (string_len_full + options_structure.option_gid.id_option_value_len <= options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_gid.id_option_value,
+					options_structure.option_gid.id_option_value_len);
+			}
+			else if (string_len_full < options_full_string_buffer_size)
+			{
+				memcpy(&(options_full_string_buffer[string_len_full]),
+					options_structure.option_gid.id_option_value,
+					options_full_string_buffer_size - string_len_full);
+			}
+		}
+
+		string_len_full += options_structure.option_gid.id_option_value_len;
+		++current_item_full;
+
+		// string
+		if (current_item > 0)
+		{
+			if ((options_string_buffer != NULL)
+				&& (string_len + 1 <= options_string_buffer_size))
+			{
+				options_string_buffer[string_len] = ',';
+			}
+
+			++string_len;
+		}
+
+		if (options_string_buffer != NULL)
+		{
+			if (string_len + options_structure.option_gid.id_option_len <= options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_gid.id_option,
+					options_structure.option_gid.id_option_len);
+			}
+			else if (string_len < options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_gid.id_option,
+					options_string_buffer_size - string_len);
+			}
+		}
+
+		string_len += options_structure.option_gid.id_option_len;
+
+		if (options_string_buffer != NULL)
+		{
+			if (string_len + options_structure.option_gid.id_option_value_len <= options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_gid.id_option_value,
+					options_structure.option_gid.id_option_value_len);
+			}
+			else if (string_len < options_string_buffer_size)
+			{
+				memcpy(&(options_string_buffer[string_len]),
+					options_structure.option_gid.id_option_value,
+					options_string_buffer_size - string_len);
+			}
+		}
+
+		string_len += options_structure.option_gid.id_option_value_len;
+		++current_item;
 	}
 
-	if (mount_all_opts_len_count > 1)
+	if (options_full_string_length != NULL)
 	{
-		mount_all_opts_len_cur += mount_all_opts_len_count - 1;
+		*options_full_string_length = string_len_full;
 	}
 
 	if (options_string_length != NULL)
 	{
-		*options_string_length = mount_opts_len_cur;
+		*options_string_length = string_len;
 	}
 
-	if (mtab_options_string_length != NULL)
+	if (mount_flags != NULL)
 	{
-		*mtab_options_string_length = mount_all_opts_len_cur;
+		*mount_flags = flags;
 	}
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	if ((fsopts != NULL) && (fsopts->external_fstype != NULL))
 	{
 		return dtmd_fsopts_external_mount;
 	}
 	else
 	{
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		return dtmd_fsopts_internal_mount;
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	}
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 dtmd_fsopts_get_info_error_1:
-	return result;
-}
-
-int dtmd_fsopts_generate_string(const char *options_list,
-	const char *filesystem,
-	uid_t *uid,
-	gid_t *gid,
-	char *options_string_buffer,
-	unsigned int options_string_buffer_size,
-	char *mtab_options_string_buffer,
-	unsigned int mtab_options_string_buffer_size,
-	unsigned long *mount_flags)
-{
-	const struct string_to_mount_flag *mntflagslist;
-	const struct dtmd_filesystem_options *fsopts;
-
-	unsigned int mount_opts_len_cur = 0;
-	unsigned int mount_all_opts_len_cur = 0;
-
-	const char *opt_start;
-	const char *opt_end;
-	unsigned int opt_len;
-	int result;
-
-	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
-
-	if (options_list != NULL)
-	{
-		opt_start = options_list;
-	}
-	else if (fsopts != NULL)
-	{
-		opt_start = fsopts->defaults;
-	}
-	else
-	{
-		result = 0;
-		goto dtmd_fsopts_generate_string_error_1;
-	}
-
-	while (opt_start != NULL)
-	{
-		opt_end = strchr(opt_start, ',');
-
-		if (opt_end != NULL)
-		{
-			opt_len = opt_end - opt_start;
-			++opt_end;
-		}
-		else
-		{
-			opt_len = strlen(opt_start);
-		}
-
-		if (opt_len == 0)
-		{
-			result = 0;
-			goto dtmd_fsopts_generate_string_error_1;
-		}
-
-		// check option
-		if (!dtmd_is_option_allowed(opt_start, opt_len, fsopts))
-		{
-			result = 0;
-			goto dtmd_fsopts_generate_string_error_1;
-		}
-
-		// mount options
-		mntflagslist = string_to_mount_flag_list;
-		while (mntflagslist->option != NULL)
-		{
-			if (opt_len == strlen(mntflagslist->option)
-				&& (strncmp(opt_start, mntflagslist->option, opt_len) == 0))
-			{
-				break;
-			}
-
-			++mntflagslist;
-		}
-
-		if ((mntflagslist->option == NULL)
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-				|| ((fsopts != NULL) && (fsopts->external_fstype != NULL))
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-			)
-		{
-			if (options_string_buffer != NULL)
-			{
-				if (mount_opts_len_cur != 0)
-				{
-					options_string_buffer[mount_opts_len_cur] = ',';
-					++mount_opts_len_cur;
-				}
-
-				memcpy(&options_string_buffer[mount_opts_len_cur], opt_start, opt_len);
-				mount_opts_len_cur += opt_len;
-			}
-		}
-		else
-		{
-			if (mount_flags != NULL)
-			{
-				if (mntflagslist->enabled)
-				{
-					*mount_flags |= mntflagslist->flag;
-				}
-				else
-				{
-					*mount_flags &= ~(mntflagslist->flag);
-				}
-			}
-		}
-
-		if (mtab_options_string_buffer != NULL)
-		{
-			// all mount options
-			if (mount_all_opts_len_cur != 0)
-			{
-				mtab_options_string_buffer[mount_all_opts_len_cur] = ',';
-				++mount_all_opts_len_cur;
-			}
-
-			memcpy(&mtab_options_string_buffer[mount_all_opts_len_cur], opt_start, opt_len);
-			mount_all_opts_len_cur += opt_len;
-		}
-
-		opt_start = opt_end;
-	}
-
-	// add uid/gid
-	if ((uid != NULL) && (fsopts->option_uid != NULL))
-	{
-		if (options_string_buffer != NULL)
-		{
-			// mount options
-			if (mount_opts_len_cur != 0)
-			{
-				options_string_buffer[mount_opts_len_cur] = ',';
-				++mount_opts_len_cur;
-			}
-
-			result = strlen(fsopts->option_uid);
-
-			memcpy(&options_string_buffer[mount_opts_len_cur], fsopts->option_uid, result);
-			mount_opts_len_cur += result;
-
-			result = snprintf(&options_string_buffer[mount_opts_len_cur], options_string_buffer_size - mount_opts_len_cur + 1, "%d", *uid);
-			if (result < 1)
-			{
-				result = -1;
-				goto dtmd_fsopts_generate_string_error_1;
-			}
-
-			mount_opts_len_cur += result;
-		}
-
-		if (mtab_options_string_buffer != NULL)
-		{
-			// all mount options
-			if (mount_all_opts_len_cur != 0)
-			{
-				mtab_options_string_buffer[mount_all_opts_len_cur] = ',';
-				++mount_all_opts_len_cur;
-			}
-
-			result = strlen(fsopts->option_uid);
-
-			memcpy(&mtab_options_string_buffer[mount_all_opts_len_cur], fsopts->option_uid, result);
-			mount_all_opts_len_cur += result;
-
-			result = snprintf(&mtab_options_string_buffer[mount_all_opts_len_cur], mtab_options_string_buffer_size - mount_all_opts_len_cur + 1, "%d", *uid);
-			if (result < 1)
-			{
-				result = -1;
-				goto dtmd_fsopts_generate_string_error_1;
-			}
-
-			mount_all_opts_len_cur += result;
-		}
-	}
-
-	if ((gid != NULL) && (fsopts->option_gid != NULL))
-	{
-		if (options_string_buffer != NULL)
-		{
-			// mount options
-			if (mount_opts_len_cur != 0)
-			{
-				options_string_buffer[mount_opts_len_cur] = ',';
-				++mount_opts_len_cur;
-			}
-
-			result = strlen(fsopts->option_gid);
-
-			memcpy(&options_string_buffer[mount_opts_len_cur], fsopts->option_gid, result);
-			mount_opts_len_cur += result;
-
-			result = snprintf(&options_string_buffer[mount_opts_len_cur], options_string_buffer_size - mount_opts_len_cur + 1, "%d", *gid);
-			if (result < 1)
-			{
-				result = -1;
-				goto dtmd_fsopts_generate_string_error_1;
-			}
-
-			mount_opts_len_cur += result;
-		}
-
-		if (mtab_options_string_buffer != NULL)
-		{
-			// all mount options
-			if (mount_all_opts_len_cur != 0)
-			{
-				mtab_options_string_buffer[mount_all_opts_len_cur] = ',';
-				++mount_all_opts_len_cur;
-			}
-
-			result = strlen(fsopts->option_gid);
-
-			memcpy(&mtab_options_string_buffer[mount_all_opts_len_cur], fsopts->option_gid, result);
-			mount_all_opts_len_cur += result;
-
-			result = snprintf(&mtab_options_string_buffer[mount_all_opts_len_cur], mtab_options_string_buffer_size - mount_all_opts_len_cur + 1, "%d", *gid);
-			if (result < 1)
-			{
-				result = -1;
-				goto dtmd_fsopts_generate_string_error_1;
-			}
-
-			mount_all_opts_len_cur += result;
-		}
-	}
-
-	return 1;
-
-dtmd_fsopts_generate_string_error_1:
+	free_options_list(&options_structure);
 	return result;
 }

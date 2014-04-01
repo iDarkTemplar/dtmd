@@ -58,21 +58,16 @@ const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fst
 int dtmd_is_option_allowed(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list);
 int dtmd_are_options_supported(const char *filesystem, const char *options_list);
 
-dtmd_fsopts_result_t dtmd_fsopts_get_info(const char *options_list,
+dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 	const char *filesystem,
 	uid_t *uid,
 	gid_t *gid,
+	unsigned int *options_full_string_length,
+	char *options_full_string_buffer,
+	unsigned int options_full_string_buffer_size,
 	unsigned int *options_string_length,
-	unsigned int *mtab_options_string_length);
-
-int dtmd_fsopts_generate_string(const char *options_list,
-	const char *filesystem,
-	uid_t *uid,
-	gid_t *gid,
 	char *options_string_buffer,
 	unsigned int options_string_buffer_size,
-	char *mtab_options_string_buffer,
-	unsigned int mtab_options_string_buffer_size,
 	unsigned long *mount_flags);
 
 #ifdef __cplusplus
