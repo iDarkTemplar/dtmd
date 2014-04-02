@@ -24,7 +24,7 @@
 #include "daemon/lists.h"
 #include "daemon/mnt_funcs.h"
 
-#include "daemon/filesystem_opts.h"
+#include <dtmd-filesystem-opts.h>
 
 #include <string.h>
 #include <stdlib.h>

@@ -127,6 +127,9 @@ set ( LINUX_KERNEL_SOURCES daemon/linux/kernel/kernel.c )
 set ( LINUX_KERNEL_HEADERS )
 set ( LINUX_KERNEL_LIBS pthread )
 
+set ( FILESYSTEM_OPTS_LIBRARY_SOURCES library/dtmd-filesystem-opts.c )
+set ( FILESYSTEM_OPTS_LIBRARY_HEADERS library/dtmd-filesystem-opts.h )
+
 set ( MISC_LIBRARY_SOURCES library/dtmd-misc.c )
 set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
 
@@ -142,8 +145,8 @@ if (OS_LINUX)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt)
 endif (OS_LINUX)
 
-set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_opts.c daemon/filesystem_mnt.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_opts.h daemon/filesystem_mnt.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h )
+set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -190,6 +193,9 @@ if (OS_LINUX)
 	endif (LINUX_NO_UDEV)
 endif (OS_LINUX)
 
+add_library( dtmd-filesystem-opts SHARED ${FILESYSTEM_OPTS_LIBRARY_SOURCES} ${FILESYSTEM_OPTS_LIBRARY_HEADERS} )
+target_link_libraries( dtmd-filesystem-opts )
+
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
 target_link_libraries( dtmd-misc )
 
@@ -197,7 +203,7 @@ add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
 target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
-target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
+target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc dtmd-filesystem-opts )
 
 add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
@@ -225,7 +231,10 @@ set (TEST_LIBS_commands dtmd-misc)
 set (TEST_SOURCES_decode_label daemon/label.c tests/decode_label_test.c tests/dt_tests.h)
 set (TEST_LIBS_decode_label )
 
-set (ALL_TESTS commands decode_label)
+set (TEST_SOURCES_filesystem_opts tests/filesystem_opts_test.c tests/dt_tests.h)
+set (TEST_LIBS_filesystem_opts dtmd-filesystem-opts)
+
+set (ALL_TESTS commands decode_label filesystem_opts)
 foreach (CURRENT_TEST ${ALL_TESTS})
 	add_executable( ${CURRENT_TEST}_test ${TEST_SOURCES_${CURRENT_TEST}})
 	target_link_libraries( ${CURRENT_TEST}_test ${TEST_LIBS_${CURRENT_TEST}} )
@@ -233,11 +242,13 @@ foreach (CURRENT_TEST ${ALL_TESTS})
 endforeach (CURRENT_TEST)
 
 # installation config
-install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
-install(TARGETS dtmd         RUNTIME DESTINATION bin)
+install(TARGETS dtmd-filesystem-opts LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-misc            LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-library         LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-daemon          RUNTIME DESTINATION sbin)
+install(TARGETS dtmd                 RUNTIME DESTINATION bin)
 
+#install(FILES "library/dtmd-filesystem-opts.h" DESTINATION "${HEADERS_PREFIX}")
 install(FILES "dtmd.h" DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-misc.h" DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-library.h" DESTINATION "${HEADERS_PREFIX}")

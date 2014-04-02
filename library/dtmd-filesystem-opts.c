@@ -18,7 +18,7 @@
  *
  */
 
-#include "daemon/filesystem_opts.h"
+#include <dtmd-filesystem-opts.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -399,6 +399,7 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 
 	return NULL;
 }
+
 const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype)
 {
 	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
@@ -613,6 +614,8 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 
 				fsopts_list->options = (struct dtmd_internal_fsopts_item**) tmp;
 				++(fsopts_list->options_count);
+
+				fsopts_list->options[fsopts_list->options_count - 1] = option_item;
 			}
 
 			// fill item
@@ -690,7 +693,7 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 		}
 	}
 
-	return -1;
+	return 1;
 }
 
 dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
@@ -706,7 +709,7 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 	unsigned long *mount_flags)
 {
 	dtmd_internal_fsopts_t options_structure;
-	const struct dtmd_filesystem_options *fsopts;
+	const struct dtmd_filesystem_options *fsopts = NULL;
 
 	dtmd_fsopts_result_t result;
 	int call_result;
@@ -721,7 +724,10 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 	init_options_list(&options_structure);
 
-	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
+	if (filesystem != NULL)
+	{
+		fsopts = dtmd_get_fsopts_for_fstype(filesystem);
+	}
 
 	if (options_list != NULL)
 	{
@@ -1040,6 +1046,8 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 		string_len += options_structure.option_gid.id_option_value_len;
 		++current_item;
 	}
+
+	free_options_list(&options_structure);
 
 	if (options_full_string_length != NULL)
 	{
