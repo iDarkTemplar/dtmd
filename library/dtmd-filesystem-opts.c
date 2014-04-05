@@ -25,9 +25,6 @@
 #include <stdlib.h>
 #include <sys/mount.h>
 
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-
 /* option: flag and strings
 MS_BIND (Linux 2.4 onward)
 	bind
@@ -91,13 +88,13 @@ static const struct string_to_mount_flag string_to_mount_flag_list[] =
 	{ "sync",        MS_SYNCHRONOUS, 1 },
 	{ NULL,          0,              0 }
 };
-#if 0
+
 struct dtmd_mount_option
 {
 	const char * option;
 	unsigned char has_param;
 };
-#endif
+
 static const struct dtmd_mount_option vfat_allow[] =
 {
 	{ "flush",        0 },
@@ -116,7 +113,6 @@ static const struct dtmd_mount_option vfat_allow[] =
 	{ NULL,           0 }
 };
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
 	{ "umask=",        1 },
@@ -128,7 +124,6 @@ static const struct dtmd_mount_option ntfs3g_allow[] =
 	{ "allow_other",   0 },
 	{ NULL,            0 }
 };
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 static const struct dtmd_mount_option iso9660_allow[] =
 {
@@ -152,7 +147,7 @@ static const struct dtmd_mount_option udf_allow[] =
 	{ "undelete",   0 },
 	{ NULL,         0 }
 };
-#if 0
+
 struct dtmd_filesystem_options
 {
 	const char * const external_fstype;
@@ -162,20 +157,17 @@ struct dtmd_filesystem_options
 	const char * const option_gid;
 	const char * const defaults;
 };
-#endif
+
 static const struct dtmd_filesystem_options filesystem_mount_options[] =
 {
 	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 		NULL, /* NOT EXTERNAL MOUNT */
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"vfat",
 		vfat_allow,
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
 	},
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
 		"ntfs-3g",
@@ -192,11 +184,8 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		"gid=",
 		"rw,nodev,nosuid,allow_other,dmask=0077"
 	},
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 		NULL, /* NOT EXTERNAL MOUNT */
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"iso9660",
 		iso9660_allow,
 		"uid=",
@@ -204,9 +193,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
 	},
 	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 		NULL, /* NOT EXTERNAL MOUNT */
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		"udf",
 		udf_allow,
 		"uid=",
@@ -214,9 +201,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
 	},
 	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 		NULL,
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		NULL,
 		NULL,
 		NULL,
@@ -240,118 +225,6 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ "dirsync",    0 },
 	{ NULL,         0 }
 };
-
-int dtmd_are_options_supported(const char *filesystem, const char *options_list)
-{
-	const char *opt_start;
-	const char *opt_end;
-	unsigned int opt_len;
-
-	const struct dtmd_filesystem_options *fsopts;
-
-	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
-
-	opt_start = options_list;
-
-	if (*opt_start != 0)
-	{
-		while (opt_start != NULL)
-		{
-			opt_end = strchr(opt_start, ',');
-
-			if (opt_end != NULL)
-			{
-				opt_len = opt_end - opt_start;
-				++opt_end;
-			}
-			else
-			{
-				opt_len = strlen(opt_start);
-			}
-
-			if (opt_len == 0)
-			{
-				return 0;
-			}
-
-			// check option
-			if (!dtmd_is_option_allowed(opt_start, opt_len, fsopts))
-			{
-				return 0;
-			}
-
-			opt_start = opt_end;
-		}
-	}
-
-	return 1;
-}
-
-int dtmd_is_option_allowed(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
-{
-	const struct dtmd_mount_option *option_list;
-	unsigned int minlen;
-	const struct dtmd_mount_option *options_lists_array[2];
-	unsigned int array_index;
-	unsigned int array_size;
-
-	options_lists_array[0] = any_fs_allowed_list;
-
-	if (filesystem_list != NULL)
-	{
-		options_lists_array[1] = filesystem_list->options;
-		array_size = sizeof(options_lists_array)/sizeof(options_lists_array[0]);
-	}
-	else
-	{
-		options_lists_array[1] = NULL;
-		array_size = sizeof(options_lists_array)/sizeof(options_lists_array[0]) - 1;
-	}
-
-	for (array_index = 0; array_index < array_size; ++array_index)
-	{
-		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
-		{
-			if (option_list->has_param)
-			{
-				minlen = strlen(option_list->option);
-
-				if ((option_len > minlen) && (strncmp(option, option_list->option, minlen) == 0))
-				{
-					return 1;
-				}
-			}
-			else
-			{
-				if ((strlen(option_list->option) == option_len) && (strncmp(option, option_list->option, option_len) == 0))
-				{
-					return 1;
-				}
-			}
-		}
-	}
-
-/* NOTE: uid and gid options explicitly are not allowed
-	if (filesystem_list != NULL)
-	{
-		if ((filesystem_list->option_uid != NULL)
-			&& (option_len > (minlen = strlen(filesystem_list->option_uid)))
-			&& (strncmp(option, filesystem_list->option_uid, minlen) == 0))
-		{
-			return 1;
-		}
-
-		if ((filesystem_list->option_gid != NULL)
-			&& (option_len > (minlen = strlen(filesystem_list->option_gid)))
-			&& (strncmp(option, filesystem_list->option_gid, minlen) == 0))
-		{
-			return 1;
-		}
-	}
-*/
-
-	return 0;
-}
 
 static const struct dtmd_mount_option* find_option_in_list(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
 {
@@ -400,7 +273,7 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 	return NULL;
 }
 
-const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype)
+static const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype)
 {
 	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
 
@@ -694,6 +567,58 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 	}
 
 	return 1;
+}
+
+dtmd_fsopts_result_t dtmd_fsopts_fstype(const char *filesystem)
+{
+	const struct dtmd_filesystem_options *fsopts;
+
+	if (filesystem == NULL)
+	{
+		return dtmd_fsopts_not_supported;
+	}
+
+	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
+
+	if (fsopts == NULL)
+	{
+		return dtmd_fsopts_not_supported;
+	}
+
+	if (fsopts->external_fstype != NULL)
+	{
+		return dtmd_fsopts_external_mount;
+	}
+	else
+	{
+		return dtmd_fsopts_internal_mount;
+	}
+}
+
+const char* dtmd_fsopts_get_fstype_string(const char *filesystem)
+{
+	const struct dtmd_filesystem_options *fsopts;
+
+	if (filesystem == NULL)
+	{
+		return NULL;
+	}
+
+	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
+
+	if (fsopts == NULL)
+	{
+		return NULL;
+	}
+
+	if (fsopts->external_fstype != NULL)
+	{
+		return fsopts->external_fstype;
+	}
+	else
+	{
+		return fsopts->fstype;
+	}
 }
 
 dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,

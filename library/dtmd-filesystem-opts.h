@@ -27,25 +27,6 @@
 extern "C" {
 #endif
 
-// TODO: remove structs from header
-struct dtmd_mount_option
-{
-	const char * const option;
-	const unsigned char has_param;
-};
-
-struct dtmd_filesystem_options
-{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	const char * const external_fstype;
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-	const char * const fstype;
-	const struct dtmd_mount_option * const options;
-	const char * const option_uid;
-	const char * const option_gid;
-	const char * const defaults;
-};
-
 typedef enum dtmd_fsopts_result
 {
 	dtmd_fsopts_error = -1,
@@ -54,9 +35,8 @@ typedef enum dtmd_fsopts_result
 	dtmd_fsopts_external_mount = 2
 } dtmd_fsopts_result_t;
 
-const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype);
-int dtmd_is_option_allowed(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list);
-int dtmd_are_options_supported(const char *filesystem, const char *options_list);
+dtmd_fsopts_result_t dtmd_fsopts_fstype(const char *filesystem);
+const char* dtmd_fsopts_get_fstype_string(const char *filesystem);
 
 dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 	const char *filesystem,
