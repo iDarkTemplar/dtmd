@@ -20,6 +20,8 @@
 
 #include "daemon/config_file.h"
 
+#include <dtmd-filesystem-opts.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -208,7 +210,20 @@ static int process_config_value(const char *key, const char *value)
 						memcpy(fs_opts, &(value[1]), strlen(value) - 2);
 						fs_opts[strlen(value) - 2] = 0;
 
-						return insert_mount_opts_into_array(fs_name, fs_opts);
+						switch (dtmd_fsopts_generate_string(fs_opts, fs_name,
+							NULL, NULL, NULL, NULL, 0, NULL, NULL, 0, NULL))
+						{
+						case dtmd_fsopts_internal_mount:
+						case dtmd_fsopts_external_mount:
+							return insert_mount_opts_into_array(fs_name, fs_opts);
+
+						case dtmd_fsopts_error:
+						case dtmd_fsopts_not_supported:
+						default:
+							free(fs_name);
+							free(fs_opts);
+							return -1;
+						}
 					}
 					else
 					{
