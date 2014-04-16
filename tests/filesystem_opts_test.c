@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <dtmd-filesystem-opts.h>
+#include "daemon/filesystem_opts.h"
 #include "tests/dt_tests.h"
 
 #include <sys/mount.h>

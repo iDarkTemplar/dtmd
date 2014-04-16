@@ -19,8 +19,7 @@
  */
 
 #include "daemon/config_file.h"
-
-#include <dtmd-filesystem-opts.h>
+#include "filesystem_opts.h"
 
 #include <stdio.h>
 #include <stdlib.h>

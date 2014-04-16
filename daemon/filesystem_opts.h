@@ -18,8 +18,8 @@
  *
  */
 
-#ifndef DTMD_FILESYSTEM_OPTS_H
-#define DTMD_FILESYSTEM_OPTS_H
+#ifndef FILESYSTEM_OPTS_H
+#define FILESYSTEM_OPTS_H
 
 #include <sys/types.h>
 
@@ -54,4 +54,4 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 }
 #endif
 
-#endif /* DTMD_FILESYSTEM_OPTS_H */
+#endif /* FILESYSTEM_OPTS_H */

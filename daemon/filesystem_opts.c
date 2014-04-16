@@ -18,7 +18,7 @@
  *
  */
 
-#include <dtmd-filesystem-opts.h>
+#include "daemon/filesystem_opts.h"
 
 #include <stdio.h>
 #include <string.h>

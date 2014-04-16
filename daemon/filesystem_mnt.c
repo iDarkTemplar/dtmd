@@ -23,8 +23,7 @@
 #include "daemon/dtmd-internal.h"
 #include "daemon/lists.h"
 #include "daemon/mnt_funcs.h"
-
-#include <dtmd-filesystem-opts.h>
+#include "daemon/filesystem_opts.h"
 
 #include <string.h>
 #include <stdlib.h>
