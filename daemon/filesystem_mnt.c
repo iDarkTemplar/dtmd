@@ -114,19 +114,22 @@ static dir_state_t get_dir_state(const char *dirname)
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 static int invoke_mount_external(int client_number,
 	const char *path,
-	const char *mount_options,
 	const char *mount_path,
 	const char *fstype,
-	uid_t uid,
-	gid_t gid,
-	unsigned int string_full_len)
+	dtmd_fsopts_list_t *fsopts_list)
 {
 	int result;
 
 	int total_len;
 	int mount_flags_start;
 	char *mount_cmd;
-	dtmd_fsopts_result_t fsopts_type;
+	unsigned int string_full_len;
+
+	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0, NULL, NULL, 0, NULL);
+	if (result != 1)
+	{
+		goto invoke_mount_external_error_1;
+	}
 
 	// calculate total length
 	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(fstype) + 1 + strlen(path) + 1 + strlen(mount_path);
@@ -158,12 +161,9 @@ static int invoke_mount_external(int client_number,
 	{
 		strcat(mount_cmd, " -o ");
 
-		fsopts_type = dtmd_fsopts_generate_string(mount_options,
-			fstype, &uid, &gid, NULL, &(mount_cmd[mount_flags_start]), string_full_len, NULL, NULL, 0, NULL);
-
-		if (fsopts_type != dtmd_fsopts_external_mount)
+		result = fsopts_generate_string(fsopts_list, NULL, &(mount_cmd[mount_flags_start]), string_full_len, NULL, NULL, 0, NULL);
+		if (result != 1)
 		{
-			result = -1;
 			goto invoke_mount_external_error_2;
 		}
 	}
@@ -195,19 +195,22 @@ invoke_mount_external_error_1:
 
 static int invoke_mount_internal(int client_number,
 	const char *path,
-	const char *mount_options,
 	const char *mount_path,
 	const char *fstype,
-	uid_t uid,
-	gid_t gid,
-	unsigned int string_full_len,
-	unsigned int string_len)
+	dtmd_fsopts_list_t *fsopts_list)
 {
 	unsigned long mount_flags = 0;
 	char *mount_opts;
 	char *mount_full_opts;
 	int result;
-	dtmd_fsopts_result_t fsopts_type;
+	unsigned int string_full_len;
+	unsigned int string_len;
+
+	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0, &string_len, NULL, 0, NULL);
+	if (result != 1)
+	{
+		goto invoke_mount_internal_error_1;
+	}
 
 	mount_full_opts = (char*) malloc(string_full_len + 1);
 	if (mount_full_opts == NULL)
@@ -223,12 +226,9 @@ static int invoke_mount_internal(int client_number,
 		goto invoke_mount_internal_error_2;
 	}
 
-	fsopts_type = dtmd_fsopts_generate_string(mount_options,
-		fstype, &uid, &gid, NULL, mount_full_opts, string_full_len, NULL, mount_opts, string_len, &mount_flags);
-
-	if (fsopts_type != dtmd_fsopts_internal_mount)
+	result = fsopts_generate_string(fsopts_list, NULL, mount_full_opts, string_full_len, NULL, mount_opts, string_len, &mount_flags);
+	if (result != 1)
 	{
-		result = -1;
 		goto invoke_mount_internal_error_3;
 	}
 
@@ -353,12 +353,9 @@ int invoke_mount(int client_number, const char *path, const char *mount_options,
 	const char *local_mnt_point;
 	const char *local_fstype;
 	const char *local_label;
-	const char *local_real_fstype;
 
-	unsigned int opt_full_len;
-	unsigned int opt_len;
-
-	dtmd_fsopts_result_t fsopts_type;
+	const struct dtmd_filesystem_options *fsopts;
+	dtmd_fsopts_list_t fsopts_list;
 
 	uid_t uid;
 	gid_t gid;
@@ -414,35 +411,19 @@ invoke_mount_exit_loop:
 		goto invoke_mount_error_1;
 	}
 
-	fsopts_type = dtmd_fsopts_generate_string(mount_options,
-		local_fstype, &uid, &gid, &opt_full_len, NULL, 0, &opt_len, NULL, 0, NULL);
-
-	switch (fsopts_type)
+	fsopts = get_fsopts_for_fs(local_fstype);
+	if (fsopts == NULL)
 	{
-	case dtmd_fsopts_internal_mount:
-		break;
-
-	case dtmd_fsopts_external_mount:
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		break;
-		// NOTE: fallthrough to 'not supported' in case external mount is disabled
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-
-	case dtmd_fsopts_not_supported:
-		result = 0;
-		goto invoke_mount_error_1;
-
-	case dtmd_fsopts_error:
-	default:
 		result = -1;
 		goto invoke_mount_error_1;
 	}
 
-	local_real_fstype = dtmd_fsopts_get_fstype_string(local_fstype);
-	if (local_real_fstype == NULL)
+	init_options_list(&fsopts_list);
+
+	result = convert_options_to_list(mount_options, fsopts, &uid, &gid, &fsopts_list);
+	if (result != 1)
 	{
-		result = -1;
-		goto invoke_mount_error_1;
+		goto invoke_mount_error_2;
 	}
 
 	for (;;)
@@ -451,7 +432,7 @@ invoke_mount_exit_loop:
 		if (mount_path == NULL)
 		{
 			result = -1;
-			goto invoke_mount_error_1;
+			goto invoke_mount_error_2;
 		}
 
 		// check mount point
@@ -461,7 +442,7 @@ invoke_mount_exit_loop:
 			if (result < 0)
 			{
 				result = -1;
-				goto invoke_mount_error_2;
+				goto invoke_mount_error_3;
 			}
 			else
 			{
@@ -473,7 +454,7 @@ invoke_mount_exit_loop:
 
 				case mount_by_device_name:
 					result = 0;
-					goto invoke_mount_error_2;
+					goto invoke_mount_error_3;
 				}
 			}
 
@@ -492,32 +473,22 @@ invoke_mount_exit_loop:
 		{
 			// NOTE: failing to create directory is non-fatal error
 			result = 0;
-			goto invoke_mount_error_2;
+			goto invoke_mount_error_3;
 		}
 	}
 
-	switch (fsopts_type)
-	{
-	case dtmd_fsopts_internal_mount:
-		result = invoke_mount_internal(client_number, path, mount_options, mount_path, local_real_fstype, uid, gid, opt_full_len, opt_len);
-		break;
-
-	case dtmd_fsopts_external_mount:
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		result = invoke_mount_external(client_number, path, mount_options, mount_path, local_real_fstype, uid, gid, opt_full_len);
-		break;
-		// NOTE: fallthrough to 'not supported' in case external mount is disabled
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-
-	case dtmd_fsopts_not_supported:
-		result = 0;
-		goto invoke_mount_error_2;
-
-	case dtmd_fsopts_error:
-	default:
-		result = -1;
-		goto invoke_mount_error_2;
+	if (fsopts->external_fstype != NULL)
+	{
+		result = invoke_mount_external(client_number, path, mount_path, fsopts->external_fstype, &fsopts_list);
 	}
+	else
+	{
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+		result = invoke_mount_internal(client_number, path, mount_path, fsopts->fstype, &fsopts_list);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	if (result != 1)
 	{
@@ -528,8 +499,11 @@ invoke_mount_exit_loop:
 
 	return result;
 
-invoke_mount_error_2:
+invoke_mount_error_3:
 	free(mount_path);
+
+invoke_mount_error_2:
+	free_options_list(&fsopts_list);
 
 invoke_mount_error_1:
 	return result;
@@ -610,47 +584,28 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 static int invoke_unmount_common(int client_number, const char *path, const char *mnt_point, const char *fstype)
 {
 	int result;
-	dtmd_fsopts_result_t type;
-	const char *fsname;
 
-	type = dtmd_fsopts_fstype(fstype);
-	switch (type)
+	const struct dtmd_filesystem_options *fsopts;
+
+	fsopts = get_fsopts_for_fs(fstype);
+	if (fsopts == NULL)
 	{
-	case dtmd_fsopts_internal_mount:
-		fsname = dtmd_fsopts_get_fstype_string(fstype);
-		if (fsname != NULL)
-		{
-			result = invoke_unmount_internal(client_number, path, mnt_point, fsname);
-		}
-		else
-		{
-			result = -1;
-		}
-		break;
-
-	case dtmd_fsopts_external_mount:
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-		fsname = dtmd_fsopts_get_fstype_string(fstype);
-		if (fsname != NULL)
-		{
-			result = invoke_unmount_external(client_number, path, mnt_point, fsname);
-		}
-		else
-		{
-			result = -1;
-		}
-		break;
-		// NOTE: fallthrough to 'not supported' in case external mount is disabled
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
-
-	case dtmd_fsopts_not_supported:
-		result = 0;
-		break;
-
-	case dtmd_fsopts_error:
-	default:
-		break;
+		result = -1;
+		goto invoke_unmount_common_error_1;
 	}
+
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	if (fsopts->external_fstype != NULL)
+	{
+		result = invoke_unmount_external(client_number, path, mnt_point, fsopts->external_fstype);;
+	}
+	else
+	{
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+		result = invoke_unmount_internal(client_number, path, mnt_point, fsopts->fstype);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	if (result == 1)
 	{
@@ -660,6 +615,7 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 		}
 	}
 
+invoke_unmount_common_error_1:
 	return result;
 }
 

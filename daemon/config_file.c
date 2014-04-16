@@ -148,6 +148,9 @@ static int process_config_value(const char *key, const char *value)
 	struct stat st;
 	char *fs_name;
 	char *fs_opts;
+	int result;
+	const struct dtmd_filesystem_options *fsopts_type;
+	dtmd_fsopts_list_t fsopts_list;
 
 	if (strcmp(key, config_unmount_on_exit) == 0)
 	{
@@ -209,25 +212,23 @@ static int process_config_value(const char *key, const char *value)
 						memcpy(fs_opts, &(value[1]), strlen(value) - 2);
 						fs_opts[strlen(value) - 2] = 0;
 
-						switch (dtmd_fsopts_generate_string(fs_opts, fs_name,
-							NULL, NULL, NULL, NULL, 0, NULL, NULL, 0, NULL))
+						fsopts_type = get_fsopts_for_fs(fs_name);
+						if (fsopts_type != NULL)
 						{
-						case dtmd_fsopts_internal_mount:
-						case dtmd_fsopts_external_mount:
-							return insert_mount_opts_into_array(fs_name, fs_opts);
+							init_options_list(&fsopts_list);
+							result = convert_options_to_list(fs_opts, fsopts_type, NULL, NULL, &fsopts_list);
+							free_options_list(&fsopts_list);
 
-						case dtmd_fsopts_error:
-						case dtmd_fsopts_not_supported:
-						default:
-							free(fs_name);
-							free(fs_opts);
-							return -1;
+							if (result == 1)
+							{
+								return insert_mount_opts_into_array(fs_name, fs_opts);
+							}
 						}
+
+						free(fs_opts);
 					}
-					else
-					{
-						free(fs_name);
-					}
+
+					free(fs_name);
 				}
 			}
 		}

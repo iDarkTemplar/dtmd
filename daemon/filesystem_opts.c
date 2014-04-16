@@ -57,14 +57,7 @@ MS_SYNCHRONOUS
 	sync
  */
 
-struct string_to_mount_flag
-{
-	const char *option;
-	unsigned long flag;
-	unsigned char enabled;
-};
-
-static const struct string_to_mount_flag string_to_mount_flag_list[] =
+static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 {
 	{ "dirsync",     MS_DIRSYNC,     1 },
 	{ "mand",        MS_MANDLOCK,    1 },
@@ -87,12 +80,6 @@ static const struct string_to_mount_flag string_to_mount_flag_list[] =
 	{ "strictatime", MS_STRICTATIME, 1 },
 	{ "sync",        MS_SYNCHRONOUS, 1 },
 	{ NULL,          0,              0 }
-};
-
-struct dtmd_mount_option
-{
-	const char * option;
-	unsigned char has_param;
 };
 
 static const struct dtmd_mount_option vfat_allow[] =
@@ -146,16 +133,6 @@ static const struct dtmd_mount_option udf_allow[] =
 	{ "dmode=",     1 },
 	{ "undelete",   0 },
 	{ NULL,         0 }
-};
-
-struct dtmd_filesystem_options
-{
-	const char * const external_fstype;
-	const char * const fstype;
-	const struct dtmd_mount_option * const options;
-	const char * const option_uid;
-	const char * const option_gid;
-	const char * const defaults;
 };
 
 static const struct dtmd_filesystem_options filesystem_mount_options[] =
@@ -226,6 +203,31 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ NULL,         0 }
 };
 
+const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
+{
+	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
+
+	if (filesystem == NULL)
+	{
+		return NULL;
+	}
+
+	for (;;)
+	{
+		if (fsopts->fstype == NULL)
+		{
+			return NULL;
+		}
+
+		if (strcmp(fsopts->fstype, filesystem) == 0)
+		{
+			return fsopts;
+		}
+
+		++fsopts;
+	}
+}
+
 static const struct dtmd_mount_option* find_option_in_list(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
 {
 	const struct dtmd_mount_option *option_list;
@@ -293,32 +295,7 @@ static const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const ch
 	}
 }
 
-struct dtmd_internal_fsopts_item
-{
-	struct string_to_mount_flag option;
-	unsigned int option_full_len;
-	unsigned int option_len;
-};
-
-struct dtmd_internal_fsopts_id
-{
-	const char *id_option;
-	unsigned int id_option_len;
-
-	char *id_option_value;
-	unsigned int id_option_value_len;
-};
-
-typedef struct dtmd_internal_fsopts
-{
-	struct dtmd_internal_fsopts_item **options;
-	unsigned int options_count;
-
-	struct dtmd_internal_fsopts_id option_uid;
-	struct dtmd_internal_fsopts_id option_gid;
-} dtmd_internal_fsopts_t;
-
-static void init_options_list_id(struct dtmd_internal_fsopts_id *id)
+static void init_options_list_id(struct dtmd_fsopts_list_id *id)
 {
 	id->id_option           = NULL;
 	id->id_option_len       = 0;
@@ -326,16 +303,19 @@ static void init_options_list_id(struct dtmd_internal_fsopts_id *id)
 	id->id_option_value_len = 0;
 }
 
-static void init_options_list(dtmd_internal_fsopts_t *fsopts_list)
+void init_options_list(dtmd_fsopts_list_t *fsopts_list)
 {
-	fsopts_list->options       = NULL;
-	fsopts_list->options_count = 0;
+	if (fsopts_list != NULL)
+	{
+		fsopts_list->options       = NULL;
+		fsopts_list->options_count = 0;
 
-	init_options_list_id(&(fsopts_list->option_uid));
-	init_options_list_id(&(fsopts_list->option_gid));
+		init_options_list_id(&(fsopts_list->option_uid));
+		init_options_list_id(&(fsopts_list->option_gid));
+	}
 }
 
-static void free_options_list_id(struct dtmd_internal_fsopts_id *id)
+static void free_options_list_id(struct dtmd_fsopts_list_id *id)
 {
 	id->id_option = NULL;
 	id->id_option_len = 0;
@@ -349,33 +329,36 @@ static void free_options_list_id(struct dtmd_internal_fsopts_id *id)
 	id->id_option_value_len = 0;
 }
 
-static void free_options_list(dtmd_internal_fsopts_t *fsopts_list)
+void free_options_list(dtmd_fsopts_list_t *fsopts_list)
 {
 	unsigned int index = 0;
 
-	if (fsopts_list->options != NULL)
+	if (fsopts_list != NULL)
 	{
-		for ( ; index < fsopts_list->options_count; ++index)
+		if (fsopts_list->options != NULL)
 		{
-			if (fsopts_list->options[index] != NULL)
+			for ( ; index < fsopts_list->options_count; ++index)
 			{
-				free(fsopts_list->options[index]);
+				if (fsopts_list->options[index] != NULL)
+				{
+					free(fsopts_list->options[index]);
+				}
 			}
+
+			free(fsopts_list->options);
+			fsopts_list->options = NULL;
 		}
 
-		free(fsopts_list->options);
-		fsopts_list->options = NULL;
+		fsopts_list->options_count = 0;
+
+		free_options_list_id(&(fsopts_list->option_uid));
+		free_options_list_id(&(fsopts_list->option_gid));
 	}
-
-	fsopts_list->options_count = 0;
-
-	free_options_list_id(&(fsopts_list->option_uid));
-	free_options_list_id(&(fsopts_list->option_gid));
 }
 
-static int convert_options_to_list(const char *options_list, const struct dtmd_filesystem_options *fsopts, uid_t *uid, gid_t *gid, dtmd_internal_fsopts_t *fsopts_list)
+int convert_options_to_list(const char *options_list, const struct dtmd_filesystem_options *fsopts, uid_t *uid, gid_t *gid, dtmd_fsopts_list_t *fsopts_list)
 {
-	const struct string_to_mount_flag *mntflagslist;
+	const struct dtmd_string_to_mount_flag *mntflagslist;
 	const struct dtmd_mount_option *option_params;
 
 	const char *opt_start;
@@ -385,8 +368,14 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 
 	unsigned int option_index;
 
-	struct dtmd_internal_fsopts_item *option_item;
+	struct dtmd_fsopts_list_item *option_item;
 	void *tmp;
+
+	if ((options_list == NULL)
+		|| (fsopts_list == NULL))
+	{
+		return -1;
+	}
 
 	opt_start = options_list;
 
@@ -472,20 +461,20 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 			else
 			{
 				// not found
-				option_item = (struct dtmd_internal_fsopts_item*) malloc(sizeof(struct dtmd_internal_fsopts_item));
+				option_item = (struct dtmd_fsopts_list_item*) malloc(sizeof(struct dtmd_fsopts_list_item));
 				if (option_item == NULL)
 				{
 					return -1;
 				}
 
-				tmp = realloc(fsopts_list->options, (fsopts_list->options_count + 1) * sizeof(struct dtmd_internal_fsopts_item*));
+				tmp = realloc(fsopts_list->options, (fsopts_list->options_count + 1) * sizeof(struct dtmd_fsopts_list_item*));
 				if (tmp == NULL)
 				{
 					free(option_item);
 					return -1;
 				}
 
-				fsopts_list->options = (struct dtmd_internal_fsopts_item**) tmp;
+				fsopts_list->options = (struct dtmd_fsopts_list_item**) tmp;
 				++(fsopts_list->options_count);
 
 				fsopts_list->options[fsopts_list->options_count - 1] = option_item;
@@ -569,62 +558,7 @@ static int convert_options_to_list(const char *options_list, const struct dtmd_f
 	return 1;
 }
 
-dtmd_fsopts_result_t dtmd_fsopts_fstype(const char *filesystem)
-{
-	const struct dtmd_filesystem_options *fsopts;
-
-	if (filesystem == NULL)
-	{
-		return dtmd_fsopts_not_supported;
-	}
-
-	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
-
-	if (fsopts == NULL)
-	{
-		return dtmd_fsopts_not_supported;
-	}
-
-	if (fsopts->external_fstype != NULL)
-	{
-		return dtmd_fsopts_external_mount;
-	}
-	else
-	{
-		return dtmd_fsopts_internal_mount;
-	}
-}
-
-const char* dtmd_fsopts_get_fstype_string(const char *filesystem)
-{
-	const struct dtmd_filesystem_options *fsopts;
-
-	if (filesystem == NULL)
-	{
-		return NULL;
-	}
-
-	fsopts = dtmd_get_fsopts_for_fstype(filesystem);
-
-	if (fsopts == NULL)
-	{
-		return NULL;
-	}
-
-	if (fsopts->external_fstype != NULL)
-	{
-		return fsopts->external_fstype;
-	}
-	else
-	{
-		return fsopts->fstype;
-	}
-}
-
-dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
-	const char *filesystem,
-	uid_t *uid,
-	gid_t *gid,
+int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	unsigned int *options_full_string_length,
 	char *options_full_string_buffer,
 	unsigned int options_full_string_buffer_size,
@@ -633,13 +567,6 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 	unsigned int options_string_buffer_size,
 	unsigned long *mount_flags)
 {
-	dtmd_internal_fsopts_t options_structure;
-	const struct dtmd_filesystem_options *fsopts = NULL;
-
-	dtmd_fsopts_result_t result;
-	int call_result;
-	const char *current_options;
-
 	unsigned int string_len_full = 0;
 	unsigned int string_len = 0;
 	unsigned int index;
@@ -647,46 +574,14 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 	unsigned int current_item = 0;
 	unsigned long flags = 0;
 
-	init_options_list(&options_structure);
-
-	if (filesystem != NULL)
+	if (fsopts_list == NULL)
 	{
-		fsopts = dtmd_get_fsopts_for_fstype(filesystem);
+		return -1;
 	}
 
-	if (options_list != NULL)
+	if (fsopts_list->options != NULL)
 	{
-		current_options = options_list;
-	}
-	else if (fsopts != NULL)
-	{
-		current_options = fsopts->defaults;
-	}
-	else
-	{
-		result = dtmd_fsopts_not_supported;
-		goto dtmd_fsopts_get_info_error_1;
-	}
-
-	call_result = convert_options_to_list(current_options, fsopts, uid, gid, &options_structure);
-	switch (call_result)
-	{
-	case 0:
-		result = dtmd_fsopts_not_supported;
-		goto dtmd_fsopts_get_info_error_1;
-
-	case -1:
-		result = dtmd_fsopts_error;
-		goto dtmd_fsopts_get_info_error_1;
-
-	/*case 1:
-	default:
-		break;*/
-	}
-
-	if (options_structure.options != NULL)
-	{
-		for (index = 0; index < options_structure.options_count; ++index)
+		for (index = 0; index < fsopts_list->options_count; ++index)
 		{
 			// full string
 			if (current_item_full > 0)
@@ -702,25 +597,25 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 			if (options_full_string_buffer != NULL)
 			{
-				if (string_len_full + options_structure.options[index]->option_full_len <= options_full_string_buffer_size)
+				if (string_len_full + fsopts_list->options[index]->option_full_len <= options_full_string_buffer_size)
 				{
 					memcpy(&(options_full_string_buffer[string_len_full]),
-						options_structure.options[index]->option.option,
-						options_structure.options[index]->option_full_len);
+						fsopts_list->options[index]->option.option,
+						fsopts_list->options[index]->option_full_len);
 				}
 				else if (string_len_full < options_full_string_buffer_size)
 				{
 					memcpy(&(options_full_string_buffer[string_len_full]),
-						options_structure.options[index]->option.option,
+						fsopts_list->options[index]->option.option,
 						options_full_string_buffer_size - string_len_full);
 				}
 			}
 
-			string_len_full += options_structure.options[index]->option_full_len;
+			string_len_full += fsopts_list->options[index]->option_full_len;
 			++current_item_full;
 
 			// string
-			if (!options_structure.options[index]->option.flag)
+			if (!fsopts_list->options[index]->option.flag)
 			{
 				if (current_item > 0)
 				{
@@ -735,40 +630,40 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 				if (options_string_buffer != NULL)
 				{
-					if (string_len + options_structure.options[index]->option_full_len <= options_string_buffer_size)
+					if (string_len + fsopts_list->options[index]->option_full_len <= options_string_buffer_size)
 					{
 						memcpy(&(options_string_buffer[string_len]),
-							options_structure.options[index]->option.option,
-							options_structure.options[index]->option_full_len);
+							fsopts_list->options[index]->option.option,
+							fsopts_list->options[index]->option_full_len);
 					}
 					else if (string_len < options_string_buffer_size)
 					{
 						memcpy(&(options_string_buffer[string_len]),
-							options_structure.options[index]->option.option,
+							fsopts_list->options[index]->option.option,
 							options_string_buffer_size - string_len);
 					}
 				}
 
-				string_len += options_structure.options[index]->option_full_len;
+				string_len += fsopts_list->options[index]->option_full_len;
 				++current_item;
 			}
 			else
 			{
-				if (options_structure.options[index]->option.enabled)
+				if (fsopts_list->options[index]->option.enabled)
 				{
-					flags |= options_structure.options[index]->option.flag;
+					flags |= fsopts_list->options[index]->option.flag;
 				}
 				else
 				{
-					flags &= ~(options_structure.options[index]->option.flag);
+					flags &= ~(fsopts_list->options[index]->option.flag);
 				}
 			}
 		}
 	}
 
 	// uid
-	if ((options_structure.option_uid.id_option_value != NULL)
-		&& (options_structure.option_uid.id_option != NULL))
+	if ((fsopts_list->option_uid.id_option_value != NULL)
+		&& (fsopts_list->option_uid.id_option != NULL))
 	{
 		// full string
 		if (current_item_full > 0)
@@ -784,39 +679,39 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 		if (options_full_string_buffer != NULL)
 		{
-			if (string_len_full + options_structure.option_uid.id_option_len <= options_full_string_buffer_size)
+			if (string_len_full + fsopts_list->option_uid.id_option_len <= options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_uid.id_option,
-					options_structure.option_uid.id_option_len);
+					fsopts_list->option_uid.id_option,
+					fsopts_list->option_uid.id_option_len);
 			}
 			else if (string_len_full < options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_uid.id_option,
+					fsopts_list->option_uid.id_option,
 					options_full_string_buffer_size - string_len_full);
 			}
 		}
 
-		string_len_full += options_structure.option_uid.id_option_len;
+		string_len_full += fsopts_list->option_uid.id_option_len;
 
 		if (options_full_string_buffer != NULL)
 		{
-			if (string_len_full + options_structure.option_uid.id_option_value_len <= options_full_string_buffer_size)
+			if (string_len_full + fsopts_list->option_uid.id_option_value_len <= options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_uid.id_option_value,
-					options_structure.option_uid.id_option_value_len);
+					fsopts_list->option_uid.id_option_value,
+					fsopts_list->option_uid.id_option_value_len);
 			}
 			else if (string_len_full < options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_uid.id_option_value,
+					fsopts_list->option_uid.id_option_value,
 					options_full_string_buffer_size - string_len_full);
 			}
 		}
 
-		string_len_full += options_structure.option_uid.id_option_value_len;
+		string_len_full += fsopts_list->option_uid.id_option_value_len;
 		++current_item_full;
 
 		// string
@@ -833,45 +728,45 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 		if (options_string_buffer != NULL)
 		{
-			if (string_len + options_structure.option_uid.id_option_len <= options_string_buffer_size)
+			if (string_len + fsopts_list->option_uid.id_option_len <= options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_uid.id_option,
-					options_structure.option_uid.id_option_len);
+					fsopts_list->option_uid.id_option,
+					fsopts_list->option_uid.id_option_len);
 			}
 			else if (string_len < options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_uid.id_option,
+					fsopts_list->option_uid.id_option,
 					options_string_buffer_size - string_len);
 			}
 		}
 
-		string_len += options_structure.option_uid.id_option_len;
+		string_len += fsopts_list->option_uid.id_option_len;
 
 		if (options_string_buffer != NULL)
 		{
-			if (string_len + options_structure.option_uid.id_option_value_len <= options_string_buffer_size)
+			if (string_len + fsopts_list->option_uid.id_option_value_len <= options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_uid.id_option_value,
-					options_structure.option_uid.id_option_value_len);
+					fsopts_list->option_uid.id_option_value,
+					fsopts_list->option_uid.id_option_value_len);
 			}
 			else if (string_len < options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_uid.id_option_value,
+					fsopts_list->option_uid.id_option_value,
 					options_string_buffer_size - string_len);
 			}
 		}
 
-		string_len += options_structure.option_uid.id_option_value_len;
+		string_len += fsopts_list->option_uid.id_option_value_len;
 		++current_item;
 	}
 
 	// gid
-	if ((options_structure.option_gid.id_option_value != NULL)
-		&& (options_structure.option_gid.id_option != NULL))
+	if ((fsopts_list->option_gid.id_option_value != NULL)
+		&& (fsopts_list->option_gid.id_option != NULL))
 	{
 		// full string
 		if (current_item_full > 0)
@@ -887,39 +782,39 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 		if (options_full_string_buffer != NULL)
 		{
-			if (string_len_full + options_structure.option_gid.id_option_len <= options_full_string_buffer_size)
+			if (string_len_full + fsopts_list->option_gid.id_option_len <= options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_gid.id_option,
-					options_structure.option_gid.id_option_len);
+					fsopts_list->option_gid.id_option,
+					fsopts_list->option_gid.id_option_len);
 			}
 			else if (string_len_full < options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_gid.id_option,
+					fsopts_list->option_gid.id_option,
 					options_full_string_buffer_size - string_len_full);
 			}
 		}
 
-		string_len_full += options_structure.option_gid.id_option_len;
+		string_len_full += fsopts_list->option_gid.id_option_len;
 
 		if (options_full_string_buffer != NULL)
 		{
-			if (string_len_full + options_structure.option_gid.id_option_value_len <= options_full_string_buffer_size)
+			if (string_len_full + fsopts_list->option_gid.id_option_value_len <= options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_gid.id_option_value,
-					options_structure.option_gid.id_option_value_len);
+					fsopts_list->option_gid.id_option_value,
+					fsopts_list->option_gid.id_option_value_len);
 			}
 			else if (string_len_full < options_full_string_buffer_size)
 			{
 				memcpy(&(options_full_string_buffer[string_len_full]),
-					options_structure.option_gid.id_option_value,
+					fsopts_list->option_gid.id_option_value,
 					options_full_string_buffer_size - string_len_full);
 			}
 		}
 
-		string_len_full += options_structure.option_gid.id_option_value_len;
+		string_len_full += fsopts_list->option_gid.id_option_value_len;
 		++current_item_full;
 
 		// string
@@ -936,43 +831,41 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 
 		if (options_string_buffer != NULL)
 		{
-			if (string_len + options_structure.option_gid.id_option_len <= options_string_buffer_size)
+			if (string_len + fsopts_list->option_gid.id_option_len <= options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_gid.id_option,
-					options_structure.option_gid.id_option_len);
+					fsopts_list->option_gid.id_option,
+					fsopts_list->option_gid.id_option_len);
 			}
 			else if (string_len < options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_gid.id_option,
+					fsopts_list->option_gid.id_option,
 					options_string_buffer_size - string_len);
 			}
 		}
 
-		string_len += options_structure.option_gid.id_option_len;
+		string_len += fsopts_list->option_gid.id_option_len;
 
 		if (options_string_buffer != NULL)
 		{
-			if (string_len + options_structure.option_gid.id_option_value_len <= options_string_buffer_size)
+			if (string_len + fsopts_list->option_gid.id_option_value_len <= options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_gid.id_option_value,
-					options_structure.option_gid.id_option_value_len);
+					fsopts_list->option_gid.id_option_value,
+					fsopts_list->option_gid.id_option_value_len);
 			}
 			else if (string_len < options_string_buffer_size)
 			{
 				memcpy(&(options_string_buffer[string_len]),
-					options_structure.option_gid.id_option_value,
+					fsopts_list->option_gid.id_option_value,
 					options_string_buffer_size - string_len);
 			}
 		}
 
-		string_len += options_structure.option_gid.id_option_value_len;
+		string_len += fsopts_list->option_gid.id_option_value_len;
 		++current_item;
 	}
-
-	free_options_list(&options_structure);
 
 	if (options_full_string_length != NULL)
 	{
@@ -989,16 +882,5 @@ dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
 		*mount_flags = flags;
 	}
 
-	if ((fsopts != NULL) && (fsopts->external_fstype != NULL))
-	{
-		return dtmd_fsopts_external_mount;
-	}
-	else
-	{
-		return dtmd_fsopts_internal_mount;
-	}
-
-dtmd_fsopts_get_info_error_1:
-	free_options_list(&options_structure);
-	return result;
+	return 1;
 }

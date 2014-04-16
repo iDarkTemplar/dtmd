@@ -27,21 +27,61 @@
 extern "C" {
 #endif
 
-typedef enum dtmd_fsopts_result
+struct dtmd_mount_option
 {
-	dtmd_fsopts_error = -1,
-	dtmd_fsopts_not_supported = 0,
-	dtmd_fsopts_internal_mount = 1,
-	dtmd_fsopts_external_mount = 2
-} dtmd_fsopts_result_t;
+	const char * option;
+	unsigned char has_param;
+};
 
-dtmd_fsopts_result_t dtmd_fsopts_fstype(const char *filesystem);
-const char* dtmd_fsopts_get_fstype_string(const char *filesystem);
+struct dtmd_filesystem_options
+{
+	const char * const external_fstype;
+	const char * const fstype;
+	const struct dtmd_mount_option * const options;
+	const char * const option_uid;
+	const char * const option_gid;
+	const char * const defaults;
+};
 
-dtmd_fsopts_result_t dtmd_fsopts_generate_string(const char *options_list,
-	const char *filesystem,
-	uid_t *uid,
-	gid_t *gid,
+struct dtmd_string_to_mount_flag
+{
+	const char *option;
+	unsigned long flag;
+	unsigned char enabled;
+};
+
+struct dtmd_fsopts_list_item
+{
+	struct dtmd_string_to_mount_flag option;
+	unsigned int option_full_len;
+	unsigned int option_len;
+};
+
+struct dtmd_fsopts_list_id
+{
+	const char *id_option;
+	unsigned int id_option_len;
+
+	char *id_option_value;
+	unsigned int id_option_value_len;
+};
+
+typedef struct dtmd_fsopts_list
+{
+	struct dtmd_fsopts_list_item **options;
+	unsigned int options_count;
+
+	struct dtmd_fsopts_list_id option_uid;
+	struct dtmd_fsopts_list_id option_gid;
+} dtmd_fsopts_list_t;
+
+const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem);
+
+void init_options_list(dtmd_fsopts_list_t *fsopts_list);
+int convert_options_to_list(const char *options_list, const struct dtmd_filesystem_options *fsopts, uid_t *uid, gid_t *gid, dtmd_fsopts_list_t *fsopts_list);
+void free_options_list(dtmd_fsopts_list_t *fsopts_list);
+
+int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	unsigned int *options_full_string_length,
 	char *options_full_string_buffer,
 	unsigned int options_full_string_buffer_size,

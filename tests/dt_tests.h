@@ -59,4 +59,20 @@ if (!(test)) \
 	} \
 }
 
+#define test_compare_comment_deinit(test, comment, deinit) \
+if (!(test)) \
+{ \
+	printf("line %d, test failed: %s\n",__LINE__, #test ); \
+	printf("Comment: %s\n", comment); \
+	if (tests_on_error_quit_value) \
+	{ \
+		(deinit); \
+		return -1; \
+	} \
+	else \
+	{ \
+		tests_result_value = -1; \
+	} \
+}
+
 #endif /* DT_TESTS_H */

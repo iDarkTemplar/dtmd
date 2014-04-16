@@ -3,7 +3,7 @@ project(Dark-Templar-Mount-Daemon)
 cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 1)
-set(DTMD_VERSION_MINOR 4)
+set(DTMD_VERSION_MINOR 5)
 set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
@@ -236,15 +236,15 @@ foreach (CURRENT_TEST ${ALL_TESTS})
 endforeach (CURRENT_TEST)
 
 # installation config
-install(TARGETS dtmd-misc            LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-install(TARGETS dtmd-library         LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-install(TARGETS dtmd-daemon          RUNTIME DESTINATION sbin)
-install(TARGETS dtmd                 RUNTIME DESTINATION bin)
+install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
+install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
+install(TARGETS dtmd         RUNTIME DESTINATION bin)
 
-install(FILES "dtmd.h" DESTINATION "${HEADERS_PREFIX}")
-install(FILES "library/dtmd-misc.h" DESTINATION "${HEADERS_PREFIX}")
+install(FILES "dtmd.h"                 DESTINATION "${HEADERS_PREFIX}")
+install(FILES "library/dtmd-misc.h"    DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-library.h" DESTINATION "${HEADERS_PREFIX}")
-install(FILES "daemon/dtmd.conf" DESTINATION "${CONFIG_DIR}")
+install(FILES "daemon/dtmd.conf"       DESTINATION "${CONFIG_DIR}")
 
 if (NOT DEFINED DISABLE_CXX)
 	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
