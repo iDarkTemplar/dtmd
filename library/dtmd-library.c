@@ -2034,7 +2034,7 @@ inline static dtmd_helper_result_t dtmd_helper_process_mount_implementation(dtmd
 	if ((handle->library_state == dtmd_state_default)
 		&& (dtmd_helper_is_helper_mount(cmd))
 		&& (strcmp(cmd->args[1], params->path) == 0)
-		&& (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], params->mount_options) == 0))
+		&& (((cmd->args[2] != NULL) && (params->mount_options != NULL) && (strcmp(cmd->args[2], params->mount_options) == 0))
 			|| ((cmd->args[2] == NULL) && (params->mount_options == NULL))))
 	{
 		if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
