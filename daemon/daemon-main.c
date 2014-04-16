@@ -45,15 +45,18 @@
 
 #define DTMD_INVERTED_SOCKET_MASK 0
 
-static unsigned char continue_working = 1;
-static unsigned char daemonize        = 1;
+static unsigned char continue_working  = 1;
+static unsigned char daemonize         = 1;
+static unsigned char check_config_only = 0;
 
 void print_usage(char *name)
 {
 	fprintf(stderr, "USAGE: %s [options]\n"
 		"where options are one or more of following:\n"
 		"\t-n\n"
-		"\t--no-daemon\t- do not daemonize\n",
+		"\t--no-daemon\t- do not daemonize\n"
+		"\t-c\n"
+		"\t--check-config\t- check config file and quit\n",
 		name);
 }
 
@@ -260,9 +263,34 @@ int main(int argc, char **argv)
 		{
 			daemonize = 0;
 		}
+		else if ((strcmp(argv[rc],"-c") == 0) || (strcmp(argv[rc],"--check-config") == 0))
+		{
+			check_config_only = 1;
+		}
 		else
 		{
 			print_usage(argv[0]);
+			return -1;
+		}
+	}
+
+	if (check_config_only == 1)
+	{
+		result = read_config();
+		free_config();
+
+		switch (result)
+		{
+		case read_config_return_ok:
+			printf("Config file is correct\n");
+			return 0;
+
+		case read_config_return_no_file:
+			printf("Config file is missing: defaults are assumed\n");
+			return 0;
+
+		default:
+			printf("Config file is incorrect, error on line %d\n", result);
 			return -1;
 		}
 	}
@@ -453,8 +481,14 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	if (read_config() < 0)
+
+	switch (read_config())
 	{
+	case read_config_return_ok:
+	case read_config_return_no_file:
+		break;
+
+	default:
 		if (!daemonize)
 		{
 			fprintf(stderr, "Error reading config file\n");

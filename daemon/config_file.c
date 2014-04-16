@@ -248,16 +248,19 @@ int read_config(void)
 	ssize_t equal_start;
 	ssize_t value_start, value_end;
 	int inside_quotes = 0;
-	int rc = 0;
+	int rc = read_config_return_ok;
+	int line_num = 0;
 
 	file = fopen(config_filename, "r");
 	if (file == NULL)
 	{
-		return 0;
+		return read_config_return_no_file;
 	}
 
 	while ((read_size = getline(&buffer, &buffer_size, file)) > 0)
 	{
+		++line_num;
+
 		key_start   = key_end   = -1;
 		equal_start = -1;
 		value_start = value_end = -1;
@@ -298,7 +301,7 @@ int read_config(void)
 				else
 				{
 					// error on line
-					rc = -1;
+					rc = line_num;
 					goto read_config_exit;
 				}
 			}
@@ -316,7 +319,7 @@ int read_config(void)
 				else
 				{
 					// error on line
-					rc = -1;
+					rc = line_num;
 					goto read_config_exit;
 				}
 			}
@@ -346,14 +349,14 @@ int read_config(void)
 				else if (value_start != -1)
 				{
 					// error on line
-					rc = -1;
+					rc = line_num;
 					goto read_config_exit;
 				}
 			}
 			else
 			{
 				// error on line
-				rc = -1;
+				rc = line_num;
 				goto read_config_exit;
 			}
 		}
@@ -365,7 +368,7 @@ int read_config(void)
 
 			if (process_config_value(&(buffer[key_start]), &(buffer[value_start])) < 0)
 			{
-				rc = -1;
+				rc = line_num;
 				goto read_config_exit;
 			}
 		}
