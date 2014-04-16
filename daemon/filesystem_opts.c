@@ -275,26 +275,6 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 	return NULL;
 }
 
-static const struct dtmd_filesystem_options* dtmd_get_fsopts_for_fstype(const char *fstype)
-{
-	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
-
-	for (;;)
-	{
-		if (fsopts->fstype == NULL)
-		{
-			return NULL;
-		}
-
-		if (strcmp(fsopts->fstype, fstype) == 0)
-		{
-			return fsopts;
-		}
-
-		++fsopts;
-	}
-}
-
 static void init_options_list_id(struct dtmd_fsopts_list_id *id)
 {
 	id->id_option           = NULL;

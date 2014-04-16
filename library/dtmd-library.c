@@ -1629,7 +1629,7 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 			if ((handle->library_state == dtmd_state_default)
 				&& (dtmd_helper_is_helper_mount(cmd))
 				&& (strcmp(cmd->args[1], path) == 0)
-				&& (((cmd->args[2] != NULL) && (strcmp(cmd->args[2], mount_options) == 0))
+				&& (((cmd->args[2] != NULL) && (mount_options != NULL) &&(strcmp(cmd->args[2], mount_options) == 0))
 					|| ((cmd->args[2] == NULL) && (mount_options == NULL))))
 			{
 				if (strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
