@@ -235,6 +235,7 @@ int main(int argc, char **argv)
 	int lockfd;
 	int rc;
 	mode_t def_mask;
+	uid_t process_uid;
 	pid_t child = -1;
 	char buffer[12];
 	const int backlog = 4;
@@ -293,6 +294,14 @@ int main(int argc, char **argv)
 			printf("Config file is incorrect, error on line %d\n", result);
 			return -1;
 		}
+	}
+
+	process_uid = geteuid();
+	if (process_uid != 0)
+	{
+		fprintf(stderr, "Error: process UID is not root, UID is %u\n", process_uid);
+		result = -1;
+		goto exit_1;
 	}
 
 	socketfd = socket(AF_LOCAL, SOCK_STREAM, 0);
@@ -480,7 +489,6 @@ int main(int argc, char **argv)
 		result = -1;
 		goto exit_6;
 	}
-
 
 	switch (read_config())
 	{
