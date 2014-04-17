@@ -275,9 +275,9 @@ int main(int argc, char **argv)
 		}
 	}
 
+	result = read_config();
 	if (check_config_only == 1)
 	{
-		result = read_config();
 		free_config();
 
 		switch (result)
@@ -293,6 +293,20 @@ int main(int argc, char **argv)
 		default:
 			printf("Config file is incorrect, error on line %d\n", result);
 			return -1;
+		}
+	}
+	else
+	{
+		switch (result)
+		{
+		case read_config_return_ok:
+		case read_config_return_no_file:
+			break;
+
+		default:
+			fprintf(stderr, "Config file is incorrect, error on line %d\n", result);
+			result = -1;
+			goto exit_1;
 		}
 	}
 
@@ -488,22 +502,6 @@ int main(int argc, char **argv)
 
 		result = -1;
 		goto exit_6;
-	}
-
-	switch (read_config())
-	{
-	case read_config_return_ok:
-	case read_config_return_no_file:
-		break;
-
-	default:
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error reading config file\n");
-		}
-
-		result = -1;
-		goto exit_7;
 	}
 
 	while ((rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)) > 0)
@@ -875,7 +873,6 @@ exit_7:
 	remove_all_media();
 	remove_all_stateful_media();
 	close(mountfd);
-	free_config();
 
 exit_6:
 	device_system_stop_monitoring(dtmd_dev_mon);
@@ -899,5 +896,6 @@ exit_2:
 	close(socketfd);
 
 exit_1:
+	free_config();
 	return result;
 }
