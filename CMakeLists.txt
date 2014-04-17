@@ -22,15 +22,18 @@ include(CPack)
 set(INST_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories")
 set(DATA_PREFIX "${INST_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories")
 set(CONFIG_DIR "/etc" CACHE PATH "Config files directory")
+set(MTAB_DIR "/etc" CACHE PATH "mtab file location directory")
 set(HEADERS_PREFIX "${INST_PREFIX}/include" CACHE PATH "Prefix prepended to headers install directories")
 set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
 message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
 message(STATUS "To change config directory use -DCONFIG_DIR=path")
+message(STATUS "To change location directory of mtab file use -DMTAB_DIR=path")
 
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
+add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT")
