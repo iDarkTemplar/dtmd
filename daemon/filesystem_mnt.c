@@ -255,11 +255,6 @@ static int invoke_mount_internal(int client_number,
 		result = 0;
 	}
 
-	free(mount_full_opts);
-	free(mount_opts);
-
-	return result;
-
 invoke_mount_internal_error_3:
 	free(mount_opts);
 
@@ -418,6 +413,27 @@ invoke_mount_exit_loop:
 		goto invoke_mount_error_1;
 	}
 
+	if (mount_options == NULL)
+	{
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		if (fsopts->external_fstype != NULL)
+		{
+			mount_options = get_mount_options_for_fs_from_config(fsopts->external_fstype);
+		}
+		else
+		{
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+			mount_options = get_mount_options_for_fs_from_config(fsopts->fstype);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+		}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	}
+
+	if (mount_options == NULL)
+	{
+		mount_options = fsopts->defaults;
+	}
+
 	init_options_list(&fsopts_list);
 
 	result = convert_options_to_list(mount_options, fsopts, &uid, &gid, &fsopts_list);
@@ -494,10 +510,6 @@ invoke_mount_exit_loop:
 	{
 		rmdir(mount_path);
 	}
-
-	free(mount_path);
-
-	return result;
 
 invoke_mount_error_3:
 	free(mount_path);
