@@ -43,8 +43,6 @@
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
-#define DTMD_INVERTED_SOCKET_MASK 0
-
 static unsigned char continue_working  = 1;
 static unsigned char daemonize         = 1;
 static unsigned char check_config_only = 0;
@@ -227,6 +225,65 @@ remove_empty_dirs_error_1:
 	closedir(dir);
 }
 
+int create_mount_dir_recursive(char *directory)
+{
+	int length;
+	int result = 0;
+	char *delim;
+	struct stat dirstat;
+
+	length = strlen(directory);
+	if (length == 0)
+	{
+		return result;
+	}
+
+	if (stat(directory, &dirstat) == 0)
+	{
+		if (S_ISDIR(dirstat.st_mode))
+		{
+			return 0;
+		}
+		else
+		{
+			return -1;
+		}
+	}
+
+	delim = strrchr(directory, '/');
+
+	if (delim != NULL)
+	{
+		*delim = 0;
+		result = create_mount_dir_recursive(directory);
+		*delim = '/';
+	}
+
+	if (result == 0)
+	{
+		result = mkdir(directory, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	}
+
+	return result;
+}
+
+int create_mount_dir(const char *directory)
+{
+	char *dir;
+	int result;
+
+	dir = strdup(directory);
+	if (dir == NULL)
+	{
+		return -1;
+	}
+
+	result = create_mount_dir_recursive(dir);
+	free(dir);
+
+	return result;
+}
+
 int main(int argc, char **argv)
 {
 	int result = 0;
@@ -234,13 +291,13 @@ int main(int argc, char **argv)
 	struct sockaddr_un sockaddr;
 	int lockfd;
 	int rc;
-	mode_t def_mask;
 	uid_t process_uid;
 	pid_t child = -1;
 	char buffer[12];
 	const int backlog = 4;
 	unsigned int i;
 	unsigned int j;
+	struct stat st;
 
 	dtmd_device_system_t *dtmd_dev_system;
 	dtmd_device_enumeration_t *dtmd_dev_enum;
@@ -318,6 +375,36 @@ int main(int argc, char **argv)
 		goto exit_1;
 	}
 
+	umask(0);
+
+	if (chdir("/") == -1)
+	{
+		fprintf(stderr, "Error changing directory to /\n");
+		result = -1;
+		goto exit_1;
+	}
+
+	if (create_mount_dir_on_startup)
+	{
+		result = create_mount_dir((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
+		if (result != 0)
+		{
+			fprintf(stderr, "Error: could not create mount directory\n");
+			result = -1;
+			goto exit_1;
+		}
+	}
+	else
+	{
+		if ((stat((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir, &st) != 0)
+			|| (!S_ISDIR(st.st_mode)))
+		{
+			fprintf(stderr, "Error: mount directory does not exist or is not a directory\n");
+			result = -1;
+			goto exit_1;
+		}
+	}
+
 	socketfd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (socketfd == -1)
 	{
@@ -341,9 +428,7 @@ int main(int argc, char **argv)
 	}
 
 	unlink(sockaddr.sun_path);
-	def_mask = umask(DTMD_INVERTED_SOCKET_MASK);
 	rc = bind(socketfd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un));
-	umask(def_mask);
 
 	if (rc == -1)
 	{
@@ -402,8 +487,6 @@ int main(int argc, char **argv)
 		goto exit_4;
 	}
 
-	umask(0);
-
 	if (daemonize)
 	{
 		if (setsid() == -1)
@@ -411,17 +494,6 @@ int main(int argc, char **argv)
 			result = -1;
 			goto exit_4;
 		}
-	}
-
-	if (chdir("/") == -1)
-	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error changing directory to /\n");
-		}
-
-		result = -1;
-		goto exit_4;
 	}
 
 	if (daemonize)

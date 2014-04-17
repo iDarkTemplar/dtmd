@@ -25,7 +25,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys/stat.h>
 
 #ifndef CONFIG_DIR
 #error CONFIG_DIR is not defined
@@ -36,6 +35,7 @@
 int unmount_on_exit = 0;
 enum mount_by_value_enum mount_by_value = mount_by_device_name;
 char *mount_dir = NULL;
+int create_mount_dir_on_startup = 0;
 
 struct default_mount_opts
 {
@@ -46,15 +46,18 @@ struct default_mount_opts
 struct default_mount_opts **default_mount_opts_array = NULL;
 unsigned int default_mount_opts_array_size = 0;
 
+static const char *config_yes = "yes";
+static const char *config_no = "no";
+
 static const char *config_unmount_on_exit = "unmount_on_exit";
-static const char *config_unmount_on_exit_yes = "yes";
-static const char *config_unmount_on_exit_no = "no";
 
 static const char *config_mount_by = "mount_by";
 static const char *config_mount_by_name = "name";
 static const char *config_mount_by_label = "label";
 
 static const char *config_mount_dir = "mount_dir";
+
+static const char *config_create_mount_dir_on_startup = "create_mount_dir";
 
 static const char *config_default_mount_opts = "default_mount_opts_";
 
@@ -145,7 +148,6 @@ static void free_mount_opts_array(void)
 
 static int process_config_value(const char *key, const char *value)
 {
-	struct stat st;
 	char *fs_name;
 	char *fs_opts;
 	int result;
@@ -154,12 +156,12 @@ static int process_config_value(const char *key, const char *value)
 
 	if (strcmp(key, config_unmount_on_exit) == 0)
 	{
-		if (strcmp(value, config_unmount_on_exit_yes) == 0)
+		if (strcmp(value, config_yes) == 0)
 		{
 			unmount_on_exit = 1;
 			return 1;
 		}
-		else if (strcmp(value, config_unmount_on_exit_no) == 0)
+		else if (strcmp(value, config_no) == 0)
 		{
 			unmount_on_exit = 0;
 			return 1;
@@ -180,18 +182,36 @@ static int process_config_value(const char *key, const char *value)
 	}
 	else if (strcmp(key, config_mount_dir) == 0)
 	{
-		if ((stat(value, &st) == 0) && (S_ISDIR(st.st_mode)))
+		if ((strlen(value) > 1)
+			&& (value[0] == '\"')
+			&& (value[strlen(value) - 1] == '\"'))
 		{
 			if (mount_dir != NULL)
 			{
 				free(mount_dir);
 			}
 
-			mount_dir = strdup(value);
+			mount_dir = malloc(strlen(value) - 1);
 			if (mount_dir != NULL)
 			{
+				memcpy(mount_dir, &(value[1]), strlen(value) - 2);
+				mount_dir[strlen(value) - 2] = 0;
+
 				return 1;
 			}
+		}
+	}
+	else if (strcmp(key, config_create_mount_dir_on_startup) == 0)
+	{
+		if (strcmp(value, config_yes) == 0)
+		{
+			create_mount_dir_on_startup = 1;
+			return 1;
+		}
+		else if (strcmp(value, config_no) == 0)
+		{
+			create_mount_dir_on_startup = 0;
+			return 1;
 		}
 	}
 	else if (strncmp(key, config_default_mount_opts, strlen(config_default_mount_opts)) == 0)

@@ -34,6 +34,7 @@ enum mount_by_value_enum
 extern int unmount_on_exit;
 extern enum mount_by_value_enum mount_by_value;
 extern char *mount_dir;
+extern int create_mount_dir_on_startup;
 
 #define read_config_return_ok 0
 #define read_config_return_no_file -1
