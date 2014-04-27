@@ -298,6 +298,9 @@ int main(int argc, char **argv)
 	unsigned int i;
 	unsigned int j;
 	struct stat st;
+	int daemonpipe[2] = { -1, -1 };
+	unsigned char daemondata;
+	int action_result;
 
 	dtmd_device_system_t *dtmd_dev_system;
 	dtmd_device_enumeration_t *dtmd_dev_enum;
@@ -332,12 +335,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	result = read_config();
+	rc = read_config();
 	if (check_config_only == 1)
 	{
 		free_config();
 
-		switch (result)
+		switch (rc)
 		{
 		case read_config_return_ok:
 			printf("Config file is correct\n");
@@ -348,20 +351,20 @@ int main(int argc, char **argv)
 			return 0;
 
 		default:
-			printf("Config file is incorrect, error on line %d\n", result);
+			printf("Config file is incorrect, error on line %d\n", rc);
 			return -1;
 		}
 	}
 	else
 	{
-		switch (result)
+		switch (rc)
 		{
 		case read_config_return_ok:
 		case read_config_return_no_file:
 			break;
 
 		default:
-			fprintf(stderr, "Config file is incorrect, error on line %d\n", result);
+			fprintf(stderr, "Config file is incorrect, error on line %d\n", rc);
 			result = -1;
 			goto exit_1;
 		}
@@ -378,6 +381,7 @@ int main(int argc, char **argv)
 	umask(0);
 
 	if (chdir("/") == -1)
+
 	{
 		fprintf(stderr, "Error changing directory to /\n");
 		result = -1;
@@ -386,8 +390,8 @@ int main(int argc, char **argv)
 
 	if (create_mount_dir_on_startup)
 	{
-		result = create_mount_dir((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
-		if (result != 0)
+		rc = create_mount_dir((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
+		if (rc != 0)
 		{
 			fprintf(stderr, "Error: could not create mount directory\n");
 			result = -1;
@@ -439,10 +443,23 @@ int main(int argc, char **argv)
 
 	if (daemonize)
 	{
+		if (pipe(daemonpipe) != 0)
+		{
+			fprintf(stderr, "Error creating pipes\n");
+			result = -1;
+			goto exit_4;
+		}
+
 		child = fork();
 		if (child == -1)
 		{
 			fprintf(stderr, "Error forking\n");
+
+			close(daemonpipe[0]);
+			close(daemonpipe[1]);
+			daemonpipe[0] = -1;
+			daemonpipe[1] = -1;
+
 			result = -1;
 			goto exit_4;
 		}
@@ -451,10 +468,26 @@ int main(int argc, char **argv)
 			// parent - exit
 			close(socketfd);
 			close(lockfd);
+
+			close(daemonpipe[1]);
+			daemonpipe[1] = -1;
+
+			if ((read(daemonpipe[0], &daemondata, sizeof(unsigned char)) != sizeof(unsigned char))
+				|| (daemondata != 1))
+			{
+				fprintf(stderr, "Failed starting daemon\n");
+				result = -1;
+			}
+
+			close(daemonpipe[0]);
+			daemonpipe[0] = -1;
+
 			goto exit_1;
 		}
 
 		// child - daemon
+		close(daemonpipe[0]);
+		daemonpipe[0] = -1;
 	}
 
 	snprintf(buffer, sizeof(buffer), "%10d\n", getpid());
@@ -466,14 +499,23 @@ int main(int argc, char **argv)
 		}
 
 		result = -1;
-		goto exit_4;
+		goto exit_4_pipe;
 	}
 
 #ifdef _POSIX_SYNCHRONIZED_IO
-	fdatasync(lockfd);
+	if (fdatasync(lockfd) != 0)
 #else
-	fsync(lockfd);
+	if (fsync(lockfd) != 0)
 #endif
+	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error synchronizing lockfile\n");
+		}
+
+		result = -1;
+		goto exit_4_pipe;
+	}
 
 	rc = setSigHandlers();
 	if (rc == -1)
@@ -484,7 +526,7 @@ int main(int argc, char **argv)
 		}
 
 		result = -1;
-		goto exit_4;
+		goto exit_4_pipe;
 	}
 
 	if (daemonize)
@@ -492,16 +534,13 @@ int main(int argc, char **argv)
 		if (setsid() == -1)
 		{
 			result = -1;
-			goto exit_4;
+			goto exit_4_pipe;
 		}
-	}
 
-	if (daemonize)
-	{
 		if (redirectStdio() != 0)
 		{
 			result = -1;
-			goto exit_4;
+			goto exit_4_pipe;
 		}
 	}
 
@@ -642,6 +681,15 @@ int main(int argc, char **argv)
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = -1;
 		goto exit_7;
+	}
+
+	if (daemonpipe[1] != -1)
+	{
+		// successful initialization
+		daemondata = 1;
+		write(daemonpipe[1], &daemondata, sizeof(unsigned char));
+		close(daemonpipe[1]);
+		daemonpipe[1] = -1;
 	}
 
 	while (continue_working)
@@ -866,7 +914,7 @@ int main(int argc, char **argv)
 
 				clients[j]->buf_used += rc;
 				clients[j]->buf[clients[j]->buf_used] = 0;
-				result = 1;
+				action_result = 1;
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
@@ -874,7 +922,7 @@ int main(int argc, char **argv)
 					if (!rc)
 					{
 						remove_client(pollfds[i].fd);
-						result = 0;
+						action_result = 0;
 						break;
 					}
 
@@ -898,7 +946,7 @@ int main(int argc, char **argv)
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used + 1);
 				}
 
-				if ((result) && (clients[j]->buf_used == dtmd_command_max_length))
+				if ((action_result) && (clients[j]->buf_used == dtmd_command_max_length))
 				{
 					remove_client(pollfds[i].fd);
 					continue;
@@ -953,6 +1001,16 @@ exit_4_log:
 		closelog();
 	}
 #endif /* DISABLE_SYSLOG */
+
+exit_4_pipe:
+	if (daemonpipe[1] != -1)
+	{
+		// failed initialization
+		daemondata = 0;
+		write(daemonpipe[1], &daemondata, sizeof(unsigned char));
+		close(daemonpipe[1]);
+		daemonpipe[1] = -1;
+	}
 
 exit_4:
 	close(socketfd);

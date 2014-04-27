@@ -268,7 +268,9 @@ static int helper_blkid_read_data_from_partition(const char *partition_name, con
 	pr = blkid_new_probe_from_filename(partition_name);
 	if (pr == NULL)
 	{
+#if 0
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed initializing blkid for device '%s'", partition_name);
+#endif /* 0 */
 		*fstype = NULL;
 		*label  = NULL;
 		return 0;
@@ -421,7 +423,9 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 
 	if (stat(name, &stat_entry) != 0)
 	{
+#if 0
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed calling stat for file '%s'", name);
+#endif /* 0 */
 		goto helper_read_partition_exit_1;
 	}
 
@@ -533,7 +537,9 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 
 	if (stat(name, &stat_entry) != 0)
 	{
+#if 0
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed calling stat for file '%s'", name);
+#endif /* 0 */
 		goto helper_read_device_exit_1;
 	}
 
@@ -543,7 +549,9 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 
 		if (read_int_from_file(name) != removable_correct_value)
 		{
+#if 0
 			WRITE_LOG_ARGS(LOG_WARNING, "Device '%s' is not removable", device_name);
+#endif /* 0 */
 			goto helper_read_device_exit_1;
 		}
 	}
