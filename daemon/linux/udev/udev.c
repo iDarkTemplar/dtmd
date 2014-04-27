@@ -20,6 +20,7 @@
 
 #include "daemon/system_module.h"
 #include "daemon/lists.h"
+#include "daemon/log.h"
 
 #include <libudev.h>
 #include <stdlib.h>
@@ -172,22 +173,26 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	enumeration = (dtmd_device_enumeration_t*) malloc(sizeof(dtmd_device_enumeration_t));
 	if (enumeration == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_enumerate_devices_error_1;
 	}
 
 	enumeration->enumerate = udev_enumerate_new((struct udev*) system);
 	if (enumeration->enumerate == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		goto device_system_enumerate_devices_error_2;
 	}
 
 	if (udev_enumerate_add_match_subsystem(enumeration->enumerate, "block") < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		goto device_system_enumerate_devices_error_3;
 	}
 
 	if (udev_enumerate_scan_devices(enumeration->enumerate) < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		goto device_system_enumerate_devices_error_3;
 	}
 
@@ -242,12 +247,14 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 		dev = udev_device_new_from_syspath(udev_enumerate_get_udev(enumeration->enumerate), path);
 		if (dev == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Udev failure");
 			return -1;
 		}
 
 		path = udev_device_get_devnode(dev);
 		if (path == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Udev failure");
 			udev_device_unref(dev);
 			return -1;
 		}
@@ -259,6 +266,7 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 			if (device_info == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				udev_device_unref(dev);
 				return -1;
 			}
@@ -273,6 +281,7 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 			if (device_info == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				udev_device_unref(dev);
 				return -1;
 			}
@@ -311,16 +320,19 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 	mon = udev_monitor_new_from_netlink((struct udev*) system, "udev");
 	if (mon == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		goto device_system_start_monitoring_error_1;
 	}
 
 	if (udev_monitor_filter_add_match_subsystem_devtype(mon, "block", NULL) < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		goto device_system_start_monitoring_error_2;
 	}
 
 	if (udev_monitor_enable_receiving(mon) < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		goto device_system_start_monitoring_error_2;
 	}
 
@@ -405,6 +417,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 				if (device_info == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					udev_device_unref(dev);
 					return -1;
 				}
@@ -420,6 +433,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 				device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 				if (device_info == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					udev_device_unref(dev);
 					return -1;
 				}
@@ -436,6 +450,7 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 	}
 	else
 	{
+		WRITE_LOG(LOG_ERR, "Udev failure");
 		return -1;
 	}
 

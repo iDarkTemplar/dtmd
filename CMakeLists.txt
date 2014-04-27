@@ -30,13 +30,14 @@ message(STATUS "To change installation directory use -DINST_PREFIX=path, for exa
 message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
 message(STATUS "To change config directory use -DCONFIG_DIR=path")
 message(STATUS "To change location directory of mtab file use -DMTAB_DIR=path")
+message(STATUS "To disable syslog use -DDISABLE_SYSLOG=1")
 
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
 add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT")
+	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT=1")
 endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
@@ -89,6 +90,10 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe ${CLANG_WARNINGS} -g -ggdb")
 	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+
+if (DEFINED DISABLE_SYSLOG)
+	add_definitions(-DDISABLE_SYSLOG)
+endif (DEFINED DISABLE_SYSLOG)
 
 if (DEFINED CLIENT_QT)
 	set (FORCE_QT 1)
@@ -146,7 +151,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )

@@ -24,6 +24,7 @@
 #include "daemon/lists.h"
 #include "daemon/mnt_funcs.h"
 #include "daemon/filesystem_opts.h"
+#include "daemon/log.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -61,6 +62,7 @@ static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 	if ((getsockopt(socket_fd, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length) != 0)
 		|| (ucred_length != sizeof(struct ucred)))
 	{
+		WRITE_LOG(LOG_ERR, "Failed obtaining credentials of client");
 		return -1;
 	}
 
@@ -144,6 +146,7 @@ static int invoke_mount_external(int client_number,
 	mount_cmd = (char*) malloc(total_len + 1);
 	if (mount_cmd == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = -1;
 		goto invoke_mount_external_error_1;
 	}
@@ -176,12 +179,31 @@ static int invoke_mount_external(int client_number,
 
 	switch (result)
 	{
-	case 0:  /* success */
 	case 16: /* problems writing or locking /etc/mtab */
+		WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
+	case 0:  /* success */
+		WRITE_LOG_ARGS(LOG_INFO, "Mounted device '%s' to path '%s'", path, mount_path);
 		return 1;
 	case -1:
+		WRITE_LOG(LOG_ERR, "Unknown mount error");
 		return -1;
+	case 1:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: incorrect invocation or permissions", path, mount_path);
+		return 0;
+	case 2:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: system error", path, mount_path);
+		return 0;
+	case 4:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: internal mount bug", path, mount_path);
+		return 0;
+	case 8:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: user interrupt", path, mount_path);
+		return 0;
+	case 32:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: mount failure", path, mount_path);
+		return 0;
 	default:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: unknown error", path, mount_path);
 		return 0;
 	}
 
@@ -215,6 +237,7 @@ static int invoke_mount_internal(int client_number,
 	mount_full_opts = (char*) malloc(string_full_len + 1);
 	if (mount_full_opts == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = -1;
 		goto invoke_mount_internal_error_1;
 	}
@@ -222,6 +245,7 @@ static int invoke_mount_internal(int client_number,
 	mount_opts = (char*) malloc(string_len + 1);
 	if (mount_opts == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = -1;
 		goto invoke_mount_internal_error_2;
 	}
@@ -240,18 +264,19 @@ static int invoke_mount_internal(int client_number,
 	if (result == 0)
 	{
 		result = add_to_mtab(path, mount_path, fstype, mount_full_opts);
-		if (result == 1)
-		{
-			result = 1;
-		}
-		else
+		if (result != 1)
 		{
 			// NOTE: failing to modify /etc/mtab is non-fatal error
-			result = 0;
+			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
 		}
+
+		result = 1;
+
+		WRITE_LOG_ARGS(LOG_INFO, "Mounted device '%s' to path '%s'", path, mount_path);
 	}
 	else
 	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s'", path, mount_path);
 		result = 0;
 	}
 
@@ -294,6 +319,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 		mount_dev_start = strrchr(path, '/');
 		if (mount_dev_start == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Invalid device name is used for mounting");
 			return NULL;
 		}
 
@@ -302,6 +328,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 
 		if (mount_dev_len == 0)
 		{
+			WRITE_LOG(LOG_ERR, "Invalid device name is used for mounting");
 			return NULL;
 		}
 		break;
@@ -316,6 +343,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 	mount_path = (char*) malloc(mount_dev_len + 1);
 	if (mount_path == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		return NULL;
 	}
 
@@ -385,6 +413,7 @@ invoke_mount_exit_loop:
 
 		if ((dev >= stateful_media_count) || (stateful_media[dev]->state != dtmd_removable_media_state_ok))
 		{
+			WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device does not exist or is not ready", path);
 			result = 0;
 			goto invoke_mount_error_1;
 		}
@@ -396,6 +425,7 @@ invoke_mount_exit_loop:
 
 	if (local_mnt_point != NULL)
 	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device is already mounted", path);
 		result = 0;
 		goto invoke_mount_error_1;
 	}
@@ -469,6 +499,7 @@ invoke_mount_exit_loop:
 					break;
 
 				case mount_by_device_name:
+					WRITE_LOG_ARGS(LOG_WARNING, "Could not find suitable mount point for device '%s'", path);
 					result = 0;
 					goto invoke_mount_error_3;
 				}
@@ -488,6 +519,7 @@ invoke_mount_exit_loop:
 		if (result != 0)
 		{
 			// NOTE: failing to create directory is non-fatal error
+			WRITE_LOG_ARGS(LOG_WARNING, "Failed to create directory '%s'", mount_path );
 			result = 0;
 			goto invoke_mount_error_3;
 		}
@@ -533,6 +565,7 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 	unmount_cmd = (char*) malloc(unmount_cmd_len + 1);
 	if (unmount_cmd == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		return -1;
 	}
 
@@ -549,10 +582,15 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 	switch (result)
 	{
 	case 0:
+		WRITE_LOG_ARGS(LOG_INFO, "Unmounted device '%s' from path '%s'", path, mnt_point);
 		return 1;
+
 	case -1:
+		WRITE_LOG(LOG_ERR, "Unknown unmount error");
 		return -1;
+
 	default:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s' from path '%s' using external umount: unknown error", path, mnt_point);
 		return 0;
 	}
 }
@@ -580,14 +618,22 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 	result = umount(mnt_point);
 	if (result != 0)
 	{
-		return 0;
-	}
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s' from path '%s'", path, mnt_point);
 
-	result = remove_from_mtab(path, mnt_point, fstype);
-	if (result != 1)
-	{
-		// NOTE: failing to modify /etc/mtab is non-fatal error
 		result = 0;
+	}
+	else
+	{
+		result = remove_from_mtab(path, mnt_point, fstype);
+		if (result != 1)
+		{
+			// NOTE: failing to modify /etc/mtab is non-fatal error
+			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
+		}
+
+		result = 1;
+
+		WRITE_LOG_ARGS(LOG_INFO, "Unmounted device '%s' from path '%s'", path, mnt_point);
 	}
 
 	return result;
@@ -666,6 +712,7 @@ invoke_unmount_exit_loop:
 
 		if (dev >= stateful_media_count)
 		{
+			WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device does not exist", path);
 			return 0;
 		}
 
@@ -675,6 +722,7 @@ invoke_unmount_exit_loop:
 
 	if (local_mnt_point == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device is not mounted", path);
 		return 0;
 	}
 

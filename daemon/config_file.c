@@ -32,6 +32,8 @@
 
 #define config_filename CONFIG_DIR "/dtmd.conf"
 
+int daemonize = 1;
+int use_syslog = 1;
 int unmount_on_exit = 0;
 enum mount_by_value_enum mount_by_value = mount_by_device_name;
 char *mount_dir = NULL;
@@ -54,6 +56,8 @@ static const char *config_unmount_on_exit = "unmount_on_exit";
 static const char *config_mount_by = "mount_by";
 static const char *config_mount_by_name = "name";
 static const char *config_mount_by_label = "label";
+
+static const char *config_use_syslog = "use_syslog";
 
 static const char *config_mount_dir = "mount_dir";
 
@@ -177,6 +181,19 @@ static int process_config_value(const char *key, const char *value)
 		else if (strcmp(value, config_mount_by_label) == 0)
 		{
 			mount_by_value = mount_by_device_label;
+			return 1;
+		}
+	}
+	if (strcmp(key, config_use_syslog) == 0)
+	{
+		if (strcmp(value, config_yes) == 0)
+		{
+			use_syslog = 1;
+			return 1;
+		}
+		else if (strcmp(value, config_no) == 0)
+		{
+			use_syslog = 0;
 			return 1;
 		}
 	}

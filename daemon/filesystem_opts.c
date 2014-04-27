@@ -20,6 +20,8 @@
 
 #include "daemon/filesystem_opts.h"
 
+#include "daemon/log.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -209,6 +211,7 @@ const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 
 	if (filesystem == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Bug: parameter filesystem is empty");
 		return NULL;
 	}
 
@@ -216,6 +219,7 @@ const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 	{
 		if (fsopts->fstype == NULL)
 		{
+			WRITE_LOG_ARGS(LOG_ERR, "Can't find filesystem options for filesystem '%s'", filesystem);
 			return NULL;
 		}
 
@@ -272,6 +276,7 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 		}
 	}
 
+	WRITE_LOG_ARGS(LOG_WARNING, "Filesystem option '%s' is not allowed", option);
 	return NULL;
 }
 
@@ -354,6 +359,7 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 	if ((options_list == NULL)
 		|| (fsopts_list == NULL))
 	{
+		WRITE_LOG(LOG_ERR, "Bug: parameter 'options list' or 'filesystem options list' of  is empty");
 		return -1;
 	}
 
@@ -377,6 +383,7 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 
 			if (opt_len == 0)
 			{
+				WRITE_LOG(LOG_WARNING, "Got empty parameter in options list");
 				return 0;
 			}
 
@@ -444,12 +451,14 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				option_item = (struct dtmd_fsopts_list_item*) malloc(sizeof(struct dtmd_fsopts_list_item));
 				if (option_item == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					return -1;
 				}
 
 				tmp = realloc(fsopts_list->options, (fsopts_list->options_count + 1) * sizeof(struct dtmd_fsopts_list_item*));
 				if (tmp == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					free(option_item);
 					return -1;
 				}
@@ -489,18 +498,21 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			result = snprintf(NULL, 0, "%u", *uid);
 			if (result < 1)
 			{
+				WRITE_LOG(LOG_ERR, "Uid to string conversion failed");
 				return -1;
 			}
 
 			fsopts_list->option_uid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_uid.id_option_value == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				return -1;
 			}
 
 			result = snprintf(fsopts_list->option_uid.id_option_value, result + 1, "%u", *uid);
 			if (result < 1)
 			{
+				WRITE_LOG(LOG_ERR, "Uid to string conversion failed");
 				return -1;
 			}
 
@@ -514,18 +526,21 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			result = snprintf(NULL, 0, "%u", *gid);
 			if (result < 1)
 			{
+				WRITE_LOG(LOG_ERR, "Gid to string conversion failed");
 				return -1;
 			}
 
 			fsopts_list->option_gid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_gid.id_option_value == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				return -1;
 			}
 
 			result = snprintf(fsopts_list->option_gid.id_option_value, result + 1, "%u", *gid);
 			if (result < 1)
 			{
+				WRITE_LOG(LOG_ERR, "Gid to string conversion failed");
 				return -1;
 			}
 
@@ -556,6 +571,7 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 
 	if (fsopts_list == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "BUG: parameter 'filesystem options list' is empty");
 		return -1;
 	}
 

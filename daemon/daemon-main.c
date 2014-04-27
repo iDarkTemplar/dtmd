@@ -40,11 +40,11 @@
 #include "daemon/system_module.h"
 #include "daemon/config_file.h"
 #include "daemon/filesystem_mnt.h"
+#include "daemon/log.h"
 
 #define dtmd_daemon_lock "/var/lock/dtmd.lock"
 
-static unsigned char continue_working  = 1;
-static unsigned char daemonize         = 1;
+static volatile unsigned char continue_working  = 1;
 static unsigned char check_config_only = 0;
 
 void print_usage(char *name)
@@ -505,37 +505,36 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (!daemonize)
+	{
+		// use stderr instead if it is available
+		use_syslog = 0;
+	}
+
+#ifndef DISABLE_SYSLOG
+	if (use_syslog)
+	{
+		openlog("DTMD", LOG_PID, LOG_DAEMON);
+	}
+#endif /* DISABLE_SYSLOG */
+
 	if (listen(socketfd, backlog) == -1)
 	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error listening socket\n");
-		}
-
+		WRITE_LOG(LOG_ERR, "Error listening socket");
 		result = -1;
-		goto exit_4;
+		goto exit_4_log;
 	}
 
 	dtmd_dev_system = device_system_init();
 	if (dtmd_dev_system == NULL)
 	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error opening device system\n");
-		}
-
 		result = -1;
-		goto exit_4;
+		goto exit_4_log;
 	}
 
 	dtmd_dev_mon = device_system_start_monitoring(dtmd_dev_system);
 	if (dtmd_dev_mon == NULL)
 	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error opening device monitor\n");
-		}
-
 		result = -1;
 		goto exit_5;
 	}
@@ -543,11 +542,6 @@ int main(int argc, char **argv)
 	monfd = device_system_get_monitor_fd(dtmd_dev_mon);
 	if (monfd < 0)
 	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error getting device monitor file descriptor\n");
-		}
-
 		result = -1;
 		goto exit_6;
 	}
@@ -555,11 +549,7 @@ int main(int argc, char **argv)
 	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
 	if (mountfd < 0)
 	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error opening mounts file descriptor\n");
-		}
-
+		WRITE_LOG(LOG_ERR, "Error opening mounts file descriptor");
 		result = -1;
 		goto exit_6;
 	}
@@ -567,11 +557,6 @@ int main(int argc, char **argv)
 	dtmd_dev_enum = device_system_enumerate_devices(dtmd_dev_system);
 	if (dtmd_dev_enum == NULL)
 	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error querying device enumeration\n");
-		}
-
 		result = -1;
 		goto exit_6;
 	}
@@ -654,6 +639,7 @@ int main(int argc, char **argv)
 	pollfds = (struct pollfd*) malloc(sizeof(struct pollfd)*pollfds_count);
 	if (pollfds == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = -1;
 		goto exit_7;
 	}
@@ -684,6 +670,7 @@ int main(int argc, char **argv)
 		{
 			if (errno != EINTR)
 			{
+				WRITE_LOG_ARGS(LOG_ERR, "Poll failed, errno %d", errno);
 				result = -1;
 				goto exit_8;
 			}
@@ -693,6 +680,7 @@ int main(int argc, char **argv)
 
 		if ((pollfds[1].revents & POLLHUP) || (pollfds[1].revents & POLLERR) || (pollfds[1].revents & POLLNVAL))
 		{
+			WRITE_LOG(LOG_ERR, "Invalid poll result on client socket");
 			result = -1;
 			goto exit_8;
 		}
@@ -701,6 +689,7 @@ int main(int argc, char **argv)
 			rc = accept(socketfd, NULL, NULL);
 			if (rc < 0)
 			{
+				WRITE_LOG_ARGS(LOG_ERR, "Accepting client failed, errno %d", errno);
 				result = -1;
 				goto exit_8;
 			}
@@ -715,6 +704,7 @@ int main(int argc, char **argv)
 
 		if ((pollfds[0].revents & POLLHUP) || (pollfds[0].revents & POLLERR) || (pollfds[0].revents & POLLNVAL))
 		{
+			WRITE_LOG(LOG_ERR, "Invalid poll result on device monitoring socket");
 			result = -1;
 			goto exit_8;
 		}
@@ -831,6 +821,7 @@ int main(int argc, char **argv)
 
 		if ((pollfds[2].revents & POLLHUP) || (pollfds[2].revents & POLLNVAL))
 		{
+			WRITE_LOG(LOG_ERR, "Invalid poll result on device monitoring socket");
 			result = -1;
 			goto exit_8;
 		}
@@ -861,6 +852,7 @@ int main(int argc, char **argv)
 
 				if (j == clients_count)
 				{
+					WRITE_LOG(LOG_ERR, "BUG: could not find non-existent client");
 					result = -1;
 					goto exit_8;
 				}
@@ -889,6 +881,7 @@ int main(int argc, char **argv)
 					cmd = dtmd_parse_command(clients[j]->buf);
 					if (cmd == NULL)
 					{
+						WRITE_LOG(LOG_ERR, "Memory allocation failure");
 						result = -1;
 						goto exit_8;
 					}
@@ -919,6 +912,7 @@ int main(int argc, char **argv)
 			tmp = realloc(pollfds, sizeof(struct pollfd)*pollfds_count);
 			if (tmp == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				result = -1;
 				goto exit_8;
 			}
@@ -951,6 +945,14 @@ exit_6:
 
 exit_5:
 	device_system_deinit(dtmd_dev_system);
+
+exit_4_log:
+#ifndef DISABLE_SYSLOG
+	if (use_syslog)
+	{
+		closelog();
+	}
+#endif /* DISABLE_SYSLOG */
 
 exit_4:
 	close(socketfd);

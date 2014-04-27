@@ -25,6 +25,10 @@
 
 #include <sys/mount.h>
 
+// required to disable logging output and meet linking requirements
+int use_syslog = 0;
+int daemonize = 1;
+
 #define get_fsopts(fstype) \
 	fsopts_##fstype = get_fsopts_for_fs(#fstype); \
 	if (fsopts_##fstype == NULL) \

@@ -31,6 +31,8 @@ enum mount_by_value_enum
 	mount_by_device_label
 };
 
+extern int daemonize;
+extern int use_syslog;
 extern int unmount_on_exit;
 extern enum mount_by_value_enum mount_by_value;
 extern char *mount_dir;

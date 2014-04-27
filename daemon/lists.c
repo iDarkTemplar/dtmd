@@ -22,6 +22,7 @@
 
 #include "daemon/label.h"
 #include "daemon/actions.h"
+#include "daemon/log.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -54,12 +55,14 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 	cur_media = (struct removable_media*) malloc(sizeof(struct removable_media));
 	if (cur_media == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_media_block_error_1;
 	}
 
 	cur_media->path = strdup(path);
 	if (cur_media->path == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_media_block_error_2;
 	}
 
@@ -70,6 +73,7 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 	tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*)*(media_count+1));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_media_block_error_3;
 	}
 
@@ -113,6 +117,7 @@ int remove_media_block(const char *path)
 				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*) * media_count);
 				if (tmp == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					return -1;
 				}
 
@@ -199,18 +204,21 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 			cur_partition = (struct removable_partition*) malloc(sizeof(struct removable_partition));
 			if (cur_partition == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				goto add_media_partition_error_1;
 			}
 
 			cur_partition->path = strdup(partition);
 			if (cur_partition->path == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				goto add_media_partition_error_2;
 			}
 
 			cur_partition->fstype = strdup(fstype);
 			if (cur_partition->fstype == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				goto add_media_partition_error_3;
 			}
 
@@ -219,6 +227,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 				cur_partition->label = decode_label(label);
 				if (cur_partition->label == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					goto add_media_partition_error_4;
 				}
 			}
@@ -234,6 +243,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 			tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * (media[i]->partitions_count + 1));
 			if (tmp == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				goto add_media_partition_error_5;
 			}
 
@@ -247,6 +257,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 		}
 	}
 
+	WRITE_LOG(LOG_ERR, "BUG: reached code which should be unreachable");
 	return -2; // -2 means bug
 
 add_media_partition_error_5:
@@ -294,6 +305,7 @@ int remove_media_partition(const char *block, const char *partition)
 						tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * media[i]->partitions_count);
 						if (tmp == NULL)
 						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
 							return -1;
 						}
 
@@ -413,12 +425,14 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 	cur_media = (struct removable_stateful_media*) malloc(sizeof(struct removable_stateful_media));
 	if (cur_media == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_stateful_media_error_1;
 	}
 
 	cur_media->path = strdup(path);
 	if (cur_media->path == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_stateful_media_error_2;
 	}
 
@@ -427,6 +441,7 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 		cur_media->fstype = strdup(fstype);
 		if (cur_media->fstype == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto add_stateful_media_error_3;
 		}
 	}
@@ -440,6 +455,7 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 		cur_media->label = decode_label(label);
 		if (cur_media->label == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto add_stateful_media_error_4;
 		}
 	}
@@ -457,6 +473,7 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 	tmp = (struct removable_stateful_media**) realloc(stateful_media, sizeof(struct removable_stateful_media*)*(stateful_media_count+1));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_stateful_media_error_5;
 	}
 
@@ -511,6 +528,7 @@ int remove_stateful_media(const char *path)
 				tmp = (struct removable_stateful_media**) realloc(stateful_media, sizeof(struct removable_stateful_media*) * stateful_media_count);
 				if (tmp == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					return -1;
 				}
 
@@ -622,6 +640,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 				stateful_media[i]->fstype = strdup(fstype);
 				if (stateful_media[i]->fstype == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					return -1;
 				}
 			}
@@ -631,6 +650,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 				stateful_media[i]->label = decode_label(label);
 				if (stateful_media[i]->label == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					return -1;
 				}
 			}
@@ -645,6 +665,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 		}
 	}
 
+	WRITE_LOG(LOG_ERR, "Caught false event about stateful device change");
 	return -1;
 }
 
@@ -711,6 +732,7 @@ int add_client(int client)
 	cur_client = (struct client*) malloc(sizeof(struct client));
 	if (cur_client == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_client_error_1;
 	}
 
@@ -720,6 +742,7 @@ int add_client(int client)
 	tmp = (struct client**) realloc(clients, sizeof(struct client*)*(clients_count+1));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_client_error_2;
 	}
 
@@ -759,6 +782,7 @@ int remove_client(int client)
 				tmp = (struct client**) realloc(clients, sizeof(struct client*)*clients_count);
 				if (tmp == NULL)
 				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					return -1;
 				}
 
