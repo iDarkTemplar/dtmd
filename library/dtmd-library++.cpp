@@ -440,9 +440,14 @@ dtmd_result_t library::list_stateful_device(int timeout, const std::string &devi
 	return result;
 }
 
+dtmd_result_t library::mount(int timeout, const std::string &path)
+{
+	return dtmd_mount(this->m_handle, timeout, path.c_str(), NULL);
+}
+
 dtmd_result_t library::mount(int timeout, const std::string &path, const std::string &mount_options)
 {
-	return dtmd_mount(this->m_handle, timeout, path.c_str(), (mount_options.empty() ? NULL : mount_options.c_str()));
+	return dtmd_mount(this->m_handle, timeout, path.c_str(), mount_options.c_str());
 }
 
 dtmd_result_t library::unmount(int timeout, const std::string &path)
@@ -458,9 +463,18 @@ bool library::isStateInvalid() const
 void library::local_callback(void *arg, const dtmd_command_t *cmd)
 {
 	library *lib = (library*) arg;
-	command local_command(cmd);
 
-	lib->m_cb(lib->m_arg, local_command);
+	try
+	{
+		command local_command(cmd);
+
+		lib->m_cb(lib->m_arg, local_command);
+	}
+	catch (...)
+	{
+		// signal failure
+		lib->m_cb(lib->m_arg, command());
+	}
 }
 
 } // namespace dtmd
