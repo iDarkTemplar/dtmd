@@ -887,6 +887,8 @@ int invoke_list_supported_filesystems(int client_number)
 	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
 	int first = 1;
 
+	dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n");
+
 	dprintf(clients[client_number]->clientfd, dtmd_response_argument_supported_filesystems_lists "(");
 
 	for (;;)
@@ -896,21 +898,82 @@ int invoke_list_supported_filesystems(int client_number)
 			break;
 		}
 
-		if (first != 0)
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+		if (fsopts->external_fstype == NULL)
 		{
-			first = 0;
-		}
-		else
-		{
-			dprintf(clients[client_number]->clientfd, ", ");
-		}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+			if (first != 0)
+			{
+				first = 0;
+			}
+			else
+			{
+				dprintf(clients[client_number]->clientfd, ", ");
+			}
 
-		dprintf(clients[client_number]->clientfd, "\"%s\"", fsopts->fstype);
+			dprintf(clients[client_number]->clientfd, "\"%s\"", fsopts->fstype);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+		}
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 		++fsopts;
 	}
 
 	dprintf(clients[client_number]->clientfd, ")\n");
+
+	dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n");
+
+	return 0;
+}
+
+int invoke_list_supported_filesystem_options(int client_number, const char *filesystem)
+{
+	const struct dtmd_filesystem_options *fsopts;
+	const struct dtmd_mount_option *option_list;
+	const struct dtmd_mount_option *options_lists_array[2];
+	unsigned int array_index;
+	int first = 1;
+
+	fsopts = get_fsopts_for_fs(filesystem);
+#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+	if (fsopts == NULL)
+#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	if ((fsopts == NULL) || (fsopts->external_fstype != NULL))
+#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+	{
+		dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem);
+		return 0;
+	}
+
+	options_lists_array[0] = any_fs_allowed_list;
+	options_lists_array[1] = fsopts->options;
+
+	dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem);
+
+	dprintf(clients[client_number]->clientfd, dtmd_response_argument_supported_filesystem_options_lists "(");
+
+	for (array_index = 0; array_index < 2; ++array_index)
+	{
+		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
+		{
+			if (first != 0)
+			{
+				first = 0;
+			}
+			else
+			{
+				dprintf(clients[client_number]->clientfd, ", ");
+			}
+
+			dprintf(clients[client_number]->clientfd, "\"%s\"", option_list->option);
+		}
+	}
+
+	dprintf(clients[client_number]->clientfd, ")\n");
+
+	dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem);
 
 	return 0;
 }

@@ -88,6 +88,7 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const char *mount_options);
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path);
 dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, unsigned int *supported_filesystems_count, const char ***supported_filesystems_list);
+dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, unsigned int *supported_filesystem_options_count, const char ***supported_filesystem_options_list);
 int dtmd_is_state_invalid(dtmd_t *handle);
 
 void dtmd_free_devices_array(dtmd_t *handle, unsigned int device_count, dtmd_device_t **devices);
@@ -96,6 +97,7 @@ void dtmd_free_partition(dtmd_t *handle, dtmd_partition_t *partition);
 void dtmd_free_stateful_devices_array(dtmd_t *handle, unsigned int stateful_device_count, dtmd_stateful_device_t **stateful_devices);
 void dtmd_free_stateful_device(dtmd_t *handle, dtmd_stateful_device_t *stateful_device);
 void dtmd_free_supported_filesystems_list(dtmd_t *handle, unsigned int supported_filesystems_count, const char **supported_filesystems_list);
+void dtmd_free_supported_filesystem_options_list(dtmd_t *handle, unsigned int supported_filesystem_options_count, const char **supported_filesystem_options_list);
 
 #ifdef __cplusplus
 }

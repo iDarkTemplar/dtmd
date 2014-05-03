@@ -91,6 +91,7 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	unsigned long *mount_flags);
 
 int invoke_list_supported_filesystems(int client_number);
+int invoke_list_supported_filesystem_options(int client_number, const char *filesystem);
 
 #ifdef __cplusplus
 }

@@ -493,6 +493,44 @@ dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::
 	return result;
 }
 
+dtmd_result_t library::list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list)
+{
+	dtmd_result_t result;
+	unsigned int supported_filesystem_options_count;
+	const char **supported_filesystem_options_array;
+	unsigned int i;
+
+	result = dtmd_list_supported_filesystem_options(this->m_handle, timeout, filesystem.c_str(), &supported_filesystem_options_count, &supported_filesystem_options_array);
+
+	if (result == dtmd_ok)
+	{
+		try
+		{
+			if (supported_filesystem_options_array != NULL)
+			{
+				supported_filesystem_options_list.reserve(supported_filesystem_options_count);
+
+				for (i = 0; i < supported_filesystem_options_count; ++i)
+				{
+					if (supported_filesystem_options_array[i] != NULL)
+					{
+						supported_filesystem_options_list.push_back(std::string(supported_filesystem_options_array[i]));
+					}
+				}
+			}
+
+			dtmd_free_supported_filesystem_options_list(this->m_handle, supported_filesystem_options_count, supported_filesystem_options_array);
+		}
+		catch (...)
+		{
+			dtmd_free_supported_filesystem_options_list(this->m_handle, supported_filesystem_options_count, supported_filesystem_options_array);
+			throw;
+		}
+	}
+
+	return result;
+}
+
 bool library::isStateInvalid() const
 {
 	return dtmd_is_state_invalid(this->m_handle);
