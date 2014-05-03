@@ -455,6 +455,44 @@ dtmd_result_t library::unmount(int timeout, const std::string &path)
 	return dtmd_unmount(this->m_handle, timeout, path.c_str());
 }
 
+dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list)
+{
+	dtmd_result_t result;
+	unsigned int supported_filesystems_count;
+	const char **supported_filesystems_array;
+	unsigned int i;
+
+	result = dtmd_list_supported_filesystems(this->m_handle, timeout, &supported_filesystems_count, &supported_filesystems_array);
+
+	if (result == dtmd_ok)
+	{
+		try
+		{
+			if (supported_filesystems_array != NULL)
+			{
+				supported_filesystems_list.reserve(supported_filesystems_count);
+
+				for (i = 0; i < supported_filesystems_count; ++i)
+				{
+					if (supported_filesystems_array[i] != NULL)
+					{
+						supported_filesystems_list.push_back(std::string(supported_filesystems_array[i]));
+					}
+				}
+			}
+
+			dtmd_free_supported_filesystems_list(this->m_handle, supported_filesystems_count, supported_filesystems_array);
+		}
+		catch (...)
+		{
+			dtmd_free_supported_filesystems_list(this->m_handle, supported_filesystems_count, supported_filesystems_array);
+			throw;
+		}
+	}
+
+	return result;
+}
+
 bool library::isStateInvalid() const
 {
 	return dtmd_is_state_invalid(this->m_handle);

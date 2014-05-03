@@ -20,6 +20,7 @@
 
 #include "daemon/filesystem_opts.h"
 
+#include "daemon/lists.h"
 #include "daemon/log.h"
 
 #include <stdio.h>
@@ -879,4 +880,37 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	}
 
 	return 1;
+}
+
+int invoke_list_supported_filesystems(int client_number)
+{
+	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
+	int first = 1;
+
+	dprintf(clients[client_number]->clientfd, dtmd_response_argument_supported_filesystems_lists "(");
+
+	for (;;)
+	{
+		if ((fsopts == NULL) || (fsopts->fstype == NULL))
+		{
+			break;
+		}
+
+		if (first != 0)
+		{
+			first = 0;
+		}
+		else
+		{
+			dprintf(clients[client_number]->clientfd, ", ");
+		}
+
+		dprintf(clients[client_number]->clientfd, "\"%s\"", fsopts->fstype);
+
+		++fsopts;
+	}
+
+	dprintf(clients[client_number]->clientfd, ")\n");
+
+	return 0;
 }

@@ -135,6 +135,7 @@ public:
 	dtmd_result_t mount(int timeout, const std::string &path);
 	dtmd_result_t mount(int timeout, const std::string &path, const std::string &mount_options);
 	dtmd_result_t unmount(int timeout, const std::string &path);
+	dtmd_result_t list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list);
 
 	bool isStateInvalid() const;
 

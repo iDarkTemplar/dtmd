@@ -195,6 +195,16 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 
 		return rc;
 	}
+	else if ((strcmp(cmd->cmd, dtmd_command_list_supported_filesystems) == 0) && (cmd->args_count == 0))
+	{
+		dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n");
+
+		invoke_list_supported_filesystems(client_number);
+
+		dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n");
+
+		return 1;
+	}
 	else
 	{
 		return 0;
