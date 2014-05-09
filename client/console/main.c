@@ -148,6 +148,8 @@ void printUsage(char *app)
 		"\t\tlist_stateful_device path\n"
 		"\t\tmount device [ mount_options ]\n"
 		"\t\tunmount device\n"
+		"\t\tls_fs\n"
+		"\t\tls_fs_opts\n"
 		"\t\tmonitor\n", app);
 }
 
@@ -426,6 +428,76 @@ int client_unmount(char *device)
 	return func_result;
 }
 
+int client_list_supported_filesystems(void)
+{
+	dtmd_t *lib;
+	dtmd_result_t result;
+	unsigned int count, i;
+	const char **filesystems;
+
+	lib = dtmd_init(&client_callback, (void*)0, &result);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
+		return -1;
+	}
+
+	result = dtmd_list_supported_filesystems(lib, -1, &count, &filesystems);
+	if (result != dtmd_ok)
+	{
+		fprintf(stderr, "Couldn't list supported filesystems, error code %d\n", result);
+		dtmd_deinit(lib);
+		return -1;
+	}
+
+	fprintf(stdout, "Got %u supported filesystems:\n", count);
+
+	for (i = 0; i < count; ++i)
+	{
+		fprintf(stdout, "\t%s\n", filesystems[i]);
+	}
+
+	dtmd_free_supported_filesystems_list(lib, count, filesystems);
+	dtmd_deinit(lib);
+
+	return 0;
+}
+
+int client_list_supported_filesystem_options(const char *filesystem)
+{
+	dtmd_t *lib;
+	dtmd_result_t result;
+	unsigned int count, i;
+	const char **options_list;
+
+	lib = dtmd_init(&client_callback, (void*)0, &result);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
+		return -1;
+	}
+
+	result = dtmd_list_supported_filesystem_options(lib, -1,filesystem, &count, &options_list);
+	if (result != dtmd_ok)
+	{
+		fprintf(stderr, "Couldn't list supported filesystems, error code %d\n", result);
+		dtmd_deinit(lib);
+		return -1;
+	}
+
+	fprintf(stdout, "Got %u supported filesystem options for %s:\n", count, filesystem);
+
+	for (i = 0; i < count; ++i)
+	{
+		fprintf(stdout, "\t%s\n", options_list[i]);
+	}
+
+	dtmd_free_supported_filesystem_options_list(lib, count, options_list);
+	dtmd_deinit(lib);
+
+	return 0;
+}
+
 int client_monitor(void)
 {
 	dtmd_t *lib;
@@ -483,6 +555,14 @@ int main(int argc, char **argv)
 	else if ((argc == 3) && (strcmp(argv[1], "unmount") == 0))
 	{
 		return client_unmount(argv[2]);
+	}
+	else if ((argc == 2) && (strcmp(argv[1], "ls_fs") == 0))
+	{
+		return client_list_supported_filesystems();
+	}
+	else if ((argc == 3) && (strcmp(argv[1], "ls_fs_opts") == 0))
+	{
+		return client_list_supported_filesystem_options(argv[2]);
 	}
 	else if ((argc == 2) && (strcmp(argv[1], "monitor") == 0))
 	{

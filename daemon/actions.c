@@ -20,7 +20,8 @@
 
 #include "daemon/actions.h"
 
-#include "daemon/filesystems.h"
+#include "daemon/filesystem_mnt.h"
+#include "daemon/filesystem_opts.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -194,6 +195,14 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 
 		return rc;
+	}
+	else if ((strcmp(cmd->cmd, dtmd_command_list_supported_filesystems) == 0) && (cmd->args_count == 0))
+	{
+		return invoke_list_supported_filesystems(client_number);
+	}
+	else if ((strcmp(cmd->cmd, dtmd_command_list_supported_filesystem_options) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	{
+		return invoke_list_supported_filesystem_options(client_number, cmd->args[0]);
 	}
 	else
 	{

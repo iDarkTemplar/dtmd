@@ -440,14 +440,95 @@ dtmd_result_t library::list_stateful_device(int timeout, const std::string &devi
 	return result;
 }
 
+dtmd_result_t library::mount(int timeout, const std::string &path)
+{
+	return dtmd_mount(this->m_handle, timeout, path.c_str(), NULL);
+}
+
 dtmd_result_t library::mount(int timeout, const std::string &path, const std::string &mount_options)
 {
-	return dtmd_mount(this->m_handle, timeout, path.c_str(), (mount_options.empty() ? NULL : mount_options.c_str()));
+	return dtmd_mount(this->m_handle, timeout, path.c_str(), mount_options.c_str());
 }
 
 dtmd_result_t library::unmount(int timeout, const std::string &path)
 {
 	return dtmd_unmount(this->m_handle, timeout, path.c_str());
+}
+
+dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list)
+{
+	dtmd_result_t result;
+	unsigned int supported_filesystems_count;
+	const char **supported_filesystems_array;
+	unsigned int i;
+
+	result = dtmd_list_supported_filesystems(this->m_handle, timeout, &supported_filesystems_count, &supported_filesystems_array);
+
+	if (result == dtmd_ok)
+	{
+		try
+		{
+			if (supported_filesystems_array != NULL)
+			{
+				supported_filesystems_list.reserve(supported_filesystems_count);
+
+				for (i = 0; i < supported_filesystems_count; ++i)
+				{
+					if (supported_filesystems_array[i] != NULL)
+					{
+						supported_filesystems_list.push_back(std::string(supported_filesystems_array[i]));
+					}
+				}
+			}
+
+			dtmd_free_supported_filesystems_list(this->m_handle, supported_filesystems_count, supported_filesystems_array);
+		}
+		catch (...)
+		{
+			dtmd_free_supported_filesystems_list(this->m_handle, supported_filesystems_count, supported_filesystems_array);
+			throw;
+		}
+	}
+
+	return result;
+}
+
+dtmd_result_t library::list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list)
+{
+	dtmd_result_t result;
+	unsigned int supported_filesystem_options_count;
+	const char **supported_filesystem_options_array;
+	unsigned int i;
+
+	result = dtmd_list_supported_filesystem_options(this->m_handle, timeout, filesystem.c_str(), &supported_filesystem_options_count, &supported_filesystem_options_array);
+
+	if (result == dtmd_ok)
+	{
+		try
+		{
+			if (supported_filesystem_options_array != NULL)
+			{
+				supported_filesystem_options_list.reserve(supported_filesystem_options_count);
+
+				for (i = 0; i < supported_filesystem_options_count; ++i)
+				{
+					if (supported_filesystem_options_array[i] != NULL)
+					{
+						supported_filesystem_options_list.push_back(std::string(supported_filesystem_options_array[i]));
+					}
+				}
+			}
+
+			dtmd_free_supported_filesystem_options_list(this->m_handle, supported_filesystem_options_count, supported_filesystem_options_array);
+		}
+		catch (...)
+		{
+			dtmd_free_supported_filesystem_options_list(this->m_handle, supported_filesystem_options_count, supported_filesystem_options_array);
+			throw;
+		}
+	}
+
+	return result;
 }
 
 bool library::isStateInvalid() const
@@ -458,9 +539,18 @@ bool library::isStateInvalid() const
 void library::local_callback(void *arg, const dtmd_command_t *cmd)
 {
 	library *lib = (library*) arg;
-	command local_command(cmd);
 
-	lib->m_cb(lib->m_arg, local_command);
+	try
+	{
+		command local_command(cmd);
+
+		lib->m_cb(lib->m_arg, local_command);
+	}
+	catch (...)
+	{
+		// signal failure
+		lib->m_cb(lib->m_arg, command());
+	}
 }
 
 } // namespace dtmd

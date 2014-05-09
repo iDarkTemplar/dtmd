@@ -155,6 +155,27 @@ typedef enum dtmd_removable_media_state
  *		"succeeded" or "failed"
  */
 
+#define dtmd_command_list_supported_filesystems "list_supported_filesystems"
+/*
+ *	input: none
+ *
+ *	returns:
+ *		list of filesystem names
+ *
+ *		or "failed" on fail
+ */
+
+#define dtmd_command_list_supported_filesystem_options "list_supported_filesystem_options"
+/*
+ *	input:
+ *		"filesystem"
+ *
+ *	returns:
+ *		list of filesystem option names
+ *
+ *		or "failed" on fail
+ */
+
 #define dtmd_response_started "started"
 #define dtmd_response_finished "finished"
 #define dtmd_response_succeeded "succeeded"
@@ -165,5 +186,7 @@ typedef enum dtmd_removable_media_state
 #define dtmd_response_argument_partition "partition"
 #define dtmd_response_argument_stateful_devices "stateful_devices"
 #define dtmd_response_argument_stateful_device "stateful_device"
+#define dtmd_response_argument_supported_filesystems_lists "supported_filesystems_list"
+#define dtmd_response_argument_supported_filesystem_options_lists "supported_filesystem_options_list"
 
 #endif /* DTMD_H */

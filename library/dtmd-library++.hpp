@@ -36,7 +36,7 @@ class command
 {
 public:
 	command();
-	command(const dtmd_command_t *cmd);
+	explicit command(const dtmd_command_t *cmd);
 	virtual ~command();
 
 	void fillFromCmd(const dtmd_command_t *cmd);
@@ -52,7 +52,7 @@ class partition
 {
 public:
 	partition();
-	partition(const dtmd_partition_t *part);
+	explicit partition(const dtmd_partition_t *part);
 	partition(const std::string &l_path,
 		const std::string &l_fstype,
 		const std::string &l_label = std::string(),
@@ -77,7 +77,7 @@ class device
 {
 public:
 	device();
-	device(const dtmd_device_t *dev);
+	explicit device(const dtmd_device_t *dev);
 	device(const std::string &l_path, dtmd_removable_media_type_t l_type);
 
 	virtual ~device();
@@ -96,7 +96,7 @@ class stateful_device
 {
 public:
 	stateful_device();
-	stateful_device(const dtmd_stateful_device_t *dev);
+	explicit stateful_device(const dtmd_stateful_device_t *dev);
 	stateful_device(const std::string &l_path,
 		dtmd_removable_media_type_t l_type,
 		dtmd_removable_media_state_t l_state,
@@ -132,8 +132,11 @@ public:
 	dtmd_result_t list_device(int timeout, const std::string &device_path, device &result_device);
 	dtmd_result_t list_partition(int timeout, const std::string &partition_path, partition &result_partition);
 	dtmd_result_t list_stateful_device(int timeout, const std::string &device_path, stateful_device &result_stateful_device);
-	dtmd_result_t mount(int timeout, const std::string &path, const std::string &mount_options = std::string());
+	dtmd_result_t mount(int timeout, const std::string &path);
+	dtmd_result_t mount(int timeout, const std::string &path, const std::string &mount_options);
 	dtmd_result_t unmount(int timeout, const std::string &path);
+	dtmd_result_t list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list);
+	dtmd_result_t list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list);
 
 	bool isStateInvalid() const;
 

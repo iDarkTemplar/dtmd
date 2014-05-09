@@ -18,8 +18,8 @@
  *
  */
 
-#ifndef FILESYSTEMS_H
-#define FILESYSTEMS_H
+#ifndef FILESYSTEM_MNT_H
+#define FILESYSTEM_MNT_H
 
 #include "daemon/config_file.h"
 
@@ -38,4 +38,4 @@ int invoke_unmount_all(int client_number);
 }
 #endif
 
-#endif /* FILESYSTEMS_H */
+#endif /* FILESYSTEM_MNT_H */

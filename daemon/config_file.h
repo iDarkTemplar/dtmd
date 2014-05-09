@@ -31,11 +31,20 @@ enum mount_by_value_enum
 	mount_by_device_label
 };
 
+extern int daemonize;
+extern int use_syslog;
 extern int unmount_on_exit;
 extern enum mount_by_value_enum mount_by_value;
+extern char *mount_dir;
+extern int create_mount_dir_on_startup;
 
-void read_config(void);
+#define read_config_return_ok 0
+#define read_config_return_no_file -1
+
+int read_config(void);
 void free_config(void);
+
+const char* get_mount_options_for_fs_from_config(const char *fstype);
 
 #ifdef __cplusplus
 }

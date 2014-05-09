@@ -20,6 +20,7 @@
 
 #include "daemon/system_module.h"
 #include "daemon/lists.h"
+#include "daemon/log.h"
 
 #include <blkid.h>
 #include <stdlib.h>
@@ -148,6 +149,7 @@ static int read_int_from_file(const char *filename)
 	file = fopen(filename, "r");
 	if (file == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s' for reading", filename);
 		goto read_int_from_file_error_1;
 	}
 
@@ -162,6 +164,7 @@ static int read_int_from_file(const char *filename)
 			}
 			else
 			{
+				WRITE_LOG_ARGS(LOG_ERR, "File '%s' does not contain valid number", filename);
 				goto read_int_from_file_error_2;
 			}
 		}
@@ -198,6 +201,7 @@ static char* read_string_from_file(const char *filename)
 	result = (char*) malloc((result_len+1) * sizeof(char));
 	if (result == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto read_string_from_file_error_2;
 	}
 
@@ -211,6 +215,7 @@ static char* read_string_from_file(const char *filename)
 		tmp = realloc(result, result_len + 2);
 		if (tmp == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto read_string_from_file_error_3;
 		}
 
@@ -263,6 +268,9 @@ static int helper_blkid_read_data_from_partition(const char *partition_name, con
 	pr = blkid_new_probe_from_filename(partition_name);
 	if (pr == NULL)
 	{
+#if 0
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed initializing blkid for device '%s'", partition_name);
+#endif /* 0 */
 		*fstype = NULL;
 		*label  = NULL;
 		return 0;
@@ -279,6 +287,7 @@ static int helper_blkid_read_data_from_partition(const char *partition_name, con
 		local_fstype = strdup(local_fstype);
 		if (local_fstype == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto helper_blkid_read_data_from_partition_error_1;
 		}
 	}
@@ -288,6 +297,7 @@ static int helper_blkid_read_data_from_partition(const char *partition_name, con
 		local_label = strdup(local_label);
 		if (local_label == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto helper_blkid_read_data_from_partition_error_2;
 		}
 	}
@@ -369,12 +379,14 @@ static int open_netlink_socket(void)
 	fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_KOBJECT_UEVENT);
 	if (fd == -1)
 	{
+		WRITE_LOG(LOG_ERR, "Failed opening netlink socket");
 		return -1;
 	}
 
 	int on = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Failed setting passcred option for netlink socket");
 		close(fd);
 		return -1;
 	}
@@ -386,6 +398,7 @@ static int open_netlink_socket(void)
 
 	if (bind(fd, (struct sockaddr*) &local, sizeof(local)) < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Failed binding netlink socket");
 		close(fd);
 		return -1;
 	}
@@ -410,6 +423,9 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 
 	if (stat(name, &stat_entry) != 0)
 	{
+#if 0
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed calling stat for file '%s'", name);
+#endif /* 0 */
 		goto helper_read_partition_exit_1;
 	}
 
@@ -417,6 +433,7 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	device_type = read_string_from_file(name);
 	if (device_type == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed to get device type from file '%s'", name);
 		goto helper_read_partition_exit_1;
 	}
 
@@ -426,12 +443,14 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 	if (device_info == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto helper_read_partition_error_1;
 	}
 
 	device_info->private_data = malloc(sizeof(dtmd_info_private_t));
 	if (device_info->private_data == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto helper_read_partition_error_2;
 	}
 
@@ -441,12 +460,14 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	device_info->path = (char*) malloc(strlen(devices_dir) + strlen(device_name) + 2);
 	if (device_info->path == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto helper_read_partition_error_3;
 	}
 
 	device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(device_name_parent) + 2);
 	if (device_info->path_parent == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto helper_read_partition_error_4;
 	}
 
@@ -516,6 +537,9 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 
 	if (stat(name, &stat_entry) != 0)
 	{
+#if 0
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed calling stat for file '%s'", name);
+#endif /* 0 */
 		goto helper_read_device_exit_1;
 	}
 
@@ -525,6 +549,9 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 
 		if (read_int_from_file(name) != removable_correct_value)
 		{
+#if 0
+			WRITE_LOG_ARGS(LOG_WARNING, "Device '%s' is not removable", device_name);
+#endif /* 0 */
 			goto helper_read_device_exit_1;
 		}
 	}
@@ -533,6 +560,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 	device_type = read_string_from_file(name);
 	if (device_type == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed to get device type from file '%s'", name);
 		goto helper_read_device_exit_1;
 	}
 
@@ -544,12 +572,14 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 		if (device_info == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto helper_read_device_error_1;
 		}
 
 		device_info->private_data = malloc(sizeof(dtmd_info_private_t));
 		if (device_info->private_data == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto helper_read_device_error_2;
 		}
 
@@ -559,6 +589,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 		device_info->path = (char*) malloc(strlen(devices_dir) + strlen(device_name) + 2);
 		if (device_info->path == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto helper_read_device_error_3;
 		}
 
@@ -642,12 +673,14 @@ static int device_system_init_add_stateless_device(dtmd_device_system_t *device_
 	internal_device = malloc(sizeof(dtmd_device_internal_t));
 	if (internal_device == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_init_add_stateless_device_error_1;
 	}
 
 	tmp = realloc(device_system->devices, (device_system->devices_count + 1) * sizeof(dtmd_device_internal_t*));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_init_add_stateless_device_error_2;
 	}
 
@@ -692,6 +725,7 @@ static int device_system_init_add_stateful_device(dtmd_device_system_t *device_s
 	tmp = realloc(device_system->stateful_devices, (device_system->stateful_devices_count + 1) * sizeof(dtmd_info_t*));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_init_add_stateful_device_error_1;
 	}
 
@@ -770,6 +804,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 	dir_pointer = opendir(block_devices_dir);
 	if (dir_pointer == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", block_devices_dir);
 		goto device_system_init_fill_devices_error_plain_1;
 	}
 
@@ -787,6 +822,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 		if (len_core + len_base + len_ext > PATH_MAX)
 		{
+			WRITE_LOG(LOG_ERR, "Error: got too long file name");
 			goto device_system_init_fill_devices_error_plain_2;
 		}
 
@@ -811,6 +847,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				dir_pointer_partitions = opendir(file_name);
 				if (dir_pointer_partitions == NULL)
 				{
+					WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 					goto device_system_init_fill_devices_error_plain_2;
 				}
 				break;
@@ -865,6 +902,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 				if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
 				{
+					WRITE_LOG(LOG_ERR, "Error: got too long file name");
 					goto device_system_init_fill_devices_error_plain_3;
 				}
 
@@ -884,6 +922,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 						(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
 					if (tmp == NULL)
 					{
+						WRITE_LOG(LOG_ERR, "Memory allocation failure");
 						device_system_free_device(device);
 						goto device_system_init_fill_devices_error_plain_3;
 					}
@@ -914,6 +953,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 	dir_pointer_usb = opendir(block_usb_devices_dir);
 	if (dir_pointer_usb == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", block_usb_devices_dir);
 		goto device_system_init_fill_devices_error_usb_1;
 	}
 
@@ -931,6 +971,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 		if (len_core + len_base + len_ext > PATH_MAX)
 		{
+			WRITE_LOG(LOG_ERR, "Error: got too long file name");
 			goto device_system_init_fill_devices_error_usb_2;
 		}
 
@@ -946,6 +987,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 		dir_pointer_usb_device = opendir(file_name);
 		if (dir_pointer_usb_device == NULL)
 		{
+			WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 			goto device_system_init_fill_devices_error_usb_2;
 		}
 
@@ -966,6 +1008,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 			if (len_core + len_base + len_ext > PATH_MAX)
 			{
+				WRITE_LOG(LOG_ERR, "Error: got too long file name");
 				goto device_system_init_fill_devices_error_usb_3;
 			}
 
@@ -983,6 +1026,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 			dir_pointer_usb_host = opendir(file_name);
 			if (dir_pointer_usb_host == NULL)
 			{
+				WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 				goto device_system_init_fill_devices_error_usb_3;
 			}
 
@@ -1003,6 +1047,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 				if (len_core + len_base + len_ext > PATH_MAX)
 				{
+					WRITE_LOG(LOG_ERR, "Error: got too long file name");
 					goto device_system_init_fill_devices_error_usb_4;
 				}
 
@@ -1022,6 +1067,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				dir_pointer_usb_target = opendir(file_name);
 				if (dir_pointer_usb_target == NULL)
 				{
+					WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 					goto device_system_init_fill_devices_error_usb_4;
 				}
 
@@ -1038,6 +1084,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 					if (len_core + len_base + len_ext > PATH_MAX)
 					{
+						WRITE_LOG(LOG_ERR, "Error: got too long file name");
 						goto device_system_init_fill_devices_error_usb_5;
 					}
 
@@ -1061,6 +1108,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					dir_pointer_usb_target_device = opendir(file_name);
 					if (dir_pointer_usb_target_device == NULL)
 					{
+						WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 						goto device_system_init_fill_devices_error_usb_5;
 					}
 
@@ -1078,6 +1126,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 						if (len_core + len_base + len_ext > PATH_MAX)
 						{
+							WRITE_LOG(LOG_ERR, "Error: got too long file name");
 							goto device_system_init_fill_devices_error_usb_6;
 						}
 
@@ -1112,6 +1161,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 								dir_pointer_usb_target_device_blocks = opendir(file_name);
 								if (dir_pointer_usb_target_device_blocks == NULL)
 								{
+									WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 									goto device_system_init_fill_devices_error_usb_6;
 								}
 								break;
@@ -1168,6 +1218,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 								if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
 								{
+									WRITE_LOG(LOG_ERR, "Error: got too long file name");
 									goto device_system_init_fill_devices_error_usb_7;
 								}
 
@@ -1197,6 +1248,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 										(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
 									if (tmp == NULL)
 									{
+										WRITE_LOG(LOG_ERR, "Memory allocation failure");
 										device_system_free_device(device);
 										goto device_system_init_fill_devices_error_usb_7;
 									}
@@ -1243,6 +1295,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 	dir_pointer_mmc = opendir(block_mmc_devices_dir);
 	if (dir_pointer_mmc == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", block_mmc_devices_dir);
 		goto device_system_init_fill_devices_error_mmc_1;
 	}
 
@@ -1260,6 +1313,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 		if (len_core + len_base + len_ext > PATH_MAX)
 		{
+			WRITE_LOG(LOG_ERR, "Error: got too long file name");
 			goto device_system_init_fill_devices_error_mmc_2;
 		}
 
@@ -1277,6 +1331,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 		dir_pointer_mmc_device = opendir(file_name);
 		if (dir_pointer_mmc_device == NULL)
 		{
+			WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 			goto device_system_init_fill_devices_error_mmc_2;
 		}
 
@@ -1293,6 +1348,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 			if (len_core + len_base + len_ext > PATH_MAX)
 			{
+				WRITE_LOG(LOG_ERR, "Error: got too long file name");
 				goto device_system_init_fill_devices_error_mmc_3;
 			}
 
@@ -1321,6 +1377,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					dir_pointer_mmc_device_blocks = opendir(file_name);
 					if (dir_pointer_mmc_device_blocks == NULL)
 					{
+						WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
 						goto device_system_init_fill_devices_error_mmc_3;
 					}
 					break;
@@ -1376,6 +1433,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 					if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
 					{
+						WRITE_LOG(LOG_ERR, "Error: got too long file name");
 						goto device_system_init_fill_devices_error_mmc_4;
 					}
 
@@ -1399,6 +1457,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 							(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
 						if (tmp == NULL)
 						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
 							device_system_free_device(device);
 							goto device_system_init_fill_devices_error_mmc_4;
 						}
@@ -1672,6 +1731,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
 		if (device_info == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto device_system_monitor_receive_device_error_1;
 		}
 
@@ -1682,6 +1742,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		case dtmd_device_action_change:
 			if (strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 4 > PATH_MAX)
 			{
+				WRITE_LOG(LOG_ERR, "Error: got too long file name");
 				goto device_system_monitor_receive_device_error_2;
 			}
 
@@ -1700,6 +1761,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 
 			if (device_type == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Failed to get device type");
 				goto device_system_monitor_receive_device_error_2;
 			}
 
@@ -1747,6 +1809,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		device_info->path = (char*) malloc(strlen(devices_dir) + strlen(devname) + 2);
 		if (device_info->path == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto device_system_monitor_receive_device_error_2;
 		}
 
@@ -1815,6 +1878,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			last_delim = strrchr(devpath, '/');
 			if (last_delim == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Invalid device path");
 				goto device_system_monitor_receive_device_error_3;
 			}
 
@@ -1822,12 +1886,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			last_delim = strrchr(devpath, '/');
 			if (last_delim == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Invalid device path");
 				goto device_system_monitor_receive_device_error_3;
 			}
 
 			device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(last_delim) + 1);
 			if (device_info->path_parent == NULL)
 			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				goto device_system_monitor_receive_device_error_3;
 			}
 
@@ -1848,6 +1914,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	}
 	else if (len < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Failed to receive data from netlink socket");
 		goto device_system_monitor_receive_device_error_1;
 	}
 
@@ -1882,6 +1949,7 @@ static int device_system_monitor_add_item(dtmd_device_monitor_t *monitor, dtmd_i
 	monitor_item = (dtmd_monitor_item_t*) malloc(sizeof(dtmd_monitor_item_t));
 	if (monitor_item == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_monitor_add_item_error_1;
 	}
 
@@ -2378,16 +2446,19 @@ dtmd_device_system_t* device_system_init(void)
 
 	if (pthread_mutexattr_init(&mutex_attr) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Pthread initialization failure");
 		goto device_system_init_error_3;
 	}
 
 	if (pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Pthread initialization failure");
 		goto device_system_init_error_4;
 	}
 
 	if (pthread_mutex_init(&(device_system->control_mutex), &mutex_attr) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Pthread initialization failure");
 		goto device_system_init_error_4;
 	}
 
@@ -2398,11 +2469,13 @@ dtmd_device_system_t* device_system_init(void)
 
 	if (pipe(device_system->worker_control_pipe) < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Pipe() failed");
 		goto device_system_init_error_5;
 	}
 
 	if ((pthread_create(&(device_system->worker_thread), NULL, &device_system_worker_function, device_system)) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Pthread initialization failure");
 		goto device_system_init_error_6;
 	}
 
@@ -2537,6 +2610,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 
 	if (pthread_mutex_lock(&(system->control_mutex)) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Failed to obtain mutex");
 		goto device_system_enumerate_devices_error_1;
 	}
 
@@ -2550,6 +2624,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	enumeration = (dtmd_device_enumeration_t*) malloc(sizeof(dtmd_device_enumeration_t));
 	if (enumeration == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_enumerate_devices_error_2;
 	}
 
@@ -2563,6 +2638,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 		enumeration->devices = (dtmd_info_t**) malloc(devices_count * sizeof(dtmd_info_t*));
 		if (enumeration->devices == NULL)
 		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			goto device_system_enumerate_devices_error_3;
 		}
 
@@ -2607,6 +2683,7 @@ dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t 
 	tmp = realloc(system->enumerations, (system->enumeration_count + 1) * sizeof(dtmd_device_enumeration_t*));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_enumerate_devices_error_4;
 	}
 
@@ -2724,6 +2801,7 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 	monitor = (dtmd_device_monitor_t*) malloc(sizeof(dtmd_device_monitor_t));
 	if (monitor == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_start_monitoring_error_1;
 	}
 
@@ -2734,17 +2812,20 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 
 	if (pipe(monitor->data_pipe) < 0)
 	{
+		WRITE_LOG(LOG_ERR, "Pipe() failed");
 		goto device_system_start_monitoring_error_2;
 	}
 
 	if (pthread_mutex_lock(&(system->control_mutex)) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Failed to obtain mutex");
 		goto device_system_start_monitoring_error_3;
 	}
 
 	tmp = realloc(system->monitors, (system->monitor_count + 1) * sizeof(dtmd_device_monitor_t*));
 	if (tmp == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_start_monitoring_error_4;
 	}
 
@@ -2847,12 +2928,14 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 
 	if (pthread_mutex_lock(&(monitor->system->control_mutex)) != 0)
 	{
+		WRITE_LOG(LOG_ERR, "Failed to obtain mutex");
 		goto device_system_monitor_get_device_error_1;
 	}
 
 	rc = read(monitor->data_pipe[0], &data, 1);
 	if (rc != 1)
 	{
+		WRITE_LOG(LOG_ERR, "Failed to read data");
 		goto device_system_monitor_get_device_error_2;
 	}
 

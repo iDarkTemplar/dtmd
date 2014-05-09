@@ -24,6 +24,7 @@
 
 #include "daemon/lists.h"
 #include "daemon/actions.h"
+#include "daemon/log.h"
 
 #include <mntent.h>
 #include <stdlib.h>
@@ -45,6 +46,7 @@ int check_mount_changes(void)
 	mntfile = setmntent(dtmd_internal_mounts_file, "r");
 	if (mntfile == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s'", dtmd_internal_mounts_file);
 		goto check_mount_changes_error_1;
 	}
 
@@ -89,6 +91,7 @@ int check_mount_changes(void)
 								media[i]->partition[j]->mnt_point = strdup(ent->mnt_dir);
 								if (media[i]->partition[j]->mnt_point == NULL)
 								{
+									WRITE_LOG(LOG_ERR, "Memory allocation failure");
 									goto check_mount_changes_error_2;
 								}
 							}
@@ -103,6 +106,7 @@ int check_mount_changes(void)
 								media[i]->partition[j]->mnt_opts = strdup(ent->mnt_opts);
 								if (media[i]->partition[j]->mnt_opts == NULL)
 								{
+									WRITE_LOG(LOG_ERR, "Memory allocation failure");
 									goto check_mount_changes_error_2;
 								}
 							}
@@ -140,6 +144,7 @@ int check_mount_changes(void)
 							stateful_media[i]->mnt_point = strdup(ent->mnt_dir);
 							if (stateful_media[i]->mnt_point == NULL)
 							{
+								WRITE_LOG(LOG_ERR, "Memory allocation failure");
 								goto check_mount_changes_error_2;
 							}
 						}
@@ -154,6 +159,7 @@ int check_mount_changes(void)
 							stateful_media[i]->mnt_opts = strdup(ent->mnt_opts);
 							if (stateful_media[i]->mnt_opts == NULL)
 							{
+								WRITE_LOG(LOG_ERR, "Memory allocation failure");
 								goto check_mount_changes_error_2;
 							}
 						}
@@ -261,6 +267,7 @@ int point_mount_count(const char *path, int max)
 	mntfile = setmntent(dtmd_internal_mounts_file, "r");
 	if (mntfile == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s'", dtmd_internal_mounts_file);
 		return -1;
 	}
 
@@ -290,6 +297,7 @@ int add_to_mtab(const char *path, const char *mount_point, const char *type, con
 	mntfile = setmntent(dtmd_internal_mtab_file, "a");
 	if (mntfile == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s'", dtmd_internal_mtab_file);
 		return -1;
 	}
 
@@ -324,12 +332,14 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 	mntfile_old = setmntent(dtmd_internal_mtab_file, "r");
 	if (mntfile_old == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s'", dtmd_internal_mtab_file);
 		return -1;
 	}
 
 	mntfile_new = setmntent(dtmd_internal_mtab_temporary, "w");
 	if (mntfile_new == NULL)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s' for writing", dtmd_internal_mtab_temporary);
 		endmntent(mntfile_old);
 		return -1;
 	}
@@ -342,6 +352,7 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 		{
 			if (addmntent(mntfile_new, ent) != 0)
 			{
+				WRITE_LOG_ARGS(LOG_ERR, "Failed copying data to file '%s'", dtmd_internal_mtab_temporary);
 				endmntent(mntfile_old);
 				endmntent(mntfile_new);
 				unlink(dtmd_internal_mtab_temporary);
@@ -355,24 +366,28 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 
 	if (stat(dtmd_internal_mtab_file, &stats) != 0)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed obtaining file properties for file '%s'", dtmd_internal_mtab_file);
 		unlink(dtmd_internal_mtab_temporary);
 		return -1;
 	}
 
 	if (chmod(dtmd_internal_mtab_temporary, stats.st_mode) != 0)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed changing file mode for file '%s'", dtmd_internal_mtab_temporary);
 		unlink(dtmd_internal_mtab_temporary);
 		return -1;
 	}
 
 	if (chown(dtmd_internal_mtab_temporary, stats.st_uid, stats.st_gid) != 0)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed changing file owner for file '%s'", dtmd_internal_mtab_temporary);
 		unlink(dtmd_internal_mtab_temporary);
 		return -1;
 	}
 
 	if (rename(dtmd_internal_mtab_temporary, dtmd_internal_mtab_file) != 0)
 	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed renaming file '%s' to '%s'", dtmd_internal_mtab_temporary, dtmd_internal_mtab_file);
 		unlink(dtmd_internal_mtab_temporary);
 		return -1;
 	}

@@ -21,9 +21,13 @@
 #ifndef DTMD_INTERNAL_H
 #define DTMD_INTERNAL_H
 
+#ifndef MTAB_DIR
+#error MTAB_DIR is not defined
+#endif /* MTAB_DIR */
+
 #define dtmd_internal_mounts_file "/proc/self/mounts"
 #define dtmd_internal_mount_dir "/media"
-#define dtmd_internal_mtab_file "/etc/mtab"
-#define dtmd_internal_mtab_temporary "/etc/.mtab.dtmd"
+#define dtmd_internal_mtab_file MTAB_DIR "/mtab"
+#define dtmd_internal_mtab_temporary MTAB_DIR "/.mtab.dtmd"
 
 #endif /* DTMD_INTERNAL_H */
