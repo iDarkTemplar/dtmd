@@ -94,6 +94,11 @@ typedef struct dtmd_helper_params_unmount
 	const char *path;
 } dtmd_helper_params_unmount_t;
 
+typedef struct dtmd_helper_params_list_supported_filesystem_options
+{
+	const char *filesystem;
+} dtmd_helper_params_list_supported_filesystem_options_t;
+
 typedef struct dtmd_helper_state_enum_devices
 {
 	int got_started;
@@ -124,6 +129,22 @@ typedef struct dtmd_helper_state_list_stateful_device
 	int got_started;
 	dtmd_stateful_device_t *result_stateful_device;
 } dtmd_helper_state_list_stateful_device_t;
+
+typedef struct dtmd_helper_state_list_supported_filesystems
+{
+	int got_started;
+	int got_result;
+	unsigned int result_count;
+	const char **result_list;
+} dtmd_helper_state_list_supported_filesystems_t;
+
+typedef struct dtmd_helper_state_list_supported_filesystem_options
+{
+	int got_started;
+	int got_result;
+	unsigned int result_count;
+	const char **result_list;
+} dtmd_helper_state_list_supported_filesystem_options_t;
 
 static void* dtmd_worker_function(void *arg);
 
@@ -170,6 +191,8 @@ static int dtmd_helper_dprintf_list_partition(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_list_stateful_device(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_list_supported_filesystems(dtmd_t *handle, void *args);
+static int dtmd_helper_dprintf_list_supported_filesystem_options(dtmd_t *handle, void *args);
 
 typedef int (*dtmd_helper_dprintf_func_t)(dtmd_t *handle, void *args);
 typedef dtmd_helper_result_t (*dtmd_helper_process_func_t)(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state);
@@ -184,6 +207,8 @@ static dtmd_helper_result_t dtmd_helper_process_list_partition(dtmd_t *handle, d
 static dtmd_helper_result_t dtmd_helper_process_list_stateful_device(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state);
 static dtmd_helper_result_t dtmd_helper_process_mount(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state);
 static dtmd_helper_result_t dtmd_helper_process_unmount(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state);
+static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystems(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state);
+static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystem_options(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state);
 
 static int dtmd_helper_exit_enum_devices(dtmd_t *handle, void *state);
 static void dtmd_helper_exit_clear_enum_devices(void *state);
@@ -196,6 +221,12 @@ static void dtmd_helper_exit_clear_list_partition(void *state);
 
 static int dtmd_helper_exit_list_stateful_device(dtmd_t *handle, void *state);
 static void dtmd_helper_exit_clear_list_stateful_device(void *state);
+
+static int dtmd_helper_exit_list_supported_filesystems(dtmd_t *handle, void *state);
+static void dtmd_helper_exit_clear_list_supported_filesystems(void *state);
+
+static int dtmd_helper_exit_list_supported_filesystem_options(dtmd_t *handle, void *state);
+static void dtmd_helper_exit_clear_list_supported_filesystem_options(void *state);
 
 static void dtmd_helper_free_string_array(unsigned int count, const char **data);
 static int dtmd_helper_validate_string_array(unsigned int count, const char **data);
@@ -632,6 +663,81 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 		&dtmd_helper_process_unmount,
 		NULL,
 		NULL);
+}
+
+dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, unsigned int *supported_filesystems_count, const char ***supported_filesystems_list)
+{
+	dtmd_result_t res;
+
+	dtmd_helper_state_list_supported_filesystems_t state;
+
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((supported_filesystems_count == NULL) || (supported_filesystems_list == NULL))
+	{
+		return dtmd_input_error;
+	}
+
+	state.got_started = 0;
+	state.got_result = 0;
+	state.result_list = NULL;
+	state.result_count = 0;
+
+	res = dtmd_helper_generic_process(handle,
+		timeout,
+		NULL,
+		&state,
+		&dtmd_helper_dprintf_list_supported_filesystems,
+		&dtmd_helper_process_list_supported_filesystems,
+		&dtmd_helper_exit_list_supported_filesystems,
+		&dtmd_helper_exit_clear_list_supported_filesystems);
+
+	*supported_filesystems_count = state.result_count;
+	*supported_filesystems_list  = state.result_list;
+
+	return res;
+}
+
+dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, unsigned int *supported_filesystem_options_count, const char ***supported_filesystem_options_list)
+{
+	dtmd_result_t res;
+
+	dtmd_helper_params_list_supported_filesystem_options_t params;
+	dtmd_helper_state_list_supported_filesystem_options_t state;
+
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((supported_filesystem_options_count == NULL) || (supported_filesystem_options_list == NULL))
+	{
+		return dtmd_input_error;
+	}
+
+	params.filesystem = filesystem;
+
+	state.got_started = 0;
+	state.got_result = 0;
+	state.result_list = NULL;
+	state.result_count = 0;
+
+	res = dtmd_helper_generic_process(handle,
+		timeout,
+		&params,
+		&state,
+		&dtmd_helper_dprintf_list_supported_filesystem_options,
+		&dtmd_helper_process_list_supported_filesystem_options,
+		&dtmd_helper_exit_list_supported_filesystem_options,
+		&dtmd_helper_exit_clear_list_supported_filesystem_options);
+
+	*supported_filesystem_options_count = state.result_count;
+	*supported_filesystem_options_list  = state.result_list;
+
+	return res;
 }
 
 int dtmd_is_state_invalid(dtmd_t *handle)
@@ -1342,6 +1448,21 @@ inline static int dtmd_helper_dprintf_unmount_implementation(dtmd_t *handle, dtm
 static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args)
 {
 	return dtmd_helper_dprintf_unmount_implementation(handle, (dtmd_helper_params_unmount_t*) args);
+}
+
+static int dtmd_helper_dprintf_list_supported_filesystems(dtmd_t *handle, void *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_list_supported_filesystems "()\n");
+}
+
+inline static int dtmd_helper_dprintf_list_supported_filesystem_options_implementation(dtmd_t *handle, dtmd_helper_params_list_supported_filesystem_options_t *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_list_supported_filesystem_options "(\"%s\")\n", args->filesystem);
+}
+
+static int dtmd_helper_dprintf_list_supported_filesystem_options(dtmd_t *handle, void *args)
+{
+	return dtmd_helper_dprintf_list_supported_filesystem_options_implementation(handle, (dtmd_helper_params_list_supported_filesystem_options_t*) args);
 }
 
 dtmd_result_t dtmd_helper_generic_process(dtmd_t *handle, int timeout, void *params, void *state, dtmd_helper_dprintf_func_t dprintf_func, dtmd_helper_process_func_t process_func, dtmd_helper_exit_func_t exit_func, dtmd_helper_exit_clear_func_t exit_clear_func)
@@ -2232,390 +2353,160 @@ static dtmd_helper_result_t dtmd_helper_process_unmount(dtmd_t *handle, dtmd_com
 	return dtmd_helper_process_unmount_implementation(handle, cmd, (dtmd_helper_params_unmount_t*) params, state);
 }
 
-dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, unsigned int *supported_filesystems_count, const char ***supported_filesystems_list)
+inline static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystems_implementation(dtmd_t *handle, dtmd_command_t *cmd, void *params, dtmd_helper_state_list_supported_filesystems_t *state)
 {
-	char data = 0;
-	dtmd_command_t *cmd;
 	dtmd_result_t res;
-	struct timespec time_cur, time_end;
-	char *eol;
-	int got_started = 0;
-	unsigned int result_count = 0;
-	const char **result_list = NULL;
-	int got_result = 0;
 
-	if (handle == NULL)
+	if (state->got_started)
 	{
-		return dtmd_library_not_initialized;
-	}
-
-	if (dtmd_is_state_invalid(handle))
-	{
-		return dtmd_invalid_state;
-	}
-
-	if ((supported_filesystems_count == NULL) || (supported_filesystems_list == NULL))
-	{
-		return dtmd_input_error;
-	}
-
-	res = dtmd_helper_capture_socket(handle, timeout, &time_cur, &time_end);
-	if (res != dtmd_ok)
-	{
-		handle->result_state = res;
-
-		if (dtmd_helper_is_state_invalid(res))
+		if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
+			&& (dtmd_helper_is_helper_list_supported_filesystems(cmd)))
 		{
-			goto dtmd_dtmd_list_supported_filesystems_error_1;
+			handle->result_state = dtmd_ok;
+			handle->library_state = dtmd_state_default;
+			return dtmd_helper_result_exit;
+		}
+
+		if ((strcmp(cmd->cmd, dtmd_response_argument_supported_filesystems_lists) == 0)
+			&& (dtmd_helper_validate_supported_filesystems(cmd->args_count, (const char**) cmd->args) == 1)
+			&& (state->got_result == 0))
+		{
+			state->got_result = 1;
+
+			state->result_count = cmd->args_count;
+			state->result_list  = (const char**) cmd->args;
+
+			cmd->args_count = 0;
+			cmd->args       = NULL;
 		}
 		else
 		{
-			goto dtmd_dtmd_list_supported_filesystems_exit_1;
-		}
-	}
-
-	if (dprintf(handle->socket_fd, dtmd_command_list_supported_filesystems "()\n") < 0)
-	{
-		handle->result_state = dtmd_io_error;
-		goto dtmd_dtmd_list_supported_filesystems_error_1;
-	}
-
-	for (;;)
-	{
-		while ((eol = strchr(handle->buffer, '\n')) != NULL)
-		{
-			cmd = dtmd_parse_command(handle->buffer);
-
-			handle->cur_pos -= (eol + 1 - handle->buffer);
-			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
-
-			if (cmd == NULL)
-			{
-				handle->result_state = dtmd_invalid_state;
-				goto dtmd_dtmd_list_supported_filesystems_error_1;
-			}
-
-			if (got_started)
-			{
-				if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
-					&& (dtmd_helper_is_helper_list_supported_filesystems(cmd)))
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					handle->library_state = dtmd_state_default;
-					goto dtmd_dtmd_list_supported_filesystems_exit_1;
-				}
-
-				if ((strcmp(cmd->cmd, dtmd_response_argument_supported_filesystems_lists) == 0)
-					&& (dtmd_helper_validate_supported_filesystems(cmd->args_count, (const char**) cmd->args) == 1)
-					&& (got_result == 0))
-				{
-					got_result = 1;
-
-					result_count = cmd->args_count;
-					result_list  = (const char**) cmd->args;
-
-					cmd->args_count = 0;
-					cmd->args       = NULL;
-				}
-				else
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_invalid_state;
-					goto dtmd_dtmd_list_supported_filesystems_error_1;
-				}
-			}
-			else
-			{
-				if ((handle->library_state == dtmd_state_default)
-					&& (dtmd_helper_is_helper_list_supported_filesystems(cmd)))
-				{
-					if (strcmp(cmd->cmd, dtmd_response_started) == 0)
-					{
-						got_started = 1;
-						handle->library_state = dtmd_state_in_list_supported_filesystems;
-					}
-					else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_command_failed;
-						handle->library_state = dtmd_state_default;
-						goto dtmd_dtmd_list_supported_filesystems_exit_1;
-					}
-				}
-				else
-				{
-					res = dtmd_helper_handle_cmd(handle, cmd);
-
-					if (res != dtmd_ok)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = res;
-
-						if (dtmd_helper_is_state_invalid(res))
-						{
-							goto dtmd_dtmd_list_supported_filesystems_error_1;
-						}
-						else
-						{
-							goto dtmd_dtmd_list_supported_filesystems_exit_1;
-						}
-					}
-				}
-			}
-
-			dtmd_free_command(cmd);
-		}
-
-		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
-
-		if (res != dtmd_ok)
-		{
-			handle->result_state = res;
-
-			if (dtmd_helper_is_state_invalid(res))
-			{
-				goto dtmd_dtmd_list_supported_filesystems_error_1;
-			}
-			else
-			{
-				goto dtmd_dtmd_list_supported_filesystems_exit_1;
-			}
-		}
-	}
-
-dtmd_dtmd_list_supported_filesystems_exit_1:
-	if (handle->result_state == dtmd_ok)
-	{
-		if (!got_result)
-		{
 			handle->result_state = dtmd_invalid_state;
-			goto dtmd_dtmd_list_supported_filesystems_error_1;
+			return dtmd_helper_result_error;
 		}
-
-		*supported_filesystems_count = result_count;
-		*supported_filesystems_list  = result_list;
 	}
 	else
 	{
-		if (result_list != NULL)
+		if ((handle->library_state == dtmd_state_default)
+			&& (dtmd_helper_is_helper_list_supported_filesystems(cmd)))
 		{
-			dtmd_helper_free_supported_filesystems(result_count, result_list);
+			if (strcmp(cmd->cmd, dtmd_response_started) == 0)
+			{
+				state->got_started = 1;
+				handle->library_state = dtmd_state_in_list_supported_filesystems;
+			}
+			else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			{
+				handle->result_state = dtmd_command_failed;
+				handle->library_state = dtmd_state_default;
+				return dtmd_helper_result_exit;
+			}
 		}
+		else
+		{
+			res = dtmd_helper_handle_cmd(handle, cmd);
 
-		*supported_filesystems_count = 0;
-		*supported_filesystems_list  = NULL;
+			if (res != dtmd_ok)
+			{
+				handle->result_state = res;
+
+				if (dtmd_helper_is_state_invalid(res))
+				{
+					return dtmd_helper_result_error;
+				}
+				else
+				{
+					return dtmd_helper_result_exit;
+				}
+			}
+		}
 	}
 
-	sem_post(&(handle->caller_socket));
-	return handle->result_state;
-
-dtmd_dtmd_list_supported_filesystems_error_1:
-	if (result_list != NULL)
-	{
-		dtmd_helper_free_supported_filesystems(result_count, result_list);
-	}
-
-	*supported_filesystems_count = 0;
-	*supported_filesystems_list  = NULL;
-
-	write(handle->pipes[1], &data, sizeof(char));
-	sem_post(&(handle->caller_socket));
-	return handle->result_state;
+	return dtmd_helper_result_ok;
 }
 
-dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, unsigned int *supported_filesystem_options_count, const char ***supported_filesystem_options_list)
+static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystems(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state)
 {
-	char data = 0;
-	dtmd_command_t *cmd;
+	return dtmd_helper_process_list_supported_filesystems_implementation(handle, cmd, params, (dtmd_helper_state_list_supported_filesystems_t*) state);
+}
+
+inline static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystem_options_implementation(dtmd_t *handle, dtmd_command_t *cmd, dtmd_helper_params_list_supported_filesystem_options_t *params, dtmd_helper_state_list_supported_filesystem_options_t *state)
+{
 	dtmd_result_t res;
-	struct timespec time_cur, time_end;
-	char *eol;
-	int got_started = 0;
-	unsigned int result_count = 0;
-	const char **result_list = NULL;
-	int got_result = 0;
 
-	if (handle == NULL)
+	if (state->got_started)
 	{
-		return dtmd_library_not_initialized;
-	}
-
-	if (dtmd_is_state_invalid(handle))
-	{
-		return dtmd_invalid_state;
-	}
-
-	if ((filesystem == NULL) || (supported_filesystem_options_count == NULL) || (supported_filesystem_options_list == NULL))
-	{
-		return dtmd_input_error;
-	}
-
-	res = dtmd_helper_capture_socket(handle, timeout, &time_cur, &time_end);
-	if (res != dtmd_ok)
-	{
-		handle->result_state = res;
-
-		if (dtmd_helper_is_state_invalid(res))
+		if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
+			&& (dtmd_helper_is_helper_list_supported_filesystem_options(cmd))
+			&& (strcmp(cmd->args[1], params->filesystem) == 0))
 		{
-			goto dtmd_dtmd_list_supported_filesystem_options_error_1;
+			handle->result_state = dtmd_ok;
+			handle->library_state = dtmd_state_default;
+			return dtmd_helper_result_exit;
+		}
+
+		if ((strcmp(cmd->cmd, dtmd_response_argument_supported_filesystem_options_lists) == 0)
+			&& (dtmd_helper_validate_supported_filesystem_options(cmd->args_count, (const char**) cmd->args) == 1)
+			&& (state->got_result == 0))
+		{
+			state->got_result = 1;
+
+			state->result_count = cmd->args_count;
+			state->result_list  = (const char**) cmd->args;
+
+			cmd->args_count = 0;
+			cmd->args       = NULL;
 		}
 		else
 		{
-			goto dtmd_dtmd_list_supported_filesystem_options_exit_1;
-		}
-	}
-
-	if (dprintf(handle->socket_fd, dtmd_command_list_supported_filesystem_options "(\"%s\")\n", filesystem) < 0)
-	{
-		handle->result_state = dtmd_io_error;
-		goto dtmd_dtmd_list_supported_filesystem_options_error_1;
-	}
-
-	for (;;)
-	{
-		while ((eol = strchr(handle->buffer, '\n')) != NULL)
-		{
-			cmd = dtmd_parse_command(handle->buffer);
-
-			handle->cur_pos -= (eol + 1 - handle->buffer);
-			memmove(handle->buffer, eol+1, handle->cur_pos + 1);
-
-			if (cmd == NULL)
-			{
-				handle->result_state = dtmd_invalid_state;
-				goto dtmd_dtmd_list_supported_filesystem_options_error_1;
-			}
-
-			if (got_started)
-			{
-				if ((strcmp(cmd->cmd, dtmd_response_finished) == 0)
-					&& (dtmd_helper_is_helper_list_supported_filesystem_options(cmd))
-					&& (strcmp(cmd->args[1], filesystem) == 0))
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_ok;
-					handle->library_state = dtmd_state_default;
-					goto dtmd_dtmd_list_supported_filesystem_options_exit_1;
-				}
-
-				if ((strcmp(cmd->cmd, dtmd_response_argument_supported_filesystem_options_lists) == 0)
-					&& (dtmd_helper_validate_supported_filesystem_options(cmd->args_count, (const char**) cmd->args) == 1)
-					&& (got_result == 0))
-				{
-					got_result = 1;
-
-					result_count = cmd->args_count;
-					result_list  = (const char**) cmd->args;
-
-					cmd->args_count = 0;
-					cmd->args       = NULL;
-				}
-				else
-				{
-					dtmd_free_command(cmd);
-					handle->result_state = dtmd_invalid_state;
-					goto dtmd_dtmd_list_supported_filesystem_options_error_1;
-				}
-			}
-			else
-			{
-				if ((handle->library_state == dtmd_state_default)
-					&& (dtmd_helper_is_helper_list_supported_filesystem_options(cmd))
-					&& (strcmp(cmd->args[1], filesystem) == 0))
-				{
-					if (strcmp(cmd->cmd, dtmd_response_started) == 0)
-					{
-						got_started = 1;
-						handle->library_state = dtmd_state_in_list_supported_filesystem_options;
-					}
-					else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = dtmd_command_failed;
-						handle->library_state = dtmd_state_default;
-						goto dtmd_dtmd_list_supported_filesystem_options_exit_1;
-					}
-				}
-				else
-				{
-					res = dtmd_helper_handle_cmd(handle, cmd);
-
-					if (res != dtmd_ok)
-					{
-						dtmd_free_command(cmd);
-						handle->result_state = res;
-
-						if (dtmd_helper_is_state_invalid(res))
-						{
-							goto dtmd_dtmd_list_supported_filesystem_options_error_1;
-						}
-						else
-						{
-							goto dtmd_dtmd_list_supported_filesystem_options_exit_1;
-						}
-					}
-				}
-			}
-
-			dtmd_free_command(cmd);
-		}
-
-		res = dtmd_helper_read_data(handle, timeout, &time_cur, &time_end);
-
-		if (res != dtmd_ok)
-		{
-			handle->result_state = res;
-
-			if (dtmd_helper_is_state_invalid(res))
-			{
-				goto dtmd_dtmd_list_supported_filesystem_options_error_1;
-			}
-			else
-			{
-				goto dtmd_dtmd_list_supported_filesystem_options_exit_1;
-			}
-		}
-	}
-
-dtmd_dtmd_list_supported_filesystem_options_exit_1:
-	if (handle->result_state == dtmd_ok)
-	{
-		if (!got_result)
-		{
 			handle->result_state = dtmd_invalid_state;
-			goto dtmd_dtmd_list_supported_filesystem_options_error_1;
+			return dtmd_helper_result_error;
 		}
-
-		*supported_filesystem_options_count = result_count;
-		*supported_filesystem_options_list  = result_list;
 	}
 	else
 	{
-		if (result_list != NULL)
+		if ((handle->library_state == dtmd_state_default)
+			&& (dtmd_helper_is_helper_list_supported_filesystem_options(cmd))
+			&& (strcmp(cmd->args[1], params->filesystem) == 0))
 		{
-			dtmd_helper_free_supported_filesystem_options(result_count, result_list);
+			if (strcmp(cmd->cmd, dtmd_response_started) == 0)
+			{
+				state->got_started = 1;
+				handle->library_state = dtmd_state_in_list_supported_filesystem_options;
+			}
+			else if (strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			{
+				handle->result_state = dtmd_command_failed;
+				handle->library_state = dtmd_state_default;
+				return dtmd_helper_result_exit;
+			}
 		}
+		else
+		{
+			res = dtmd_helper_handle_cmd(handle, cmd);
 
-		*supported_filesystem_options_count = 0;
-		*supported_filesystem_options_list  = NULL;
+			if (res != dtmd_ok)
+			{
+				handle->result_state = res;
+
+				if (dtmd_helper_is_state_invalid(res))
+				{
+					return dtmd_helper_result_error;
+				}
+				else
+				{
+					return dtmd_helper_result_exit;
+				}
+			}
+		}
 	}
 
-	sem_post(&(handle->caller_socket));
-	return handle->result_state;
+	return dtmd_helper_result_ok;
+}
 
-dtmd_dtmd_list_supported_filesystem_options_error_1:
-	if (result_list != NULL)
-	{
-		dtmd_helper_free_supported_filesystem_options(result_count, result_list);
-	}
-
-	*supported_filesystem_options_count = 0;
-	*supported_filesystem_options_list  = NULL;
-
-	write(handle->pipes[1], &data, sizeof(char));
-	sem_post(&(handle->caller_socket));
-	return handle->result_state;
+static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystem_options(dtmd_t *handle, dtmd_command_t *cmd, void *params, void *state)
+{
+	return dtmd_helper_process_list_supported_filesystem_options_implementation(handle, cmd, (dtmd_helper_params_list_supported_filesystem_options_t*) params, (dtmd_helper_state_list_supported_filesystem_options_t*) state);
 }
 
 inline static int dtmd_helper_exit_enum_devices_implementation(dtmd_t *handle, dtmd_helper_state_enum_devices_t *state)
@@ -2818,6 +2709,84 @@ inline static void dtmd_helper_exit_clear_list_stateful_device_implementation(dt
 static void dtmd_helper_exit_clear_list_stateful_device(void *state)
 {
 	dtmd_helper_exit_clear_list_stateful_device_implementation((dtmd_helper_state_list_stateful_device_t*) state);
+}
+
+inline static int dtmd_helper_exit_list_supported_filesystems_implementation(dtmd_t *handle, dtmd_helper_state_list_supported_filesystems_t *state)
+{
+	if (handle->result_state == dtmd_ok)
+	{
+		if (!state->got_result)
+		{
+			handle->result_state = dtmd_invalid_state;
+			return 0;
+		}
+	}
+	else
+	{
+		dtmd_helper_exit_clear_list_supported_filesystems(state);
+	}
+
+	return 1;
+}
+
+static int dtmd_helper_exit_list_supported_filesystems(dtmd_t *handle, void *state)
+{
+	return dtmd_helper_exit_list_supported_filesystems_implementation(handle, (dtmd_helper_state_list_supported_filesystems_t*) state);
+}
+
+inline static void dtmd_helper_exit_clear_list_supported_filesystems_implementation(dtmd_helper_state_list_supported_filesystems_t *state)
+{
+	if (state->result_list != NULL)
+	{
+		dtmd_helper_free_supported_filesystems(state->result_count, state->result_list);
+	}
+
+	state->result_list  = NULL;
+	state->result_count = 0;
+}
+
+static void dtmd_helper_exit_clear_list_supported_filesystems(void *state)
+{
+	dtmd_helper_exit_clear_list_supported_filesystems_implementation((dtmd_helper_state_list_supported_filesystems_t*) state);
+}
+
+inline static int dtmd_helper_exit_list_supported_filesystem_options_implementation(dtmd_t *handle, dtmd_helper_state_list_supported_filesystem_options_t *state)
+{
+	if (handle->result_state == dtmd_ok)
+	{
+		if (!state->got_result)
+		{
+			handle->result_state = dtmd_invalid_state;
+			return 0;
+		}
+	}
+	else
+	{
+		dtmd_helper_exit_clear_list_supported_filesystem_options(state);
+	}
+
+	return 1;
+}
+
+static int dtmd_helper_exit_list_supported_filesystem_options(dtmd_t *handle, void *state)
+{
+	return dtmd_helper_exit_list_supported_filesystem_options_implementation(handle, (dtmd_helper_state_list_supported_filesystem_options_t*) state);
+}
+
+inline static void dtmd_helper_exit_clear_list_supported_filesystem_options_implementation(dtmd_helper_state_list_supported_filesystem_options_t *state)
+{
+	if (state->result_list != NULL)
+	{
+		dtmd_helper_free_supported_filesystem_options(state->result_count, state->result_list);
+	}
+
+	state->result_list  = NULL;
+	state->result_count = 0;
+}
+
+static void dtmd_helper_exit_clear_list_supported_filesystem_options(void *state)
+{
+	dtmd_helper_exit_clear_list_supported_filesystem_options_implementation((dtmd_helper_state_list_supported_filesystem_options_t*) state);
 }
 
 static void dtmd_helper_free_string_array(unsigned int count, const char **data)
