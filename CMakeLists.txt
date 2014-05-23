@@ -13,7 +13,7 @@ set(CPACK_PACKAGE_VERSION_PATCH ${DTMD_VERSION_PATCH})
 set(CPACK_GENERATOR "TBZ2")
 set(CPACK_SOURCE_GENERATOR "TBZ2")
 set(CPACK_SOURCE_IGNORE_FILES
-	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*;ignore;TODO")
+	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*;ignore;TODO;cppcheck-linux.sh")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${DTMD_VERSION}")
 # MUST be after CPACK_* variables.
 include(CPack)
