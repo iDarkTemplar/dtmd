@@ -1,0 +1,13 @@
+#!/sbin/runscript
+
+command=/usr/sbin/dtmd-daemon
+pidfile=/var/run/dtmd.pid
+command_args=
+name="Removable media mount daemon"
+
+depend()
+{
+        need localmount procfs dev udev
+        use logger
+        after bootmisc modules mtab
+}

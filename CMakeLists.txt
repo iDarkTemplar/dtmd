@@ -4,7 +4,7 @@ cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 1)
 set(DTMD_VERSION_MINOR 7)
-set(DTMD_VERSION_PATCH 0)
+set(DTMD_VERSION_PATCH 1)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
@@ -68,6 +68,7 @@ if (OS_LINUX)
 	message(STATUS "set LINUX_NO_UDEV to switch interface from udev to linux kernel")
 endif (OS_LINUX)
 
+message(STATUS "set DISABLE_CONSOLE_CLIENT to disable console client")
 message(STATUS "set DISABLE_CXX to disable dtmd-library++ library")
 message(STATUS "set CLIENT_QT to force enable or disable Qt client")
 
@@ -207,8 +208,10 @@ target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
 
-add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
-target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
+if (NOT DEFINED DISABLE_CONSOLE_CLIENT)
+	add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
+	target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
+endif (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 
 if (NOT DEFINED DISABLE_CXX)
 	add_library( dtmd-library++ SHARED ${LIBRARY_CXX_SOURCES} ${LIBRARY_CXX_HEADERS} )
@@ -247,7 +250,10 @@ endforeach (CURRENT_TEST)
 install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
-install(TARGETS dtmd         RUNTIME DESTINATION bin)
+
+if (NOT DEFINED DISABLE_CONSOLE_CLIENT)
+	install(TARGETS dtmd         RUNTIME DESTINATION bin)
+endif (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 
 install(FILES "dtmd.h"                 DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-misc.h"    DESTINATION "${HEADERS_PREFIX}")
