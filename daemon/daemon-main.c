@@ -554,7 +554,7 @@ int main(int argc, char **argv)
 #ifndef DISABLE_SYSLOG
 	if (use_syslog)
 	{
-		openlog("DTMD", LOG_PID, LOG_DAEMON);
+		openlog("dtmd", LOG_PID, LOG_DAEMON);
 	}
 #endif /* DISABLE_SYSLOG */
 

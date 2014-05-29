@@ -3,7 +3,7 @@
 command=/usr/sbin/dtmd-daemon
 pidfile=/var/run/dtmd.pid
 command_args=
-name="Removable media mount daemon"
+name="removable media mount daemon"
 
 depend()
 {
