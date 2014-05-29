@@ -9,5 +9,6 @@ depend()
 {
         need localmount procfs dev udev
         use logger
+        before xdm
         after bootmisc modules mtab
 }

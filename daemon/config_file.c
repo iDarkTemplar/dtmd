@@ -38,6 +38,7 @@ int unmount_on_exit = 0;
 enum mount_by_value_enum mount_by_value = mount_by_device_name;
 char *mount_dir = NULL;
 int create_mount_dir_on_startup = 0;
+int clear_mount_dir = 1;
 
 struct default_mount_opts
 {
@@ -62,6 +63,8 @@ static const char *config_use_syslog = "use_syslog";
 static const char *config_mount_dir = "mount_dir";
 
 static const char *config_create_mount_dir_on_startup = "create_mount_dir";
+
+static const char *config_clear_mount_dir = "clear_mount_dir";
 
 static const char *config_default_mount_opts = "default_mount_opts_";
 
@@ -228,6 +231,19 @@ static int process_config_value(const char *key, const char *value)
 		else if (strcmp(value, config_no) == 0)
 		{
 			create_mount_dir_on_startup = 0;
+			return 1;
+		}
+	}
+	else if (strcmp(key, config_clear_mount_dir) == 0)
+	{
+		if (strcmp(value, config_yes) == 0)
+		{
+			clear_mount_dir = 1;
+			return 1;
+		}
+		else if (strcmp(value, config_no) == 0)
+		{
+			clear_mount_dir = 0;
 			return 1;
 		}
 	}

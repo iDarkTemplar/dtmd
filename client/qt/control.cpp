@@ -458,6 +458,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				if (it == ptr->m_devices.end())
 				{
 					ptr->m_devices.push_back(dtmd::device(cmd.args[0], dtmd_string_to_device_type(cmd.args[1].c_str())));
+					modified = true;
 				}
 			} // unlock
 			else if ((cmd.cmd == dtmd_notification_remove_disk) && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
@@ -476,6 +477,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				if (it != ptr->m_devices.end())
 				{
 					ptr->m_devices.erase(it);
+					modified = true;
 				}
 			} // unlock
 			else if ((cmd.cmd == dtmd_notification_add_partition) && (cmd.args.size() == 4)
@@ -519,14 +521,6 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				std::vector<dtmd::device>::iterator dev;
 				for (dev = ptr->m_devices.begin(); dev != ptr->m_devices.end(); ++dev)
 				{
-					if (cmd.args[3] == dev->path)
-					{
-						break;
-					}
-				}
-
-				if (dev != ptr->m_devices.end())
-				{
 					std::vector<dtmd::partition>::iterator it;
 					for (it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
 					{
@@ -540,8 +534,9 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					{
 						title = QObject::trUtf8("Device removed");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
-						modified = true;
 						dev->partitions.erase(it);
+						modified = true;
+						break;
 					}
 				}
 			} // unlock
@@ -626,6 +621,8 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					it->state = dtmd_string_to_device_state(cmd.args[2].c_str());
 					it->fstype = cmd.args[3];
 					it->label = cmd.args[4];
+					it->mnt_point.clear();
+					it->mnt_opts.clear();
 
 					if ((last_state != dtmd_removable_media_state_ok)
 						&& (it->state == dtmd_removable_media_state_ok))
@@ -649,20 +646,46 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
 				std::vector<dtmd::device>::iterator dev;
-				for (dev = ptr->m_devices.begin(); (!modified) && (dev != ptr->m_devices.end()); ++dev)
+				for (dev = ptr->m_devices.begin(); dev != ptr->m_devices.end(); ++dev)
 				{
 					std::vector<dtmd::partition>::iterator it;
 					for (it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
 					{
 						if (cmd.args[0] == it->path)
 						{
-							it->mnt_point = cmd.args[1];
-							it->mnt_opts  = cmd.args[2];
-							title = QObject::trUtf8("Device mounted");
-							message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
-							modified = true;
 							break;
 						}
+					}
+
+					if (it != dev->partitions.end())
+					{
+						it->mnt_point = cmd.args[1];
+						it->mnt_opts  = cmd.args[2];
+						title = QObject::trUtf8("Device mounted");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+						break;
+					}
+				}
+
+				if (!modified)
+				{
+					std::vector<dtmd::stateful_device>::iterator it2;
+					for (it2 = ptr->m_stateful_devices.begin(); it2 != ptr->m_stateful_devices.end(); ++it2)
+					{
+						if (cmd.args[0] == it2->path)
+						{
+							break;
+						}
+					}
+
+					if (it2 != ptr->m_stateful_devices.end())
+					{
+						it2->mnt_point = cmd.args[1];
+						it2->mnt_opts  = cmd.args[2];
+						title = QObject::trUtf8("Device mounted");
+						message = QString::fromLocal8Bit(it2->label.empty() ? it2->path.c_str() : it2->label.c_str());
+						modified = true;
 					}
 				}
 			} // unlock
@@ -671,20 +694,46 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
 				std::vector<dtmd::device>::iterator dev;
-				for (dev = ptr->m_devices.begin(); (!modified) && (dev != ptr->m_devices.end()); ++dev)
+				for (dev = ptr->m_devices.begin(); dev != ptr->m_devices.end(); ++dev)
 				{
 					std::vector<dtmd::partition>::iterator it;
 					for (it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
 					{
 						if (cmd.args[0] == it->path)
 						{
-							it->mnt_point.clear();
-							it->mnt_opts.clear();
-							title = QObject::trUtf8("Device unmounted");
-							message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
-							modified = true;
 							break;
 						}
+					}
+
+					if (it != dev->partitions.end())
+					{
+						it->mnt_point.clear();
+						it->mnt_opts.clear();
+						title = QObject::trUtf8("Device unmounted");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+						break;
+					}
+				}
+
+				if (!modified)
+				{
+					std::vector<dtmd::stateful_device>::iterator it2;
+					for (it2 = ptr->m_stateful_devices.begin(); it2 != ptr->m_stateful_devices.end(); ++it2)
+					{
+						if (cmd.args[0] == it2->path)
+						{
+							break;
+						}
+					}
+
+					if (it2 != ptr->m_stateful_devices.end())
+					{
+						it2->mnt_point.clear();
+						it2->mnt_opts.clear();
+						title = QObject::trUtf8("Device unmounted");
+						message = QString::fromLocal8Bit(it2->label.empty() ? it2->path.c_str() : it2->label.c_str());
+						modified = true;
 					}
 				}
 			} // unlock
@@ -692,7 +741,11 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 			if (modified)
 			{
 				ptr->triggerBuildMenu();
-				ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
+
+				if ((!title.isEmpty()) || (!message.isEmpty()))
+				{
+					ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
+				}
 			}
 		}
 		catch (const std::exception &e)

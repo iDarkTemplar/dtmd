@@ -9,5 +9,6 @@ depend()
 {
         need localmount procfs sysfs dev
         use logger
+        before xdm
         after bootmisc modules mtab
 }

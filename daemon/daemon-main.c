@@ -301,6 +301,7 @@ int main(int argc, char **argv)
 	int daemonpipe[2] = { -1, -1 };
 	unsigned char daemondata;
 	int action_result;
+	int successfully_initialized = 0;
 
 	dtmd_device_system_t *dtmd_dev_system;
 	dtmd_device_enumeration_t *dtmd_dev_enum;
@@ -692,6 +693,8 @@ int main(int argc, char **argv)
 		daemonpipe[1] = -1;
 	}
 
+	successfully_initialized = 1;
+
 	while (continue_working)
 	{
 		pollfds[0].fd = monfd;
@@ -970,7 +973,6 @@ int main(int argc, char **argv)
 	}
 
 exit_8:
-	remove_empty_dirs((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
 	unlink(dtmd_internal_mtab_temporary);
 
 	free(pollfds);
@@ -982,6 +984,11 @@ exit_7:
 	if (unmount_on_exit)
 	{
 		invoke_unmount_all(-1);
+	}
+
+	if (successfully_initialized && clear_mount_dir)
+	{
+		remove_empty_dirs((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
 	}
 
 	remove_all_media();
