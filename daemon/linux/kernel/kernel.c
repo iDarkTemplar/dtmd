@@ -1759,36 +1759,46 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				device_type = read_string_from_file(file_name);
 			}
 
-			if (device_type == NULL)
+			if (device_type != NULL)
 			{
-				WRITE_LOG(LOG_ERR, "Failed to get device type");
-				goto device_system_monitor_receive_device_error_2;
-			}
+				device_info->media_type = device_type_from_string(device_type);
+				free(device_type);
 
-			device_info->media_type = device_type_from_string(device_type);
-			free(device_type);
-
-			if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
-			{
-				switch (device_info->media_type)
+				if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
 				{
-				case dtmd_removable_media_removable_disk:
-				case dtmd_removable_media_sd_card:
-					device_info->type = dtmd_info_device;
-					break;
+					switch (device_info->media_type)
+					{
+					case dtmd_removable_media_removable_disk:
+					case dtmd_removable_media_sd_card:
+						device_info->type = dtmd_info_device;
+						break;
 
-				case dtmd_removable_media_cdrom:
-					device_info->type = dtmd_info_stateful_device;
-					break;
+					case dtmd_removable_media_cdrom:
+						device_info->type = dtmd_info_stateful_device;
+						break;
 
-				default:
-					device_info->type = dtmd_info_unknown;
-					break;
+					default:
+						device_info->type = dtmd_info_unknown;
+						break;
+					}
+				}
+				else
+				{
+					device_info->type = dtmd_info_partition;
 				}
 			}
 			else
 			{
-				device_info->type = dtmd_info_partition;
+				if (action_type == dtmd_device_action_change)
+				{
+					device_info->media_type = dtmd_removable_media_unknown_or_persistent;
+					device_info->type = dtmd_info_unknown;
+				}
+				else
+				{
+					WRITE_LOG(LOG_ERR, "Failed to get device type");
+					goto device_system_monitor_receive_device_error_2;
+				}
 			}
 			break;
 
