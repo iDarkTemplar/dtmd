@@ -761,6 +761,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 	}
 	else
 	{
+		QMessageBox::critical(NULL, QObject::trUtf8("Exiting"), QObject::trUtf8("Daemon sent exit message"));
 		ptr->exit();
 	}
 }

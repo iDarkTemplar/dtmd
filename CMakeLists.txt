@@ -71,6 +71,7 @@ endif (OS_LINUX)
 message(STATUS "set DISABLE_CONSOLE_CLIENT to disable console client")
 message(STATUS "set DISABLE_CXX to disable dtmd-library++ library")
 message(STATUS "set CLIENT_QT to force enable or disable Qt client")
+message(STATUS "set DISABLE_LIBVERSION to disable libraries versioning")
 
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
@@ -200,9 +201,15 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
+if (NOT DEFINED DISABLE_LIBVERSION)
+	set_target_properties( dtmd-misc PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+endif (NOT DEFINED DISABLE_LIBVERSION)
 target_link_libraries( dtmd-misc )
 
 add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
+if (NOT DEFINED DISABLE_LIBVERSION)
+	set_target_properties( dtmd-library PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+endif (NOT DEFINED DISABLE_LIBVERSION)
 target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
@@ -215,6 +222,9 @@ endif (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 
 if (NOT DEFINED DISABLE_CXX)
 	add_library( dtmd-library++ SHARED ${LIBRARY_CXX_SOURCES} ${LIBRARY_CXX_HEADERS} )
+	if (NOT DEFINED DISABLE_LIBVERSION)
+		set_target_properties( dtmd-library++ PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+	endif (NOT DEFINED DISABLE_LIBVERSION)
 	target_link_libraries( dtmd-library++ ${LIBRARY_CXX_LIBS} dtmd-library dtmd-misc )
 endif (NOT DEFINED DISABLE_CXX)
 
