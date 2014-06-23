@@ -59,6 +59,9 @@ Control::Control()
 	QObject::connect(this, SIGNAL(signalBuildMenu()),
 		this, SLOT(slotBuildMenu()), Qt::QueuedConnection);
 
+	QObject::connect(this, SIGNAL(signalExitSignalled(QString,QString)),
+		this, SLOT(slotExitSignalled(QString,QString)), Qt::QueuedConnection);
+
 	QObject::connect(&m_tray, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
 		this, SLOT(tray_activated(QSystemTrayIcon::ActivationReason)), Qt::QueuedConnection);
 
@@ -750,19 +753,16 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 		}
 		catch (const std::exception &e)
 		{
-			QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error") + QString("\n") + QObject::trUtf8("Error message: ") + QString::fromLocal8Bit(e.what()));
-			ptr->exit();
+			ptr->exitSignalled(QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error") + QString("\n") + QObject::trUtf8("Error message: ") + QString::fromLocal8Bit(e.what()));
 		}
 		catch (...)
 		{
-			QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error"));
-			ptr->exit();
+			ptr->exitSignalled(QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error"));
 		}
 	}
 	else
 	{
-		QMessageBox::critical(NULL, QObject::trUtf8("Exiting"), QObject::trUtf8("Daemon sent exit message"));
-		ptr->exit();
+		ptr->exitSignalled(QObject::trUtf8("Exiting"), QObject::trUtf8("Daemon sent exit message"));
 	}
 }
 
@@ -806,6 +806,11 @@ void Control::exit()
 	QApplication::exit();
 }
 
+void Control::exitSignalled(QString title, QString message)
+{
+	emit signalExitSignalled(title, message);
+}
+
 void Control::slotShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint)
 {
 	m_tray.showMessage(title, message, icon, millisecondsTimeoutHint);
@@ -815,4 +820,10 @@ void Control::slotShowMessage(app_state state, QString title, QString message, Q
 void Control::slotBuildMenu()
 {
 	BuildMenu();
+}
+
+void Control::slotExitSignalled(QString title, QString message)
+{
+	QMessageBox::critical(NULL, title, message);
+	this->exit();
 }
