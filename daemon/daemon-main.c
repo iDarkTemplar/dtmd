@@ -382,7 +382,6 @@ int main(int argc, char **argv)
 	umask(0);
 
 	if (chdir("/") == -1)
-
 	{
 		fprintf(stderr, "Error changing directory to /\n");
 		result = -1;

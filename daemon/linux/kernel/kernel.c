@@ -411,6 +411,7 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	char *device_type;
 	struct stat stat_entry;
 	char *start_string;
+	int result = -1;
 
 	dtmd_info_t *device_info;
 	dtmd_removable_media_type_t media_type;
@@ -426,6 +427,7 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 #if 0
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed calling stat for file '%s'", name);
 #endif /* 0 */
+		result = 0;
 		goto helper_read_partition_exit_1;
 	}
 
@@ -434,6 +436,7 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	if (device_type == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed to get device type from file '%s'", name);
+		result = 0;
 		goto helper_read_partition_exit_1;
 	}
 
@@ -444,14 +447,14 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	if (device_info == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		goto helper_read_partition_error_1;
+		goto helper_read_partition_exit_1;
 	}
 
 	device_info->private_data = malloc(sizeof(dtmd_info_private_t));
 	if (device_info->private_data == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		goto helper_read_partition_error_2;
+		goto helper_read_partition_exit_2;
 	}
 
 	((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
@@ -461,14 +464,14 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	if (device_info->path == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		goto helper_read_partition_error_3;
+		goto helper_read_partition_exit_3;
 	}
 
 	device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(device_name_parent) + 2);
 	if (device_info->path_parent == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		goto helper_read_partition_error_4;
+		goto helper_read_partition_exit_4;
 	}
 
 	device_info->type = dtmd_info_partition;
@@ -484,42 +487,45 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	device_info->media_type   = media_type;
 	device_info->state        = dtmd_removable_media_state_unknown;
 
-	if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
-	    || (device_info->fstype == NULL))
+	if (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
 	{
-		if (device_info->fstype != NULL)
-		{
-			free((char*) device_info->fstype);
-		}
+		goto helper_read_partition_exit_6;
+	}
 
-		if (device_info->label != NULL)
-		{
-			free((char*) device_info->label);
-		}
-
-		goto helper_read_partition_error_5;
+	if (device_info->fstype == NULL)
+	{
+		result = 0;
+		goto helper_read_partition_exit_5;
 	}
 
 	*device = device_info;
 	return 1;
 
-helper_read_partition_exit_1:
-	return 0;
+helper_read_partition_exit_6:
+	if (device_info->fstype != NULL)
+	{
+		free((char*) device_info->fstype);
+	}
 
-helper_read_partition_error_5:
+helper_read_partition_exit_5:
+	if (device_info->label != NULL)
+	{
+		free((char*) device_info->label);
+	}
+
 	free((char*) device_info->path_parent);
 
-helper_read_partition_error_4:
+helper_read_partition_exit_4:
 	free((char*) device_info->path);
 
-helper_read_partition_error_3:
+helper_read_partition_exit_3:
 	free(device_info->private_data);
 
-helper_read_partition_error_2:
+helper_read_partition_exit_2:
 	free(device_info);
 
-helper_read_partition_error_1:
-	return -1;
+helper_read_partition_exit_1:
+	return result;
 }
 
 static int helper_read_device(dtmd_device_system_t *device_system, const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
@@ -1628,6 +1634,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	char *device_type;
 
 	char *last_delim;
+	int result = -1;
 
 	memset(&kernel, 0, sizeof(kernel));
 	kernel.nl_family = AF_NETLINK;
@@ -1651,12 +1658,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			|| (kernel.nl_pid != 0)
 			|| (kernel.nl_groups != NETLINK_GROUP_KERNEL))
 		{
+			result = 0;
 			goto device_system_monitor_receive_device_exit_1;
 		}
 
 		cmsg = CMSG_FIRSTHDR(&rtnl_reply);
 		if ((cmsg == NULL)|| (cmsg->cmsg_type != SCM_CREDENTIALS))
 		{
+			result = 0;
 			goto device_system_monitor_receive_device_exit_1;
 		}
 
@@ -1666,6 +1675,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			|| (cred->uid != 0)
 			|| (cred->gid != 0))
 		{
+			result = 0;
 			goto device_system_monitor_receive_device_exit_1;
 		}
 
@@ -1725,6 +1735,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			|| ((strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) != 0)
 				&& (strcmp(devtype, NETLINK_STRING_DEVTYPE_PARTITION) != 0)))
 		{
+			result = 0;
 			goto device_system_monitor_receive_device_exit_1;
 		}
 
@@ -1732,7 +1743,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		if (device_info == NULL)
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
-			goto device_system_monitor_receive_device_error_1;
+			goto device_system_monitor_receive_device_exit_1;
 		}
 
 		switch (action_type)
@@ -1743,7 +1754,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			if (strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 4 > PATH_MAX)
 			{
 				WRITE_LOG(LOG_ERR, "Error: got too long file name");
-				goto device_system_monitor_receive_device_error_2;
+				goto device_system_monitor_receive_device_exit_2;
 			}
 
 			strcpy(file_name, block_sys_dir);
@@ -1797,7 +1808,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				else
 				{
 					WRITE_LOG(LOG_ERR, "Failed to get device type");
-					goto device_system_monitor_receive_device_error_2;
+					goto device_system_monitor_receive_device_exit_2;
 				}
 			}
 			break;
@@ -1812,6 +1823,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			{
 				device_info->type = dtmd_info_partition;
 			}
+
 			device_info->media_type = dtmd_removable_media_unknown_or_persistent;
 			break;
 		}
@@ -1820,7 +1832,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		if (device_info->path == NULL)
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
-			goto device_system_monitor_receive_device_error_2;
+			goto device_system_monitor_receive_device_exit_2;
 		}
 
 		strcpy((char*) device_info->path, devices_dir);
@@ -1837,10 +1849,15 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			case dtmd_info_partition:
 				device_info->state = dtmd_removable_media_state_unknown;
 
-				if ((helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
-					|| (device_info->fstype == NULL))
+				if (helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label)) != 1)
 				{
-					goto device_system_monitor_receive_device_error_3;
+					goto device_system_monitor_receive_device_exit_4;
+				}
+
+				if (device_info->fstype == NULL)
+				{
+					result = 0;
+					goto device_system_monitor_receive_device_exit_3;
 				}
 				break;
 
@@ -1863,7 +1880,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 					break;
 
 				case -1:
-					goto device_system_monitor_receive_device_error_3;
+					goto device_system_monitor_receive_device_exit_4;
 				}
 				break;
 
@@ -1889,7 +1906,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			if (last_delim == NULL)
 			{
 				WRITE_LOG(LOG_ERR, "Invalid device path");
-				goto device_system_monitor_receive_device_error_3;
+				goto device_system_monitor_receive_device_exit_4;
 			}
 
 			*last_delim = 0;
@@ -1897,14 +1914,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			if (last_delim == NULL)
 			{
 				WRITE_LOG(LOG_ERR, "Invalid device path");
-				goto device_system_monitor_receive_device_error_3;
+				goto device_system_monitor_receive_device_exit_4;
 			}
 
 			device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(last_delim) + 1);
 			if (device_info->path_parent == NULL)
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
-				goto device_system_monitor_receive_device_error_3;
+				goto device_system_monitor_receive_device_exit_4;
 			}
 
 			strcpy((char*) device_info->path_parent, devices_dir);
@@ -1925,18 +1942,18 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	else if (len < 0)
 	{
 		WRITE_LOG(LOG_ERR, "Failed to receive data from netlink socket");
-		goto device_system_monitor_receive_device_error_1;
+		goto device_system_monitor_receive_device_exit_1;
 	}
 
-device_system_monitor_receive_device_exit_1:
 	return 0;
 
-device_system_monitor_receive_device_error_3:
+device_system_monitor_receive_device_exit_4:
 	if (device_info->fstype != NULL)
 	{
 		free((char*) device_info->fstype);
 	}
 
+device_system_monitor_receive_device_exit_3:
 	if (device_info->label != NULL)
 	{
 		free((char*) device_info->label);
@@ -1944,11 +1961,11 @@ device_system_monitor_receive_device_error_3:
 
 	free((char*) device_info->path);
 
-device_system_monitor_receive_device_error_2:
+device_system_monitor_receive_device_exit_2:
 	free(device_info);
 
-device_system_monitor_receive_device_error_1:
-	return -1;
+device_system_monitor_receive_device_exit_1:
+	return result;
 }
 
 static int device_system_monitor_add_item(dtmd_device_monitor_t *monitor, dtmd_info_t *device, dtmd_device_action_type_t action)
@@ -2436,6 +2453,7 @@ dtmd_device_system_t* device_system_init(void)
 	device_system = (dtmd_device_system_t*) malloc(sizeof(dtmd_device_system_t));
 	if (device_system == NULL)
 	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto device_system_init_error_1;
 	}
 
