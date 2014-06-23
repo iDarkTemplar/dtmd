@@ -134,7 +134,7 @@ static int invoke_mount_external(int client_number,
 	}
 
 	// calculate total length
-	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(fstype) + 1 + strlen(path) + 1 + strlen(mount_path);
+	mount_flags_start = strlen(mount_ext_cmd) + strlen(" -t ") + strlen(fstype) + 1 + strlen(path) + 2 + strlen(mount_path) + 1;
 
 	if (string_full_len > 0)
 	{
@@ -156,8 +156,9 @@ static int invoke_mount_external(int client_number,
 	strcat(mount_cmd, fstype);
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, path);
-	strcat(mount_cmd, " ");
+	strcat(mount_cmd, " \"");
 	strcat(mount_cmd, mount_path);
+	strcat(mount_cmd, "\"");
 
 	// create flags and string
 	if (string_full_len > 0)
@@ -203,7 +204,7 @@ static int invoke_mount_external(int client_number,
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: mount failure", path, mount_path);
 		return 0;
 	default:
-		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: unknown error", path, mount_path);
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: unknown error, code %d", path, mount_path, result);
 		return 0;
 	}
 
@@ -560,7 +561,7 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 	int unmount_cmd_len;
 	char *unmount_cmd;
 
-	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(fstype) + 1 + strlen(mnt_point);
+	unmount_cmd_len = strlen(unmount_ext_cmd) + strlen(" -t ") + strlen(fstype) + 2 + strlen(mnt_point) + 1;
 
 	unmount_cmd = (char*) malloc(unmount_cmd_len + 1);
 	if (unmount_cmd == NULL)
@@ -572,8 +573,9 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 	strcpy(unmount_cmd, unmount_ext_cmd);
 	strcat(unmount_cmd, " -t ");
 	strcat(unmount_cmd, fstype);
-	strcat(unmount_cmd, " ");
+	strcat(unmount_cmd, " \"");
 	strcat(unmount_cmd, mnt_point);
+	strcat(unmount_cmd, "\"");
 
 	result = system(unmount_cmd);
 
