@@ -19,7 +19,8 @@
  */
 
 #include "daemon/config_file.h"
-#include "filesystem_opts.h"
+#include "daemon/filesystem_opts.h"
+#include "daemon/return_codes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,7 +89,7 @@ static int insert_mount_opts_into_array(char *fs_name, char *fs_opts)
 		free(default_mount_opts_array[item]->opts);
 		default_mount_opts_array[item]->opts = fs_opts;
 
-		return 0;
+		return result_fail;
 	}
 	else
 	{
@@ -110,7 +111,7 @@ static int insert_mount_opts_into_array(char *fs_name, char *fs_opts)
 		array_item->opts = fs_opts;
 		default_mount_opts_array[default_mount_opts_array_size - 1] = array_item;
 
-		return 1;
+		return result_success;
 	}
 
 insert_mount_opts_into_array_error_2:
@@ -120,7 +121,7 @@ insert_mount_opts_into_array_error_1:
 	free(fs_name);
 	free(fs_opts);
 
-	return -1;
+	return result_fatal_error;
 }
 
 static void free_mount_opts_array(void)
@@ -166,12 +167,12 @@ static int process_config_value(const char *key, const char *value)
 		if (strcmp(value, config_yes) == 0)
 		{
 			unmount_on_exit = 1;
-			return 1;
+			return result_success;
 		}
 		else if (strcmp(value, config_no) == 0)
 		{
 			unmount_on_exit = 0;
-			return 1;
+			return result_success;
 		}
 	}
 	else if (strcmp(key, config_mount_by) == 0)
@@ -179,12 +180,12 @@ static int process_config_value(const char *key, const char *value)
 		if (strcmp(value, config_mount_by_name) == 0)
 		{
 			mount_by_value = mount_by_device_name;
-			return 1;
+			return result_success;
 		}
 		else if (strcmp(value, config_mount_by_label) == 0)
 		{
 			mount_by_value = mount_by_device_label;
-			return 1;
+			return result_success;
 		}
 	}
 	if (strcmp(key, config_use_syslog) == 0)
@@ -192,12 +193,12 @@ static int process_config_value(const char *key, const char *value)
 		if (strcmp(value, config_yes) == 0)
 		{
 			use_syslog = 1;
-			return 1;
+			return result_success;
 		}
 		else if (strcmp(value, config_no) == 0)
 		{
 			use_syslog = 0;
-			return 1;
+			return result_success;
 		}
 	}
 	else if (strcmp(key, config_mount_dir) == 0)
@@ -217,8 +218,10 @@ static int process_config_value(const char *key, const char *value)
 				memcpy(mount_dir, &(value[1]), strlen(value) - 2);
 				mount_dir[strlen(value) - 2] = 0;
 
-				return 1;
+				return result_success;
 			}
+
+			return result_fatal_error;
 		}
 	}
 	else if (strcmp(key, config_create_mount_dir_on_startup) == 0)
@@ -226,12 +229,12 @@ static int process_config_value(const char *key, const char *value)
 		if (strcmp(value, config_yes) == 0)
 		{
 			create_mount_dir_on_startup = 1;
-			return 1;
+			return result_success;
 		}
 		else if (strcmp(value, config_no) == 0)
 		{
 			create_mount_dir_on_startup = 0;
-			return 1;
+			return result_success;
 		}
 	}
 	else if (strcmp(key, config_clear_mount_dir) == 0)
@@ -239,12 +242,12 @@ static int process_config_value(const char *key, const char *value)
 		if (strcmp(value, config_yes) == 0)
 		{
 			clear_mount_dir = 1;
-			return 1;
+			return result_success;
 		}
 		else if (strcmp(value, config_no) == 0)
 		{
 			clear_mount_dir = 0;
-			return 1;
+			return result_success;
 		}
 	}
 	else if (strncmp(key, config_default_mount_opts, strlen(config_default_mount_opts)) == 0)
@@ -255,6 +258,8 @@ static int process_config_value(const char *key, const char *value)
 				&& (value[0] == '\"')
 				&& (value[strlen(value) - 1] == '\"'))
 			{
+				result = result_fatal_error;
+
 				fs_name = strdup(&(key[strlen(config_default_mount_opts)]));
 
 				if (fs_name != NULL)
@@ -272,7 +277,7 @@ static int process_config_value(const char *key, const char *value)
 							result = convert_options_to_list(fs_opts, fsopts_type, NULL, NULL, &fsopts_list);
 							free_options_list(&fsopts_list);
 
-							if (result == 1)
+							if (is_result_successful(result))
 							{
 								return insert_mount_opts_into_array(fs_name, fs_opts);
 							}
@@ -283,11 +288,13 @@ static int process_config_value(const char *key, const char *value)
 
 					free(fs_name);
 				}
+
+				return result;
 			}
 		}
 	}
 
-	return -1;
+	return result_fail;
 }
 
 int read_config(void)
@@ -419,7 +426,7 @@ int read_config(void)
 			buffer[key_end] = 0;
 			buffer[value_end] = 0;
 
-			if (process_config_value(&(buffer[key_start]), &(buffer[value_start])) < 0)
+			if (is_result_failure(process_config_value(&(buffer[key_start]), &(buffer[value_start]))))
 			{
 				rc = line_num;
 				goto read_config_exit;

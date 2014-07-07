@@ -25,6 +25,7 @@
 #include "daemon/mnt_funcs.h"
 #include "daemon/filesystem_opts.h"
 #include "daemon/log.h"
+#include "daemon/return_codes.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -63,13 +64,13 @@ static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 		|| (ucred_length != sizeof(struct ucred)))
 	{
 		WRITE_LOG(LOG_ERR, "Failed obtaining credentials of client");
-		return -1;
+		return result_client_error;
 	}
 
 	*uid = credentials.uid;
 	*gid = credentials.gid;
 
-	return 1;
+	return result_success;
 }
 #endif /* OS == Linux */
 
@@ -128,7 +129,7 @@ static int invoke_mount_external(int client_number,
 	unsigned int string_full_len;
 
 	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0, NULL, NULL, 0, NULL);
-	if (result != 1)
+	if (is_result_failure(result))
 	{
 		goto invoke_mount_external_error_1;
 	}
@@ -147,7 +148,7 @@ static int invoke_mount_external(int client_number,
 	if (mount_cmd == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = -1;
+		result = result_fatal_error;
 		goto invoke_mount_external_error_1;
 	}
 
@@ -166,7 +167,7 @@ static int invoke_mount_external(int client_number,
 		strcat(mount_cmd, " -o ");
 
 		result = fsopts_generate_string(fsopts_list, NULL, &(mount_cmd[mount_flags_start]), string_full_len, NULL, NULL, 0, NULL);
-		if (result != 1)
+		if (is_result_failure(result))
 		{
 			goto invoke_mount_external_error_2;
 		}
@@ -181,31 +182,32 @@ static int invoke_mount_external(int client_number,
 	switch (result)
 	{
 	case 16: /* problems writing or locking /etc/mtab */
-		WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
+		WRITE_LOG(LOG_WARNING, "Failed to modify /etc/mtab");
 	case 0:  /* success */
 		WRITE_LOG_ARGS(LOG_INFO, "Mounted device '%s' to path '%s'", path, mount_path);
-		return 1;
-	case -1:
+		return result_success;
+	// NOTE: even if it may be fatal, try to ignore it, go to default
+	/*case -1:
 		WRITE_LOG(LOG_ERR, "Unknown mount error");
-		return -1;
+		return result_fail;*/
 	case 1:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: incorrect invocation or permissions", path, mount_path);
-		return 0;
+		return result_fail;
 	case 2:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: system error", path, mount_path);
-		return 0;
+		return result_fail;
 	case 4:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: internal mount bug", path, mount_path);
-		return 0;
+		return result_fail;
 	case 8:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: user interrupt", path, mount_path);
-		return 0;
+		return result_fail;
 	case 32:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: mount failure", path, mount_path);
-		return 0;
+		return result_fail;
 	default:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: unknown error, code %d", path, mount_path, result);
-		return 0;
+		return result_fail;
 	}
 
 invoke_mount_external_error_2:
@@ -230,7 +232,7 @@ static int invoke_mount_internal(int client_number,
 	unsigned int string_len;
 
 	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0, &string_len, NULL, 0, NULL);
-	if (result != 1)
+	if (is_result_failure(result))
 	{
 		goto invoke_mount_internal_error_1;
 	}
@@ -239,7 +241,7 @@ static int invoke_mount_internal(int client_number,
 	if (mount_full_opts == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = -1;
+		result = result_fatal_error;
 		goto invoke_mount_internal_error_1;
 	}
 
@@ -247,12 +249,12 @@ static int invoke_mount_internal(int client_number,
 	if (mount_opts == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = -1;
+		result = result_fatal_error;
 		goto invoke_mount_internal_error_2;
 	}
 
 	result = fsopts_generate_string(fsopts_list, NULL, mount_full_opts, string_full_len, NULL, mount_opts, string_len, &mount_flags);
-	if (result != 1)
+	if (is_result_failure(result))
 	{
 		goto invoke_mount_internal_error_3;
 	}
@@ -265,20 +267,20 @@ static int invoke_mount_internal(int client_number,
 	if (result == 0)
 	{
 		result = add_to_mtab(path, mount_path, fstype, mount_full_opts);
-		if (result != 1)
+		if (is_result_failure(result))
 		{
 			// NOTE: failing to modify /etc/mtab is non-fatal error
 			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
 		}
 
-		result = 1;
+		result = result_success;
 
 		WRITE_LOG_ARGS(LOG_INFO, "Mounted device '%s' to path '%s'", path, mount_path);
 	}
 	else
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s'", path, mount_path);
-		result = 0;
+		result = result_fail;
 	}
 
 invoke_mount_internal_error_3:
@@ -415,7 +417,7 @@ invoke_mount_exit_loop:
 		if ((dev >= stateful_media_count) || (stateful_media[dev]->state != dtmd_removable_media_state_ok))
 		{
 			WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device does not exist or is not ready", path);
-			result = 0;
+			result = result_fail;
 			goto invoke_mount_error_1;
 		}
 
@@ -427,20 +429,20 @@ invoke_mount_exit_loop:
 	if (local_mnt_point != NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device is already mounted", path);
-		result = 0;
+		result = result_fail;
 		goto invoke_mount_error_1;
 	}
 
-	if (get_credentials(clients[client_number]->clientfd, &uid, &gid) != 1)
+	result = get_credentials(clients[client_number]->clientfd, &uid, &gid);
+	if (is_result_failure(result))
 	{
-		result = -1;
 		goto invoke_mount_error_1;
 	}
 
 	fsopts = get_fsopts_for_fs(local_fstype);
 	if (fsopts == NULL)
 	{
-		result = -1;
+		result = result_fail;
 		goto invoke_mount_error_1;
 	}
 
@@ -468,7 +470,7 @@ invoke_mount_exit_loop:
 	init_options_list(&fsopts_list);
 
 	result = convert_options_to_list(mount_options, fsopts, &uid, &gid, &fsopts_list);
-	if (result != 1)
+	if (is_result_failure(result))
 	{
 		goto invoke_mount_error_2;
 	}
@@ -478,7 +480,7 @@ invoke_mount_exit_loop:
 		mount_path = calculate_path(path, local_label, &mount_type);
 		if (mount_path == NULL)
 		{
-			result = -1;
+			result = result_fatal_error;
 			goto invoke_mount_error_2;
 		}
 
@@ -488,7 +490,7 @@ invoke_mount_exit_loop:
 		{
 			if (result < 0)
 			{
-				result = -1;
+				result = result_fatal_error;
 				goto invoke_mount_error_3;
 			}
 			else
@@ -501,7 +503,7 @@ invoke_mount_exit_loop:
 
 				case mount_by_device_name:
 					WRITE_LOG_ARGS(LOG_WARNING, "Could not find suitable mount point for device '%s'", path);
-					result = 0;
+					result = result_fail;
 					goto invoke_mount_error_3;
 				}
 			}
@@ -521,7 +523,7 @@ invoke_mount_exit_loop:
 		{
 			// NOTE: failing to create directory is non-fatal error
 			WRITE_LOG_ARGS(LOG_WARNING, "Failed to create directory '%s'", mount_path );
-			result = 0;
+			result = result_fail;
 			goto invoke_mount_error_3;
 		}
 	}
@@ -539,7 +541,7 @@ invoke_mount_exit_loop:
 	}
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-	if (result != 1)
+	if (is_result_failure(result))
 	{
 		rmdir(mount_path);
 	}
@@ -567,7 +569,7 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 	if (unmount_cmd == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		return -1;
+		return result_fatal_error;
 	}
 
 	strcpy(unmount_cmd, unmount_ext_cmd);
@@ -585,15 +587,16 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 	{
 	case 0:
 		WRITE_LOG_ARGS(LOG_INFO, "Unmounted device '%s' from path '%s'", path, mnt_point);
-		return 1;
+		return result_success;
 
-	case -1:
+	// NOTE: even if it may be fatal, try to ignore it, go to default
+	/*case -1:
 		WRITE_LOG(LOG_ERR, "Unknown unmount error");
-		return -1;
+		return result_fail;*/
 
 	default:
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s' from path '%s' using external umount: unknown error", path, mnt_point);
-		return 0;
+		return result_fail;
 	}
 }
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
@@ -607,11 +610,11 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 	{
 		if (result < 0)
 		{
-			return -1;
+			return result_fatal_error;
 		}
 		else
 		{
-			return 0;
+			return result_fail;
 		}
 	}
 
@@ -621,21 +624,19 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 	if (result != 0)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s' from path '%s'", path, mnt_point);
-
-		result = 0;
+		result = result_fail;
 	}
 	else
 	{
 		result = remove_from_mtab(path, mnt_point, fstype);
-		if (result != 1)
+		if (is_result_failure(result))
 		{
 			// NOTE: failing to modify /etc/mtab is non-fatal error
 			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
 		}
 
-		result = 1;
-
 		WRITE_LOG_ARGS(LOG_INFO, "Unmounted device '%s' from path '%s'", path, mnt_point);
+		result = result_success;
 	}
 
 	return result;
@@ -650,7 +651,7 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 	fsopts = get_fsopts_for_fs(fstype);
 	if (fsopts == NULL)
 	{
-		result = -1;
+		result = result_fail;
 		goto invoke_unmount_common_error_1;
 	}
 
@@ -667,7 +668,7 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 	}
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-	if (result == 1)
+	if (is_result_successful(result))
 	{
 		if (get_dir_state(mnt_point) == dir_state_empty)
 		{
@@ -715,7 +716,7 @@ invoke_unmount_exit_loop:
 		if (dev >= stateful_media_count)
 		{
 			WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device does not exist", path);
-			return 0;
+			return result_fail;
 		}
 
 		local_mnt_point = stateful_media[dev]->mnt_point;
@@ -725,7 +726,7 @@ invoke_unmount_exit_loop:
 	if (local_mnt_point == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device is not mounted", path);
-		return 0;
+		return result_fail;
 	}
 
 	return invoke_unmount_common(client_number, path, local_mnt_point, local_fstype);
@@ -743,7 +744,7 @@ int invoke_unmount_all(int client_number)
 			if (media[dev]->partition[part]->mnt_point != NULL)
 			{
 				result = invoke_unmount_common(client_number, media[dev]->partition[part]->path, media[dev]->partition[part]->mnt_point, media[dev]->partition[part]->fstype);
-				if (result < 0)
+				if (is_result_fatal_error(result))
 				{
 					return result;
 				}
@@ -756,12 +757,12 @@ int invoke_unmount_all(int client_number)
 		if (stateful_media[dev]->mnt_point != NULL)
 		{
 			result = invoke_unmount_common(client_number, stateful_media[dev]->path, stateful_media[dev]->mnt_point, stateful_media[dev]->fstype);
-			if (result < 0)
+			if (is_result_fatal_error(result))
 			{
 				return result;
 			}
 		}
 	}
 
-	return 1;
+	return result_success;
 }

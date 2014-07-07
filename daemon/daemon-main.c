@@ -41,6 +41,7 @@
 #include "daemon/config_file.h"
 #include "daemon/filesystem_mnt.h"
 #include "daemon/log.h"
+#include "daemon/return_codes.h"
 
 #define dtmd_daemon_lock "/var/run/dtmd.pid"
 
@@ -79,23 +80,23 @@ int setSigHandlers(void)
 
 	if (sigaction(SIGTERM, &action, NULL) < 0)
 	{
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (!daemonize)
 	{
 		if (sigaction(SIGINT, &action, NULL) < 0)
 		{
-			return -1;
+			return result_fatal_error;
 		}
 	}
 
 	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
 	{
-		return -1;
+		return result_fatal_error;
 	}
 
-	return 0;
+	return result_success;
 }
 
 int redirectStdio(void)
@@ -106,7 +107,7 @@ int redirectStdio(void)
 	fd1 = open("/dev/null", O_RDONLY);
 	if (fd1 == -1)
 	{
-		return -1;
+		return result_fatal_error;
 	}
 
 	fd2 = open("/dev/null", O_WRONLY);
@@ -114,7 +115,7 @@ int redirectStdio(void)
 	{
 		close(fd1);
 
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (dup2(fd1, STDIN_FILENO) == -1)
@@ -122,7 +123,7 @@ int redirectStdio(void)
 		close(fd1);
 		close(fd2);
 
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (dup2(fd2, STDOUT_FILENO) == -1)
@@ -130,7 +131,7 @@ int redirectStdio(void)
 		close(fd1);
 		close(fd2);
 
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (dup2(fd2, STDERR_FILENO) == -1)
@@ -138,13 +139,13 @@ int redirectStdio(void)
 		close(fd1);
 		close(fd2);
 
-		return -1;
+		return result_fatal_error;
 	}
 
 	close(fd1);
 	close(fd2);
 
-	return 0;
+	return result_success;
 }
 
 void check_lock_file(void)
@@ -228,25 +229,25 @@ remove_empty_dirs_error_1:
 int create_mount_dir_recursive(char *directory)
 {
 	int length;
-	int result = 0;
+	int result = result_success;
 	char *delim;
 	struct stat dirstat;
 
 	length = strlen(directory);
 	if (length == 0)
 	{
-		return result;
+		return result_success;
 	}
 
 	if (stat(directory, &dirstat) == 0)
 	{
 		if (S_ISDIR(dirstat.st_mode))
 		{
-			return 0;
+			return result_success;
 		}
 		else
 		{
-			return -1;
+			return result_fatal_error;
 		}
 	}
 
@@ -259,9 +260,17 @@ int create_mount_dir_recursive(char *directory)
 		*delim = '/';
 	}
 
-	if (result == 0)
+	if (result == result_success)
 	{
 		result = mkdir(directory, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+		if (result >= 0)
+		{
+			result = result_success;
+		}
+		else
+		{
+			result = result_fatal_error;
+		}
 	}
 
 	return result;
@@ -275,7 +284,7 @@ int create_mount_dir(const char *directory)
 	dir = strdup(directory);
 	if (dir == NULL)
 	{
-		return -1;
+		return result_fatal_error;
 	}
 
 	result = create_mount_dir_recursive(dir);
@@ -300,7 +309,6 @@ int main(int argc, char **argv)
 	struct stat st;
 	int daemonpipe[2] = { -1, -1 };
 	unsigned char daemondata;
-	int action_result;
 	int successfully_initialized = 0;
 
 	dtmd_device_system_t *dtmd_dev_system;
@@ -391,7 +399,7 @@ int main(int argc, char **argv)
 	if (create_mount_dir_on_startup)
 	{
 		rc = create_mount_dir((mount_dir != NULL) ? mount_dir : dtmd_internal_mount_dir);
-		if (rc != 0)
+		if (is_result_failure(rc))
 		{
 			fprintf(stderr, "Error: could not create mount directory\n");
 			result = -1;
@@ -433,7 +441,6 @@ int main(int argc, char **argv)
 
 	unlink(sockaddr.sun_path);
 	rc = bind(socketfd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un));
-
 	if (rc == -1)
 	{
 		fprintf(stderr, "Error binding socket\n");
@@ -518,7 +525,7 @@ int main(int argc, char **argv)
 	}
 
 	rc = setSigHandlers();
-	if (rc == -1)
+	if (is_result_failure(rc))
 	{
 		if (!daemonize)
 		{
@@ -537,7 +544,7 @@ int main(int argc, char **argv)
 			goto exit_4_pipe;
 		}
 
-		if (redirectStdio() != 0)
+		if (is_result_failure(redirectStdio()))
 		{
 			result = -1;
 			goto exit_4_pipe;
@@ -600,7 +607,7 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	while ((rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)) > 0)
+	while (is_result_successful(rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)))
 	{
 		switch (dtmd_dev_device->type)
 		{
@@ -608,7 +615,7 @@ int main(int argc, char **argv)
 			if ((dtmd_dev_device->path != NULL)
 				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
 			{
-				if (add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type) < 0)
+				if (is_result_fatal_error(add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type)))
 				{
 					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
 					device_system_finish_enumerate_devices(dtmd_dev_enum);
@@ -624,11 +631,11 @@ int main(int argc, char **argv)
 				&& (dtmd_dev_device->fstype != NULL)
 				&& (dtmd_dev_device->path_parent != NULL))
 			{
-				if (add_media_partition(dtmd_dev_device->path_parent,
+				if (is_result_fatal_error(add_media_partition(dtmd_dev_device->path_parent,
 					dtmd_dev_device->media_type,
 					dtmd_dev_device->path,
 					dtmd_dev_device->fstype,
-					dtmd_dev_device->label) < 0)
+					dtmd_dev_device->label)))
 				{
 					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
 					device_system_finish_enumerate_devices(dtmd_dev_enum);
@@ -643,11 +650,11 @@ int main(int argc, char **argv)
 				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
 				&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
 			{
-				if (add_stateful_media(dtmd_dev_device->path,
+				if (is_result_fatal_error(add_stateful_media(dtmd_dev_device->path,
 					dtmd_dev_device->media_type,
 					dtmd_dev_device->state,
 					dtmd_dev_device->fstype,
-					dtmd_dev_device->label) < 0)
+					dtmd_dev_device->label)))
 				{
 					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
 					device_system_finish_enumerate_devices(dtmd_dev_enum);
@@ -663,13 +670,13 @@ int main(int argc, char **argv)
 
 	device_system_finish_enumerate_devices(dtmd_dev_enum);
 
-	if (rc < 0)
+	if (is_result_fatal_error(rc))
 	{
 		result = -1;
 		goto exit_7;
 	}
 
-	if (check_mount_changes() < 0)
+	if (is_result_fatal_error(check_mount_changes()))
 	{
 		result = -1;
 		goto exit_7;
@@ -745,7 +752,7 @@ int main(int argc, char **argv)
 			}
 
 			rc = add_client(rc);
-			if (rc < 0)
+			if (is_result_fatal_error(rc))
 			{
 				result = -1;
 				goto exit_8;
@@ -761,9 +768,9 @@ int main(int argc, char **argv)
 		else if (pollfds[0].revents & POLLIN)
 		{
 			rc = device_system_monitor_get_device(dtmd_dev_mon, &dtmd_dev_device, &dtmd_dev_action);
-			if (rc > 0)
+			if (is_result_successful(rc))
 			{
-				rc = 0;
+				rc = result_fail;
 
 				switch (dtmd_dev_action)
 				{
@@ -855,14 +862,9 @@ int main(int argc, char **argv)
 				}
 
 				device_system_monitor_free_device(dtmd_dev_mon, dtmd_dev_device);
-
-				if (rc < 0)
-				{
-					result = -1;
-					goto exit_8;
-				}
 			}
-			else if (rc < 0)
+
+			if (is_result_fatal_error(rc))
 			{
 				result = -1;
 				goto exit_8;
@@ -877,7 +879,7 @@ int main(int argc, char **argv)
 		}
 		else if (pollfds[2].revents & POLLERR)
 		{
-			if (check_mount_changes() < 0)
+			if (is_result_fatal_error(check_mount_changes()))
 			{
 				result = -1;
 				goto exit_8;
@@ -916,16 +918,13 @@ int main(int argc, char **argv)
 
 				clients[j]->buf_used += rc;
 				clients[j]->buf[clients[j]->buf_used] = 0;
-				action_result = 1;
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
 					rc = dtmd_validate_command(clients[j]->buf);
 					if (!rc)
 					{
-						remove_client(pollfds[i].fd);
-						action_result = 0;
-						break;
+						goto exit_remove_client;
 					}
 
 					cmd = dtmd_parse_command(clients[j]->buf);
@@ -938,20 +937,31 @@ int main(int argc, char **argv)
 
 					rc = invoke_command(j, cmd);
 					dtmd_free_command(cmd);
-					if (rc < 0)
+
+					switch (rc)
 					{
+					case result_bug:
+					case result_fatal_error:
 						result = -1;
 						goto exit_8;
+
+					case result_client_error:
+						goto exit_remove_client;
+
+					case result_fail:
+					case result_success:
+					default:
+						break;
 					}
 
 					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
 					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used + 1);
 				}
 
-				if ((action_result) && (clients[j]->buf_used == dtmd_command_max_length))
+				if (clients[j]->buf_used == dtmd_command_max_length)
 				{
+exit_remove_client:
 					remove_client(pollfds[i].fd);
-					continue;
 				}
 			}
 		}

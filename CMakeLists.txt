@@ -153,7 +153,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )

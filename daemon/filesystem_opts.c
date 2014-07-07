@@ -22,6 +22,7 @@
 
 #include "daemon/lists.h"
 #include "daemon/log.h"
+#include "daemon/return_codes.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -220,7 +221,7 @@ const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 	{
 		if (fsopts->fstype == NULL)
 		{
-			WRITE_LOG_ARGS(LOG_ERR, "Can't find filesystem options for filesystem '%s'", filesystem);
+			WRITE_LOG_ARGS(LOG_WARNING, "Can't find filesystem options for filesystem '%s'", filesystem);
 			return NULL;
 		}
 
@@ -277,7 +278,7 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 		}
 	}
 
-	WRITE_LOG_ARGS(LOG_WARNING, "Filesystem option '%s' is not allowed", option);
+	WRITE_LOG_ARGS(LOG_NOTICE, "Filesystem option '%s' is not allowed", option);
 	return NULL;
 }
 
@@ -361,7 +362,7 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 		|| (fsopts_list == NULL))
 	{
 		WRITE_LOG(LOG_ERR, "Bug: parameter 'options list' or 'filesystem options list' of  is empty");
-		return -1;
+		return result_bug;
 	}
 
 	opt_start = options_list;
@@ -385,14 +386,14 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			if (opt_len == 0)
 			{
 				WRITE_LOG(LOG_WARNING, "Got empty parameter in options list");
-				return 0;
+				return result_fail;
 			}
 
 			// check option
 			option_params = find_option_in_list(opt_start, opt_len, fsopts);
 			if (option_params == NULL)
 			{
-				return 0;
+				return result_fail;
 			}
 
 			mntflagslist = string_to_mount_flag_list;
@@ -453,7 +454,7 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				if (option_item == NULL)
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return -1;
+					return result_fatal_error;
 				}
 
 				tmp = realloc(fsopts_list->options, (fsopts_list->options_count + 1) * sizeof(struct dtmd_fsopts_list_item*));
@@ -461,7 +462,7 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					free(option_item);
-					return -1;
+					return result_fatal_error;
 				}
 
 				fsopts_list->options = (struct dtmd_fsopts_list_item**) tmp;
@@ -500,21 +501,21 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			if (result < 1)
 			{
 				WRITE_LOG(LOG_ERR, "Uid to string conversion failed");
-				return -1;
+				return result_fatal_error;
 			}
 
 			fsopts_list->option_uid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_uid.id_option_value == NULL)
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
-				return -1;
+				return result_fatal_error;
 			}
 
 			result = snprintf(fsopts_list->option_uid.id_option_value, result + 1, "%u", *uid);
 			if (result < 1)
 			{
 				WRITE_LOG(LOG_ERR, "Uid to string conversion failed");
-				return -1;
+				return result_fatal_error;
 			}
 
 			fsopts_list->option_uid.id_option_value_len = result;
@@ -528,21 +529,21 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			if (result < 1)
 			{
 				WRITE_LOG(LOG_ERR, "Gid to string conversion failed");
-				return -1;
+				return result_fatal_error;
 			}
 
 			fsopts_list->option_gid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_gid.id_option_value == NULL)
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
-				return -1;
+				return result_fatal_error;
 			}
 
 			result = snprintf(fsopts_list->option_gid.id_option_value, result + 1, "%u", *gid);
 			if (result < 1)
 			{
 				WRITE_LOG(LOG_ERR, "Gid to string conversion failed");
-				return -1;
+				return result_fatal_error;
 			}
 
 			fsopts_list->option_gid.id_option_value_len = result;
@@ -551,7 +552,7 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 		}
 	}
 
-	return 1;
+	return result_success;
 }
 
 int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
@@ -573,7 +574,7 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	if (fsopts_list == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "BUG: parameter 'filesystem options list' is empty");
-		return -1;
+		return result_bug;
 	}
 
 	if (fsopts_list->options != NULL)
@@ -879,7 +880,7 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 		*mount_flags = flags;
 	}
 
-	return 1;
+	return result_success;
 }
 
 int invoke_list_supported_filesystems(int client_number)
@@ -887,9 +888,10 @@ int invoke_list_supported_filesystems(int client_number)
 	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
 	int first = 1;
 
-	dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n");
-
-	dprintf(clients[client_number]->clientfd, dtmd_response_argument_supported_filesystems_lists "(");
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n" dtmd_response_argument_supported_filesystems_lists "(") < 0)
+	{
+		return result_client_error;
+	}
 
 	for (;;)
 	{
@@ -909,10 +911,16 @@ int invoke_list_supported_filesystems(int client_number)
 			}
 			else
 			{
-				dprintf(clients[client_number]->clientfd, ", ");
+				if (dprintf(clients[client_number]->clientfd, ", ") < 0)
+				{
+					return result_client_error;
+				}
 			}
 
-			dprintf(clients[client_number]->clientfd, "\"%s\"", fsopts->fstype);
+			if (dprintf(clients[client_number]->clientfd, "\"%s\"", fsopts->fstype) < 0)
+			{
+				return result_client_error;
+			}
 #if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
 #else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 		}
@@ -921,11 +929,12 @@ int invoke_list_supported_filesystems(int client_number)
 		++fsopts;
 	}
 
-	dprintf(clients[client_number]->clientfd, ")\n");
+	if (dprintf(clients[client_number]->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n") < 0)
+	{
+		return result_client_error;
+	}
 
-	dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n");
-
-	return 0;
+	return result_success;
 }
 
 int invoke_list_supported_filesystem_options(int client_number, const char *filesystem)
@@ -943,16 +952,21 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 	if ((fsopts == NULL) || (fsopts->external_fstype != NULL))
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	{
-		dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem);
-		return 0;
+		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
+		{
+			return result_client_error;
+		}
+
+		return result_fail;
 	}
 
 	options_lists_array[0] = any_fs_allowed_list;
 	options_lists_array[1] = fsopts->options;
 
-	dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem);
-
-	dprintf(clients[client_number]->clientfd, dtmd_response_argument_supported_filesystem_options_lists "(");
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n" dtmd_response_argument_supported_filesystem_options_lists "(", filesystem) < 0)
+	{
+		return result_client_error;
+	}
 
 	for (array_index = 0; array_index < 2; ++array_index)
 	{
@@ -964,16 +978,23 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 			}
 			else
 			{
-				dprintf(clients[client_number]->clientfd, ", ");
+				if (dprintf(clients[client_number]->clientfd, ", ") < 0)
+				{
+					return result_client_error;
+				}
 			}
 
-			dprintf(clients[client_number]->clientfd, "\"%s\"", option_list->option);
+			if (dprintf(clients[client_number]->clientfd, "\"%s\"", option_list->option) < 0)
+			{
+				return result_client_error;
+			}
 		}
 	}
 
-	dprintf(clients[client_number]->clientfd, ")\n");
+	if (dprintf(clients[client_number]->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
+	{
+		return result_client_error;
+	}
 
-	dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem);
-
-	return 0;
+	return result_success;
 }

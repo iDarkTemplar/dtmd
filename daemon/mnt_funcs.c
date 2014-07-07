@@ -25,6 +25,7 @@
 #include "daemon/lists.h"
 #include "daemon/actions.h"
 #include "daemon/log.h"
+#include "daemon/return_codes.h"
 
 #include <mntent.h>
 #include <stdlib.h>
@@ -249,13 +250,13 @@ int check_mount_changes(void)
 		}
 	}
 
-	return 0;
+	return result_success;
 
 check_mount_changes_error_2:
 	endmntent(mntfile);
 
 check_mount_changes_error_1:
-	return -1;
+	return result_fatal_error;
 }
 
 int point_mount_count(const char *path, int max)
@@ -314,11 +315,11 @@ int add_to_mtab(const char *path, const char *mount_point, const char *type, con
 
 	if (result == 0)
 	{
-		return 1;
+		return result_success;
 	}
 	else
 	{
-		return 0;
+		return result_fatal_error;
 	}
 }
 
@@ -333,7 +334,7 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 	if (mntfile_old == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s'", dtmd_internal_mtab_file);
-		return -1;
+		return result_fatal_error;
 	}
 
 	mntfile_new = setmntent(dtmd_internal_mtab_temporary, "w");
@@ -341,7 +342,7 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s' for writing", dtmd_internal_mtab_temporary);
 		endmntent(mntfile_old);
-		return -1;
+		return result_fatal_error;
 	}
 
 	while ((ent = getmntent(mntfile_old)) != NULL)
@@ -356,7 +357,7 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 				endmntent(mntfile_old);
 				endmntent(mntfile_new);
 				unlink(dtmd_internal_mtab_temporary);
-				return -1;
+				return result_fatal_error;
 			}
 		}
 	}
@@ -368,29 +369,29 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed obtaining file properties for file '%s'", dtmd_internal_mtab_file);
 		unlink(dtmd_internal_mtab_temporary);
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (chmod(dtmd_internal_mtab_temporary, stats.st_mode) != 0)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed changing file mode for file '%s'", dtmd_internal_mtab_temporary);
 		unlink(dtmd_internal_mtab_temporary);
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (chown(dtmd_internal_mtab_temporary, stats.st_uid, stats.st_gid) != 0)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed changing file owner for file '%s'", dtmd_internal_mtab_temporary);
 		unlink(dtmd_internal_mtab_temporary);
-		return -1;
+		return result_fatal_error;
 	}
 
 	if (rename(dtmd_internal_mtab_temporary, dtmd_internal_mtab_file) != 0)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed renaming file '%s' to '%s'", dtmd_internal_mtab_temporary, dtmd_internal_mtab_file);
 		unlink(dtmd_internal_mtab_temporary);
-		return -1;
+		return result_fatal_error;
 	}
 
-	return 1;
+	return result_success;
 }
