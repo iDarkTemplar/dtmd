@@ -185,7 +185,6 @@ read_int_from_file_error_1:
 	return -1;
 }
 
-// TODO: return exact reason of error
 static int read_string_from_file(char **resultstr, const char *filename)
 {
 	FILE *file;

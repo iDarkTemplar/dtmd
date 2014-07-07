@@ -115,15 +115,12 @@ int remove_media_block(const char *path)
 				media[i] = media[media_count];
 				media[media_count] = del;
 
-				// TODO: consider non-fatal error on shrinking realloc failure
+				// NOTE: consider non-fatal error on shrinking realloc failure
 				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*) * media_count);
-				if (tmp == NULL)
+				if (tmp != NULL)
 				{
-					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return result_fatal_error;
+					media = tmp;
 				}
-
-				media = tmp;
 			}
 			else
 			{
@@ -304,15 +301,12 @@ int remove_media_partition(const char *block, const char *partition)
 						media[i]->partition[j] = media[i]->partition[media[i]->partitions_count];
 						media[i]->partition[media[i]->partitions_count] = del;
 
-						// TODO: consider non-fatal error on shrinking realloc failure
+						// NOTE: consider non-fatal error on shrinking realloc failure
 						tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * media[i]->partitions_count);
-						if (tmp == NULL)
+						if (tmp != NULL)
 						{
-							WRITE_LOG(LOG_ERR, "Memory allocation failure");
-							return result_fatal_error;
+							media[i]->partition = tmp;
 						}
-
-						media[i]->partition = tmp;
 					}
 					else
 					{
@@ -528,15 +522,12 @@ int remove_stateful_media(const char *path)
 				stateful_media[i] = stateful_media[stateful_media_count];
 				stateful_media[stateful_media_count] = del;
 
-				// TODO: consider non-fatal error on shrinking realloc failure
+				// NOTE: consider non-fatal error on shrinking realloc failure
 				tmp = (struct removable_stateful_media**) realloc(stateful_media, sizeof(struct removable_stateful_media*) * stateful_media_count);
-				if (tmp == NULL)
+				if (tmp != NULL)
 				{
-					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return result_fatal_error;
+					stateful_media = tmp;
 				}
-
-				stateful_media = tmp;
 			}
 			else
 			{
@@ -783,15 +774,12 @@ int remove_client(int client)
 				clients[i] = clients[clients_count];
 				clients[clients_count] = del;
 
-				// TODO: consider non-fatal error on shrinking realloc failure
+				// NOTE: consider non-fatal error on shrinking realloc failure
 				tmp = (struct client**) realloc(clients, sizeof(struct client*)*clients_count);
-				if (tmp == NULL)
+				if (tmp != NULL)
 				{
-					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return result_fatal_error;
+					clients = tmp;
 				}
-
-				clients = tmp;
 			}
 			else
 			{
