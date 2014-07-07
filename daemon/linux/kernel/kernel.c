@@ -821,589 +821,29 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 	}
 
 	dir_pointer = opendir(block_devices_dir);
-	if (dir_pointer == NULL)
+	if (dir_pointer != NULL)
 	{
-		WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", block_devices_dir);
-		result = result_fail;
-		goto device_system_init_fill_devices_error_plain_1;
-	}
+		len_base = strlen(block_devices_dir);
 
-	len_base = strlen(block_devices_dir);
-
-	while ((dirent_device = readdir(dir_pointer)) != NULL)
-	{
-		if ((strcmp(dirent_device->d_name, ".") == 0)
-			|| (strcmp(dirent_device->d_name, "..") == 0))
+		while ((dirent_device = readdir(dir_pointer)) != NULL)
 		{
-			continue;
-		}
-
-		len_core = strlen(dirent_device->d_name) + 2;
-
-		if (len_core + len_base + len_ext > PATH_MAX)
-		{
-			WRITE_LOG(LOG_ERR, "Error: got too long file name");
-			result = result_fail;
-			goto device_system_init_fill_devices_error_plain_2;
-		}
-
-		strcpy(file_name, block_devices_dir);
-		strcat(file_name, "/");
-		strcat(file_name, dirent_device->d_name);
-
-		if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-		{
-			continue;
-		}
-
-		strcat(file_name, "/");
-
-		result = helper_read_device(device_system, file_name, dirent_device->d_name, 1, &device);
-		switch (result)
-		{
-		case 1: // device
-			result = device_system_init_add_stateless_device(device_system, device);
-			switch (result)
-			{
-			case result_success: // ok
-				file_name[len_base + len_core - 1] = 0;
-				dir_pointer_partitions = opendir(file_name);
-				if (dir_pointer_partitions == NULL)
-				{
-					WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-					result = result_fail;
-					goto device_system_init_fill_devices_error_plain_2;
-				}
-				break;
-
-			case result_fail: // ok
-				break;
-
-			default: // error
-				goto device_system_init_fill_devices_error_plain_2;
-				//break;
-			}
-			break;
-
-		case 2: // stateful_device
-			result = device_system_init_add_stateful_device(device_system, device);
-			switch (result)
-			{
-			case result_success: // ok
-				break;
-
-			case result_fail: //ok
-				break;
-
-			default: // error
-				goto device_system_init_fill_devices_error_plain_2;
-				//break;
-			}
-			break;
-
-		case result_fail:
-			break;
-
-		default:
-			goto device_system_init_fill_devices_error_plain_2;
-			//break;
-		}
-
-		if (dir_pointer_partitions != NULL)
-		{
-			len_dev_base = strlen(dirent_device->d_name) + 1;
-
-			while ((dirent_device_partition = readdir(dir_pointer_partitions)) != NULL)
-			{
-				if ((strcmp(dirent_device_partition->d_name, ".") == 0)
-					|| (strcmp(dirent_device_partition->d_name, "..") == 0))
-				{
-					continue;
-				}
-
-				len_core = strlen(dirent_device_partition->d_name) + 2;
-
-				if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
-				{
-					WRITE_LOG(LOG_ERR, "Error: got too long file name");
-					result = result_fail;
-					goto device_system_init_fill_devices_error_plain_3;
-				}
-
-				strcpy(file_name, block_devices_dir);
-				strcat(file_name, "/");
-				strcat(file_name, dirent_device->d_name);
-				strcat(file_name, "/");
-
-				result = helper_read_partition(device_system,
-					file_name,
-					dirent_device_partition->d_name,
-					dirent_device->d_name,
-					&device);
-				switch (result)
-				{
-				case result_success:
-					tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
-						(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
-					if (tmp == NULL)
-					{
-						WRITE_LOG(LOG_ERR, "Memory allocation failure");
-						device_system_free_device(device);
-						result = result_fatal_error;
-						goto device_system_init_fill_devices_error_plain_3;
-					}
-
-					device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
-
-					device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
-					++(device_system->devices[device_system->devices_count-1]->partitions_count);
-					break;
-
-				case result_fail:
-					break;
-
-				default:
-					goto device_system_init_fill_devices_error_plain_3;
-					//break;
-				}
-			}
-
-			closedir(dir_pointer_partitions);
-			dir_pointer_partitions = NULL;
-		}
-	}
-
-	closedir(dir_pointer);
-	dir_pointer = NULL;
-
-	dir_pointer_usb = opendir(block_usb_devices_dir);
-	if (dir_pointer_usb == NULL)
-	{
-		WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", block_usb_devices_dir);
-		result = result_fail;
-		goto device_system_init_fill_devices_error_usb_1;
-	}
-
-	len_base = strlen(block_usb_devices_dir);
-
-	while ((dirent_usb = readdir(dir_pointer_usb)) != NULL)
-	{
-		if ((strcmp(dirent_usb->d_name, ".") == 0)
-			|| (strcmp(dirent_usb->d_name, "..") == 0))
-		{
-			continue;
-		}
-
-		len_core = strlen(dirent_usb->d_name) + 2;
-
-		if (len_core + len_base + len_ext > PATH_MAX)
-		{
-			WRITE_LOG(LOG_ERR, "Error: got too long file name");
-			result = result_fail;
-			goto device_system_init_fill_devices_error_usb_2;
-		}
-
-		strcpy(file_name, block_usb_devices_dir);
-		strcat(file_name, "/");
-		strcat(file_name, dirent_usb->d_name);
-
-		if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-		{
-			continue;
-		}
-
-		dir_pointer_usb_device = opendir(file_name);
-		if (dir_pointer_usb_device == NULL)
-		{
-			WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-			result = result_fail;
-			goto device_system_init_fill_devices_error_usb_2;
-		}
-
-		while ((dirent_usb_device = readdir(dir_pointer_usb_device)) != NULL)
-		{
-			if ((strcmp(dirent_usb_device->d_name, ".") == 0)
-				|| (strcmp(dirent_usb_device->d_name, "..") == 0))
+			if ((strcmp(dirent_device->d_name, ".") == 0)
+				|| (strcmp(dirent_device->d_name, "..") == 0))
 			{
 				continue;
 			}
 
-			if (strncmp(dirent_usb_device->d_name, "host", strlen("host")) != 0)
-			{
-				continue;
-			}
-
-			len_core = strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 3;
+			len_core = strlen(dirent_device->d_name) + 2;
 
 			if (len_core + len_base + len_ext > PATH_MAX)
 			{
-				WRITE_LOG(LOG_ERR, "Error: got too long file name");
-				result = result_fail;
-				goto device_system_init_fill_devices_error_usb_3;
-			}
-
-			strcpy(file_name, block_usb_devices_dir);
-			strcat(file_name, "/");
-			strcat(file_name, dirent_usb->d_name);
-			strcat(file_name, "/");
-			strcat(file_name, dirent_usb_device->d_name);
-
-			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-			{
+				//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
 				continue;
 			}
 
-			dir_pointer_usb_host = opendir(file_name);
-			if (dir_pointer_usb_host == NULL)
-			{
-				WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-				result = result_fail;
-				goto device_system_init_fill_devices_error_usb_3;
-			}
-
-			while ((dirent_usb_host = readdir(dir_pointer_usb_host)) != NULL)
-			{
-				if ((strcmp(dirent_usb_host->d_name, ".") == 0)
-					|| (strcmp(dirent_usb_host->d_name, "..") == 0))
-				{
-					continue;
-				}
-
-				if (strncmp(dirent_usb_host->d_name, "target", strlen("target")) != 0)
-				{
-					continue;
-				}
-
-				len_core = strlen(dirent_usb_host->d_name) + strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 4;
-
-				if (len_core + len_base + len_ext > PATH_MAX)
-				{
-					WRITE_LOG(LOG_ERR, "Error: got too long file name");
-					result = result_fail;
-					goto device_system_init_fill_devices_error_usb_4;
-				}
-
-				strcpy(file_name, block_usb_devices_dir);
-				strcat(file_name, "/");
-				strcat(file_name, dirent_usb->d_name);
-				strcat(file_name, "/");
-				strcat(file_name, dirent_usb_device->d_name);
-				strcat(file_name, "/");
-				strcat(file_name, dirent_usb_host->d_name);
-
-				if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-				{
-					continue;
-				}
-
-				dir_pointer_usb_target = opendir(file_name);
-				if (dir_pointer_usb_target == NULL)
-				{
-					WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-					result = result_fail;
-					goto device_system_init_fill_devices_error_usb_4;
-				}
-
-				while ((dirent_usb_target = readdir(dir_pointer_usb_target)) != NULL)
-				{
-					if ((strcmp(dirent_usb_target->d_name, ".") == 0)
-						|| (strcmp(dirent_usb_target->d_name, "..") == 0))
-					{
-						continue;
-					}
-
-					len_core = strlen(block_dir_name) + strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
-						+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 6;
-
-					if (len_core + len_base + len_ext > PATH_MAX)
-					{
-						WRITE_LOG(LOG_ERR, "Error: got too long file name");
-						result = result_fail;
-						goto device_system_init_fill_devices_error_usb_5;
-					}
-
-					strcpy(file_name, block_usb_devices_dir);
-					strcat(file_name, "/");
-					strcat(file_name, dirent_usb->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, dirent_usb_device->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, dirent_usb_host->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, dirent_usb_target->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, block_dir_name);
-
-					if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-					{
-						continue;
-					}
-
-					dir_pointer_usb_target_device = opendir(file_name);
-					if (dir_pointer_usb_target_device == NULL)
-					{
-						WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-						result = result_fail;
-						goto device_system_init_fill_devices_error_usb_5;
-					}
-
-					while ((dirent_usb_target_device = readdir(dir_pointer_usb_target_device)) != NULL)
-					{
-						if ((strcmp(dirent_usb_target_device->d_name, ".") == 0)
-							|| (strcmp(dirent_usb_target_device->d_name, "..") == 0))
-						{
-							continue;
-						}
-
-						len_core = strlen(dirent_usb_target_device->d_name) + strlen(block_dir_name)
-							+ strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
-							+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 8;
-
-						if (len_core + len_base + len_ext > PATH_MAX)
-						{
-							WRITE_LOG(LOG_ERR, "Error: got too long file name");
-							result = result_fail;
-							goto device_system_init_fill_devices_error_usb_6;
-						}
-
-						strcpy(file_name, block_usb_devices_dir);
-						strcat(file_name, "/");
-						strcat(file_name, dirent_usb->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, dirent_usb_device->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, dirent_usb_host->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, dirent_usb_target->d_name);
-						strcat(file_name, "/");
-						strcat(file_name, block_dir_name);
-						strcat(file_name, "/");
-						strcat(file_name, dirent_usb_target_device->d_name);
-
-						if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-						{
-							continue;
-						}
-
-						strcat(file_name, "/");
-
-						result = helper_read_device(device_system, file_name, dirent_usb_target_device->d_name, 0, &device);
-						switch (result)
-						{
-						case 1: // device
-							result = device_system_init_add_stateless_device(device_system, device);
-							switch (result)
-							{
-							case result_success: // ok
-								file_name[len_base + len_core - 1] = 0;
-								dir_pointer_usb_target_device_blocks = opendir(file_name);
-								if (dir_pointer_usb_target_device_blocks == NULL)
-								{
-									WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-									result = result_fail;
-									goto device_system_init_fill_devices_error_usb_6;
-								}
-								break;
-
-							case result_fail: // ok
-								break;
-
-							default: // error
-								goto device_system_init_fill_devices_error_usb_6;
-								//break;
-							}
-							break;
-
-						case 2: // stateful_device
-							result = device_system_init_add_stateful_device(device_system, device);
-							switch (result)
-							{
-							case result_success: // ok
-								break;
-
-							case result_fail: //ok
-								break;
-
-							default: // error
-								goto device_system_init_fill_devices_error_usb_6;
-								//break;
-							}
-							break;
-
-						case result_fail:
-							break;
-
-						default:
-							goto device_system_init_fill_devices_error_plain_2;
-							//break;
-						}
-
-						if (dir_pointer_usb_target_device_blocks != NULL)
-						{
-							len_dev_base = strlen(dirent_usb_target_device->d_name) + strlen(block_dir_name)
-								+ strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
-								+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 7;
-
-							while ((dirent_usb_target_device_blocks = readdir(dir_pointer_usb_target_device_blocks)) != NULL)
-							{
-								if ((strcmp(dirent_usb_target_device_blocks->d_name, ".") == 0)
-									|| (strcmp(dirent_usb_target_device_blocks->d_name, "..") == 0))
-								{
-									continue;
-								}
-
-								len_core = strlen(dirent_usb_target_device_blocks->d_name) + 2;
-
-								if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
-								{
-									WRITE_LOG(LOG_ERR, "Error: got too long file name");
-									result = result_fail;
-									goto device_system_init_fill_devices_error_usb_7;
-								}
-
-								strcpy(file_name, block_usb_devices_dir);
-								strcat(file_name, "/");
-								strcat(file_name, dirent_usb->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, dirent_usb_device->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, dirent_usb_host->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, dirent_usb_target->d_name);
-								strcat(file_name, "/");
-								strcat(file_name, block_dir_name);
-								strcat(file_name, "/");
-								strcat(file_name, dirent_usb_target_device->d_name);
-								strcat(file_name, "/");
-
-								result = helper_read_partition(device_system,
-									file_name,
-									dirent_usb_target_device_blocks->d_name,
-									dirent_usb_target_device->d_name,
-									&device);
-								switch (result)
-								{
-								case result_success:
-									tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
-										(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
-									if (tmp == NULL)
-									{
-										WRITE_LOG(LOG_ERR, "Memory allocation failure");
-										device_system_free_device(device);
-										result = result_fatal_error;
-										goto device_system_init_fill_devices_error_usb_7;
-									}
-
-									device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
-
-									device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
-									++(device_system->devices[device_system->devices_count-1]->partitions_count);
-									break;
-
-								case result_fail:
-									break;
-
-								default:
-									goto device_system_init_fill_devices_error_usb_7;
-									//break;
-								}
-							}
-
-							closedir(dir_pointer_usb_target_device_blocks);
-							dir_pointer_usb_target_device_blocks = NULL;
-						}
-					}
-
-					closedir(dir_pointer_usb_target_device);
-					dir_pointer_usb_target_device = NULL;
-				}
-
-				closedir(dir_pointer_usb_target);
-				dir_pointer_usb_target = NULL;
-			}
-
-			closedir(dir_pointer_usb_host);
-			dir_pointer_usb_host = NULL;
-		}
-
-		closedir(dir_pointer_usb_device);
-		dir_pointer_usb_device = NULL;
-	}
-
-	closedir(dir_pointer_usb);
-	dir_pointer_usb = NULL;
-
-	dir_pointer_mmc = opendir(block_mmc_devices_dir);
-	if (dir_pointer_mmc == NULL)
-	{
-		WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", block_mmc_devices_dir);
-		result = result_fail;
-		goto device_system_init_fill_devices_error_mmc_1;
-	}
-
-	len_base = strlen(block_mmc_devices_dir);
-
-	while ((dirent_mmc = readdir(dir_pointer_mmc)) != NULL)
-	{
-		if ((strcmp(dirent_mmc->d_name, ".") == 0)
-			|| (strcmp(dirent_mmc->d_name, "..") == 0))
-		{
-			continue;
-		}
-
-		len_core = strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 3;
-
-		if (len_core + len_base + len_ext > PATH_MAX)
-		{
-			WRITE_LOG(LOG_ERR, "Error: got too long file name");
-			result = result_fail;
-			goto device_system_init_fill_devices_error_mmc_2;
-		}
-
-		strcpy(file_name, block_mmc_devices_dir);
-		strcat(file_name, "/");
-		strcat(file_name, dirent_mmc->d_name);
-		strcat(file_name, "/");
-		strcat(file_name, block_dir_name);
-
-		if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
-		{
-			continue;
-		}
-
-		dir_pointer_mmc_device = opendir(file_name);
-		if (dir_pointer_mmc_device == NULL)
-		{
-			WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-			result = result_fail;
-			goto device_system_init_fill_devices_error_mmc_2;
-		}
-
-		while ((dirent_mmc_device = readdir(dir_pointer_mmc_device)) != NULL)
-		{
-			if ((strcmp(dirent_mmc_device->d_name, ".") == 0)
-				|| (strcmp(dirent_mmc_device->d_name, "..") == 0))
-			{
-				continue;
-			}
-
-			len_core = strlen(dirent_mmc_device->d_name)
-				+ strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 5;
-
-			if (len_core + len_base + len_ext > PATH_MAX)
-			{
-				WRITE_LOG(LOG_ERR, "Error: got too long file name");
-				result = result_fail;
-				goto device_system_init_fill_devices_error_mmc_3;
-			}
-
-			strcpy(file_name, block_mmc_devices_dir);
+			strcpy(file_name, block_devices_dir);
 			strcat(file_name, "/");
-			strcat(file_name, dirent_mmc->d_name);
-			strcat(file_name, "/");
-			strcat(file_name, block_dir_name);
-			strcat(file_name, "/");
-			strcat(file_name, dirent_mmc_device->d_name);
+			strcat(file_name, dirent_device->d_name);
 
 			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
 			{
@@ -1412,7 +852,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 			strcat(file_name, "/");
 
-			result = helper_read_device(device_system, file_name, dirent_mmc_device->d_name, 0, &device);
+			result = helper_read_device(device_system, file_name, dirent_device->d_name, 1, &device);
 			switch (result)
 			{
 			case 1: // device
@@ -1421,12 +861,10 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				{
 				case result_success: // ok
 					file_name[len_base + len_core - 1] = 0;
-					dir_pointer_mmc_device_blocks = opendir(file_name);
-					if (dir_pointer_mmc_device_blocks == NULL)
+					dir_pointer_partitions = opendir(file_name);
+					if (dir_pointer_partitions == NULL)
 					{
-						WRITE_LOG_ARGS(LOG_ERR, "Failed to open directory '%s'", file_name);
-						result = result_fail;
-						goto device_system_init_fill_devices_error_mmc_3;
+						WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
 					}
 					break;
 
@@ -1434,7 +872,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					break;
 
 				default: // error
-					goto device_system_init_fill_devices_error_mmc_3;
+					goto device_system_init_fill_devices_error_plain_1;
 					//break;
 				}
 				break;
@@ -1445,10 +883,12 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				{
 				case result_success: // ok
 					break;
+
 				case result_fail: //ok
 					break;
+
 				default: // error
-					goto device_system_init_fill_devices_error_mmc_3;
+					goto device_system_init_fill_devices_error_plain_1;
 					//break;
 				}
 				break;
@@ -1457,45 +897,39 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				break;
 
 			default:
-				goto device_system_init_fill_devices_error_mmc_3;
+				goto device_system_init_fill_devices_error_plain_1;
 				//break;
 			}
 
-			if (dir_pointer_mmc_device_blocks != NULL)
+			if (dir_pointer_partitions != NULL)
 			{
-				len_dev_base = strlen(dirent_mmc_device->d_name)
-					+ strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 4;
+				len_dev_base = strlen(dirent_device->d_name) + 1;
 
-				while ((dirent_mmc_device_blocks = readdir(dir_pointer_mmc_device_blocks)) != NULL)
+				while ((dirent_device_partition = readdir(dir_pointer_partitions)) != NULL)
 				{
-					if ((strcmp(dirent_mmc_device_blocks->d_name, ".") == 0)
-						|| (strcmp(dirent_mmc_device_blocks->d_name, "..") == 0))
+					if ((strcmp(dirent_device_partition->d_name, ".") == 0)
+						|| (strcmp(dirent_device_partition->d_name, "..") == 0))
 					{
 						continue;
 					}
 
-					len_core = strlen(dirent_mmc_device_blocks->d_name) + 2;
+					len_core = strlen(dirent_device_partition->d_name) + 2;
 
 					if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
 					{
-						WRITE_LOG(LOG_ERR, "Error: got too long file name");
-						result = result_fail;
-						goto device_system_init_fill_devices_error_mmc_4;
+						//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+						continue;
 					}
 
-					strcpy(file_name, block_mmc_devices_dir);
+					strcpy(file_name, block_devices_dir);
 					strcat(file_name, "/");
-					strcat(file_name, dirent_mmc->d_name);
-					strcat(file_name, "/");
-					strcat(file_name, block_dir_name);
-					strcat(file_name, "/");
-					strcat(file_name, dirent_mmc_device->d_name);
+					strcat(file_name, dirent_device->d_name);
 					strcat(file_name, "/");
 
 					result = helper_read_partition(device_system,
 						file_name,
-						dirent_mmc_device_blocks->d_name,
-						dirent_mmc_device->d_name,
+						dirent_device_partition->d_name,
+						dirent_device->d_name,
 						&device);
 					switch (result)
 					{
@@ -1507,7 +941,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 							WRITE_LOG(LOG_ERR, "Memory allocation failure");
 							device_system_free_device(device);
 							result = result_fatal_error;
-							goto device_system_init_fill_devices_error_mmc_4;
+							goto device_system_init_fill_devices_error_plain_2;
 						}
 
 						device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
@@ -1520,65 +954,605 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 						break;
 
 					default:
-						goto device_system_init_fill_devices_error_mmc_4;
+						goto device_system_init_fill_devices_error_plain_2;
 						//break;
 					}
 				}
 
-				closedir(dir_pointer_mmc_device_blocks);
-				dir_pointer_mmc_device_blocks = NULL;
+				closedir(dir_pointer_partitions);
+				dir_pointer_partitions = NULL;
 			}
 		}
 
-		closedir(dir_pointer_mmc_device);
-		dir_pointer_mmc_device = NULL;
+		closedir(dir_pointer);
+		dir_pointer = NULL;
+	}
+	else
+	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", block_devices_dir);
 	}
 
-	closedir(dir_pointer_mmc);
-	dir_pointer_mmc = NULL;
+	dir_pointer_usb = opendir(block_usb_devices_dir);
+	if (dir_pointer_usb != NULL)
+	{
+		len_base = strlen(block_usb_devices_dir);
+
+		while ((dirent_usb = readdir(dir_pointer_usb)) != NULL)
+		{
+			if ((strcmp(dirent_usb->d_name, ".") == 0)
+				|| (strcmp(dirent_usb->d_name, "..") == 0))
+			{
+				continue;
+			}
+
+			len_core = strlen(dirent_usb->d_name) + 2;
+
+			if (len_core + len_base + len_ext > PATH_MAX)
+			{
+				//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+				continue;
+			}
+
+			strcpy(file_name, block_usb_devices_dir);
+			strcat(file_name, "/");
+			strcat(file_name, dirent_usb->d_name);
+
+			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+			{
+				continue;
+			}
+
+			dir_pointer_usb_device = opendir(file_name);
+			if (dir_pointer_usb_device != NULL)
+			{
+				while ((dirent_usb_device = readdir(dir_pointer_usb_device)) != NULL)
+				{
+					if ((strcmp(dirent_usb_device->d_name, ".") == 0)
+						|| (strcmp(dirent_usb_device->d_name, "..") == 0))
+					{
+						continue;
+					}
+
+					if (strncmp(dirent_usb_device->d_name, "host", strlen("host")) != 0)
+					{
+						continue;
+					}
+
+					len_core = strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 3;
+
+					if (len_core + len_base + len_ext > PATH_MAX)
+					{
+						//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+						continue;
+					}
+
+					strcpy(file_name, block_usb_devices_dir);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_usb->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_usb_device->d_name);
+
+					if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+					{
+						continue;
+					}
+
+					dir_pointer_usb_host = opendir(file_name);
+					if (dir_pointer_usb_host != NULL)
+					{
+						while ((dirent_usb_host = readdir(dir_pointer_usb_host)) != NULL)
+						{
+							if ((strcmp(dirent_usb_host->d_name, ".") == 0)
+								|| (strcmp(dirent_usb_host->d_name, "..") == 0))
+							{
+								continue;
+							}
+
+							if (strncmp(dirent_usb_host->d_name, "target", strlen("target")) != 0)
+							{
+								continue;
+							}
+
+							len_core = strlen(dirent_usb_host->d_name) + strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 4;
+
+							if (len_core + len_base + len_ext > PATH_MAX)
+							{
+								//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+								continue;
+							}
+
+							strcpy(file_name, block_usb_devices_dir);
+							strcat(file_name, "/");
+							strcat(file_name, dirent_usb->d_name);
+							strcat(file_name, "/");
+							strcat(file_name, dirent_usb_device->d_name);
+							strcat(file_name, "/");
+							strcat(file_name, dirent_usb_host->d_name);
+
+							if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+							{
+								continue;
+							}
+
+							dir_pointer_usb_target = opendir(file_name);
+							if (dir_pointer_usb_target != NULL)
+							{
+								while ((dirent_usb_target = readdir(dir_pointer_usb_target)) != NULL)
+								{
+									if ((strcmp(dirent_usb_target->d_name, ".") == 0)
+										|| (strcmp(dirent_usb_target->d_name, "..") == 0))
+									{
+										continue;
+									}
+
+									len_core = strlen(block_dir_name) + strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
+										+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 6;
+
+									if (len_core + len_base + len_ext > PATH_MAX)
+									{
+										//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+										continue;
+									}
+
+									strcpy(file_name, block_usb_devices_dir);
+									strcat(file_name, "/");
+									strcat(file_name, dirent_usb->d_name);
+									strcat(file_name, "/");
+									strcat(file_name, dirent_usb_device->d_name);
+									strcat(file_name, "/");
+									strcat(file_name, dirent_usb_host->d_name);
+									strcat(file_name, "/");
+									strcat(file_name, dirent_usb_target->d_name);
+									strcat(file_name, "/");
+									strcat(file_name, block_dir_name);
+
+									if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+									{
+										continue;
+									}
+
+									dir_pointer_usb_target_device = opendir(file_name);
+									if (dir_pointer_usb_target_device != NULL)
+									{
+										while ((dirent_usb_target_device = readdir(dir_pointer_usb_target_device)) != NULL)
+										{
+											if ((strcmp(dirent_usb_target_device->d_name, ".") == 0)
+												|| (strcmp(dirent_usb_target_device->d_name, "..") == 0))
+											{
+												continue;
+											}
+
+											len_core = strlen(dirent_usb_target_device->d_name) + strlen(block_dir_name)
+												+ strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
+												+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 8;
+
+											if (len_core + len_base + len_ext > PATH_MAX)
+											{
+												//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+												continue;
+											}
+
+											strcpy(file_name, block_usb_devices_dir);
+											strcat(file_name, "/");
+											strcat(file_name, dirent_usb->d_name);
+											strcat(file_name, "/");
+											strcat(file_name, dirent_usb_device->d_name);
+											strcat(file_name, "/");
+											strcat(file_name, dirent_usb_host->d_name);
+											strcat(file_name, "/");
+											strcat(file_name, dirent_usb_target->d_name);
+											strcat(file_name, "/");
+											strcat(file_name, block_dir_name);
+											strcat(file_name, "/");
+											strcat(file_name, dirent_usb_target_device->d_name);
+
+											if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+											{
+												continue;
+											}
+
+											strcat(file_name, "/");
+
+											result = helper_read_device(device_system, file_name, dirent_usb_target_device->d_name, 0, &device);
+											switch (result)
+											{
+											case 1: // device
+												result = device_system_init_add_stateless_device(device_system, device);
+												switch (result)
+												{
+												case result_success: // ok
+													file_name[len_base + len_core - 1] = 0;
+													dir_pointer_usb_target_device_blocks = opendir(file_name);
+													if (dir_pointer_usb_target_device_blocks == NULL)
+													{
+														WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+													}
+													break;
+
+												case result_fail: // ok
+													break;
+
+												default: // error
+													goto device_system_init_fill_devices_error_usb_2;
+													//break;
+												}
+												break;
+
+											case 2: // stateful_device
+												result = device_system_init_add_stateful_device(device_system, device);
+												switch (result)
+												{
+												case result_success: // ok
+													break;
+
+												case result_fail: //ok
+													break;
+
+												default: // error
+													goto device_system_init_fill_devices_error_usb_2;
+													//break;
+												}
+												break;
+
+											case result_fail:
+												break;
+
+											default:
+												goto device_system_init_fill_devices_error_plain_1;
+												//break;
+											}
+
+											if (dir_pointer_usb_target_device_blocks != NULL)
+											{
+												len_dev_base = strlen(dirent_usb_target_device->d_name) + strlen(block_dir_name)
+													+ strlen(dirent_usb_target->d_name) + strlen(dirent_usb_host->d_name)
+													+ strlen(dirent_usb_device->d_name) + strlen(dirent_usb->d_name) + 7;
+
+												while ((dirent_usb_target_device_blocks = readdir(dir_pointer_usb_target_device_blocks)) != NULL)
+												{
+													if ((strcmp(dirent_usb_target_device_blocks->d_name, ".") == 0)
+														|| (strcmp(dirent_usb_target_device_blocks->d_name, "..") == 0))
+													{
+														continue;
+													}
+
+													len_core = strlen(dirent_usb_target_device_blocks->d_name) + 2;
+
+													if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
+													{
+														//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+														continue;
+													}
+
+													strcpy(file_name, block_usb_devices_dir);
+													strcat(file_name, "/");
+													strcat(file_name, dirent_usb->d_name);
+													strcat(file_name, "/");
+													strcat(file_name, dirent_usb_device->d_name);
+													strcat(file_name, "/");
+													strcat(file_name, dirent_usb_host->d_name);
+													strcat(file_name, "/");
+													strcat(file_name, dirent_usb_target->d_name);
+													strcat(file_name, "/");
+													strcat(file_name, block_dir_name);
+													strcat(file_name, "/");
+													strcat(file_name, dirent_usb_target_device->d_name);
+													strcat(file_name, "/");
+
+													result = helper_read_partition(device_system,
+														file_name,
+														dirent_usb_target_device_blocks->d_name,
+														dirent_usb_target_device->d_name,
+														&device);
+													switch (result)
+													{
+													case result_success:
+														tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
+															(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
+														if (tmp == NULL)
+														{
+															WRITE_LOG(LOG_ERR, "Memory allocation failure");
+															device_system_free_device(device);
+															result = result_fatal_error;
+															goto device_system_init_fill_devices_error_usb_3;
+														}
+
+														device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
+
+														device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
+														++(device_system->devices[device_system->devices_count-1]->partitions_count);
+														break;
+
+													case result_fail:
+														break;
+
+													default:
+														goto device_system_init_fill_devices_error_usb_3;
+														//break;
+													}
+												}
+
+												closedir(dir_pointer_usb_target_device_blocks);
+												dir_pointer_usb_target_device_blocks = NULL;
+											}
+										}
+
+										closedir(dir_pointer_usb_target_device);
+										dir_pointer_usb_target_device = NULL;
+									}
+									else
+									{
+										WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+									}
+								}
+
+								closedir(dir_pointer_usb_target);
+								dir_pointer_usb_target = NULL;
+							}
+							else
+							{
+								WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+							}
+						}
+
+						closedir(dir_pointer_usb_host);
+						dir_pointer_usb_host = NULL;
+					}
+					else
+					{
+						WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+					}
+				}
+
+				closedir(dir_pointer_usb_device);
+				dir_pointer_usb_device = NULL;
+			}
+			else
+			{
+				WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+			}
+		}
+
+		closedir(dir_pointer_usb);
+		dir_pointer_usb = NULL;
+	}
+	else
+	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", block_usb_devices_dir);
+	}
+
+	dir_pointer_mmc = opendir(block_mmc_devices_dir);
+	if (dir_pointer_mmc != NULL)
+	{
+		len_base = strlen(block_mmc_devices_dir);
+
+		while ((dirent_mmc = readdir(dir_pointer_mmc)) != NULL)
+		{
+			if ((strcmp(dirent_mmc->d_name, ".") == 0)
+				|| (strcmp(dirent_mmc->d_name, "..") == 0))
+			{
+				continue;
+			}
+
+			len_core = strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 3;
+
+			if (len_core + len_base + len_ext > PATH_MAX)
+			{
+				//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+				continue;
+			}
+
+			strcpy(file_name, block_mmc_devices_dir);
+			strcat(file_name, "/");
+			strcat(file_name, dirent_mmc->d_name);
+			strcat(file_name, "/");
+			strcat(file_name, block_dir_name);
+
+			if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+			{
+				continue;
+			}
+
+			dir_pointer_mmc_device = opendir(file_name);
+			if (dir_pointer_mmc_device != NULL)
+			{
+				while ((dirent_mmc_device = readdir(dir_pointer_mmc_device)) != NULL)
+				{
+					if ((strcmp(dirent_mmc_device->d_name, ".") == 0)
+						|| (strcmp(dirent_mmc_device->d_name, "..") == 0))
+					{
+						continue;
+					}
+
+					len_core = strlen(dirent_mmc_device->d_name)
+						+ strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 5;
+
+					if (len_core + len_base + len_ext > PATH_MAX)
+					{
+						//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+						continue;
+					}
+
+					strcpy(file_name, block_mmc_devices_dir);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_mmc->d_name);
+					strcat(file_name, "/");
+					strcat(file_name, block_dir_name);
+					strcat(file_name, "/");
+					strcat(file_name, dirent_mmc_device->d_name);
+
+					if ((stat(file_name, &statbuf) != 0) || (!S_ISDIR(statbuf.st_mode)))
+					{
+						continue;
+					}
+
+					strcat(file_name, "/");
+
+					result = helper_read_device(device_system, file_name, dirent_mmc_device->d_name, 0, &device);
+					switch (result)
+					{
+					case 1: // device
+						result = device_system_init_add_stateless_device(device_system, device);
+						switch (result)
+						{
+						case result_success: // ok
+							file_name[len_base + len_core - 1] = 0;
+							dir_pointer_mmc_device_blocks = opendir(file_name);
+							if (dir_pointer_mmc_device_blocks == NULL)
+							{
+								WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+							}
+							break;
+
+						case result_fail: // ok
+							break;
+
+						default: // error
+							goto device_system_init_fill_devices_error_mmc_2;
+							//break;
+						}
+						break;
+
+					case 2: // stateful_device
+						result = device_system_init_add_stateful_device(device_system, device);
+						switch (result)
+						{
+						case result_success: // ok
+							break;
+
+						case result_fail: //ok
+							break;
+
+						default: // error
+							goto device_system_init_fill_devices_error_mmc_2;
+							//break;
+						}
+						break;
+
+					case result_fail:
+						break;
+
+					default:
+						goto device_system_init_fill_devices_error_mmc_2;
+						//break;
+					}
+
+					if (dir_pointer_mmc_device_blocks != NULL)
+					{
+						len_dev_base = strlen(dirent_mmc_device->d_name)
+							+ strlen(block_dir_name) + strlen(dirent_mmc->d_name) + 4;
+
+						while ((dirent_mmc_device_blocks = readdir(dir_pointer_mmc_device_blocks)) != NULL)
+						{
+							if ((strcmp(dirent_mmc_device_blocks->d_name, ".") == 0)
+								|| (strcmp(dirent_mmc_device_blocks->d_name, "..") == 0))
+							{
+								continue;
+							}
+
+							len_core = strlen(dirent_mmc_device_blocks->d_name) + 2;
+
+							if (len_core + len_base + len_dev_base + len_ext > PATH_MAX)
+							{
+								//WRITE_LOG(LOG_WARNING, "Error: got too long file name");
+								continue;
+							}
+
+							strcpy(file_name, block_mmc_devices_dir);
+							strcat(file_name, "/");
+							strcat(file_name, dirent_mmc->d_name);
+							strcat(file_name, "/");
+							strcat(file_name, block_dir_name);
+							strcat(file_name, "/");
+							strcat(file_name, dirent_mmc_device->d_name);
+							strcat(file_name, "/");
+
+							result = helper_read_partition(device_system,
+								file_name,
+								dirent_mmc_device_blocks->d_name,
+								dirent_mmc_device->d_name,
+								&device);
+							switch (result)
+							{
+							case result_success:
+								tmp = realloc(device_system->devices[device_system->devices_count-1]->partitions,
+									(device_system->devices[device_system->devices_count-1]->partitions_count + 1) * sizeof(dtmd_info_t*));
+								if (tmp == NULL)
+								{
+									WRITE_LOG(LOG_ERR, "Memory allocation failure");
+									device_system_free_device(device);
+									result = result_fatal_error;
+									goto device_system_init_fill_devices_error_mmc_3;
+								}
+
+								device_system->devices[device_system->devices_count-1]->partitions = (dtmd_info_t**) tmp;
+
+								device_system->devices[device_system->devices_count-1]->partitions[device_system->devices[device_system->devices_count-1]->partitions_count] = device;
+								++(device_system->devices[device_system->devices_count-1]->partitions_count);
+								break;
+
+							case result_fail:
+								break;
+
+							default:
+								goto device_system_init_fill_devices_error_mmc_3;
+								//break;
+							}
+						}
+
+						closedir(dir_pointer_mmc_device_blocks);
+						dir_pointer_mmc_device_blocks = NULL;
+					}
+				}
+
+				closedir(dir_pointer_mmc_device);
+				dir_pointer_mmc_device = NULL;
+			}
+			else
+			{
+				WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", file_name);
+			}
+		}
+
+		closedir(dir_pointer_mmc);
+		dir_pointer_mmc = NULL;
+	}
+	else
+	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed to open directory '%s'", block_mmc_devices_dir);
+	}
 
 	return result_success;
 
-device_system_init_fill_devices_error_mmc_4:
+device_system_init_fill_devices_error_mmc_3:
 	closedir(dir_pointer_mmc_device_blocks);
 
-device_system_init_fill_devices_error_mmc_3:
-	closedir(dir_pointer_mmc_device);
-
 device_system_init_fill_devices_error_mmc_2:
+	closedir(dir_pointer_mmc_device);
 	closedir(dir_pointer_mmc);
 
-	goto device_system_init_fill_devices_error_mmc_2;
-
-device_system_init_fill_devices_error_usb_7:
-	closedir(dir_pointer_usb_target_device_blocks);
-
-device_system_init_fill_devices_error_usb_6:
-	closedir(dir_pointer_usb_target_device);
-
-device_system_init_fill_devices_error_usb_5:
-	closedir(dir_pointer_usb_target);
-
-device_system_init_fill_devices_error_usb_4:
-	closedir(dir_pointer_usb_host);
+	goto device_system_init_fill_devices_error_mmc_1;
 
 device_system_init_fill_devices_error_usb_3:
-	closedir(dir_pointer_usb_device);
+	closedir(dir_pointer_usb_target_device_blocks);
 
 device_system_init_fill_devices_error_usb_2:
+	closedir(dir_pointer_usb_target_device);
+	closedir(dir_pointer_usb_target);
+	closedir(dir_pointer_usb_host);
+	closedir(dir_pointer_usb_device);
 	closedir(dir_pointer_usb);
 
 	goto device_system_init_fill_devices_error_usb_1;
 
-device_system_init_fill_devices_error_plain_3:
+device_system_init_fill_devices_error_plain_2:
 	closedir(dir_pointer_partitions);
 
-device_system_init_fill_devices_error_plain_2:
+device_system_init_fill_devices_error_plain_1:
 	closedir(dir_pointer);
 
 device_system_init_fill_devices_error_mmc_1:
 device_system_init_fill_devices_error_usb_1:
-device_system_init_fill_devices_error_plain_1:
 	return result;
 }
 
@@ -1795,7 +1769,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		case dtmd_device_action_change:
 			if (strlen(block_sys_dir) + strlen(devpath) + strlen(filename_device_type) + 4 > PATH_MAX)
 			{
-				WRITE_LOG(LOG_ERR, "Error: got too long file name");
+				WRITE_LOG(LOG_WARNING, "Error: got too long file name");
 				result = result_fail;
 				goto device_system_monitor_receive_device_exit_2;
 			}
