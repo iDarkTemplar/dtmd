@@ -2371,7 +2371,10 @@ static void* device_system_worker_function(void *arg)
 						break;
 
 					case dtmd_device_action_change:
-						if ((found_device_type != dtmd_info_unknown) && (device->type == found_device_type))
+						if ((found_device_type != dtmd_info_unknown)
+							&& (device->type == found_device_type)
+							&& ((device->type != dtmd_info_partition)
+								|| (found_parent)))
 						{
 							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
 							{
