@@ -1823,7 +1823,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				}
 				else
 				{
-					WRITE_LOG(LOG_ERR, "Failed to get device type");
+					WRITE_LOG_ARGS(LOG_WARNING, "Failed to get device type from file '%s'", file_name);
 					goto device_system_monitor_receive_device_exit_2;
 				}
 			}

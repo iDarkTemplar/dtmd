@@ -184,6 +184,11 @@ void client_print_device(const dtmd_device_t *device)
 
 	for (i = 0; i < device->partitions_count; ++i)
 	{
+		if (i != 0)
+		{
+			fprintf(stdout, "\n");
+		}
+
 		fprintf(stdout, "Partition %u:\n", i);
 		client_print_partition(device->partition[i]);
 	}
