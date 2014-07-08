@@ -2245,9 +2245,12 @@ static void* device_system_worker_function(void *arg)
 								case dtmd_info_device:
 									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
 									{
-										if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[parent_index], action) < 0)
+										if (device_system->devices[device_index]->partitions[parent_index] != NULL)
 										{
-											goto device_system_worker_function_error_3;
+											if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[parent_index], action) < 0)
+											{
+												goto device_system_worker_function_error_3;
+											}
 										}
 									}
 
@@ -2300,7 +2303,7 @@ static void* device_system_worker_function(void *arg)
 									}
 									else
 									{
-										device_system->devices[device_system->devices_count + 1] = NULL;
+										device_system->devices[device_system->devices_count] = NULL;
 									}
 								}
 								else
@@ -2317,7 +2320,7 @@ static void* device_system_worker_function(void *arg)
 
 								if (device_system->devices[parent_index]->partitions_count > 0)
 								{
-									device_system->devices[parent_index]->partitions[partition_index] = device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count + 1];
+									device_system->devices[parent_index]->partitions[partition_index] = device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count];
 
 									tmp = realloc(device_system->devices[parent_index]->partitions, device_system->devices[parent_index]->partitions_count * sizeof(dtmd_info_t*));
 									if (tmp != NULL)
@@ -2326,7 +2329,7 @@ static void* device_system_worker_function(void *arg)
 									}
 									else
 									{
-										device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count + 1] = NULL;
+										device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count] = NULL;
 									}
 								}
 								else
@@ -2343,7 +2346,7 @@ static void* device_system_worker_function(void *arg)
 
 								if (device_system->stateful_devices_count > 0)
 								{
-									device_system->stateful_devices[device_index] = device_system->stateful_devices[device_system->stateful_devices_count + 1];
+									device_system->stateful_devices[device_index] = device_system->stateful_devices[device_system->stateful_devices_count];
 
 									tmp = realloc(device_system->stateful_devices, device_system->stateful_devices_count * sizeof(dtmd_info_t*));
 									if (tmp != NULL)
@@ -2352,7 +2355,7 @@ static void* device_system_worker_function(void *arg)
 									}
 									else
 									{
-										device_system->stateful_devices[device_system->stateful_devices_count + 1] = NULL;
+										device_system->stateful_devices[device_system->stateful_devices_count] = NULL;
 									}
 								}
 								else
