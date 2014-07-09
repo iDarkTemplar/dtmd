@@ -988,8 +988,10 @@ static dtmd_result_t dtmd_helper_handle_callback_cmd(dtmd_t *handle, dtmd_comman
 {
 	if (   ((strcmp(cmd->cmd, dtmd_notification_add_disk)                == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 		|| ((strcmp(cmd->cmd, dtmd_notification_remove_disk)             == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
-		|| ((strcmp(cmd->cmd, dtmd_notification_add_partition)           == 0) && (cmd->args_count == 4) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[3] != NULL))
+		|| ((strcmp(cmd->cmd, dtmd_notification_disk_changed)            == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
+		|| ((strcmp(cmd->cmd, dtmd_notification_add_partition)           == 0) && (cmd->args_count == 4) && (cmd->args[0] != NULL) && (cmd->args[3] != NULL))
 		|| ((strcmp(cmd->cmd, dtmd_notification_remove_partition)        == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+		|| ((strcmp(cmd->cmd, dtmd_notification_partition_changed)       == 0) && (cmd->args_count == 4) && (cmd->args[0] != NULL) && (cmd->args[3] != NULL))
 		|| ((strcmp(cmd->cmd, dtmd_notification_add_stateful_device)     == 0) && (cmd->args_count == 5) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL)
 			&& ((strcmp(cmd->args[2], dtmd_string_state_ok) == 0) ? (cmd->args[3] != NULL) : (cmd->args[3] == NULL)))
 		|| ((strcmp(cmd->cmd, dtmd_notification_remove_stateful_device)  == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
@@ -1098,7 +1100,7 @@ static int dtmd_helper_cmd_check_device(dtmd_command_t *cmd)
 
 static int dtmd_helper_cmd_check_partition(dtmd_command_t *cmd)
 {
-	return (strcmp(cmd->cmd, dtmd_response_argument_partition) == 0) && (cmd->args_count == 6) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[3] != NULL);
+	return (strcmp(cmd->cmd, dtmd_response_argument_partition) == 0) && (cmd->args_count == 6) && (cmd->args[0] != NULL) && (cmd->args[3] != NULL);
 }
 
 static int dtmd_helper_cmd_check_stateful_device(dtmd_command_t *cmd)
@@ -1273,7 +1275,7 @@ static int dtmd_helper_validate_device(dtmd_device_t *device)
 
 static int dtmd_helper_validate_partition(dtmd_partition_t *partition)
 {
-	if ((partition->path == NULL) || (partition->fstype == NULL))
+	if (partition->path == NULL)
 	{
 		return 0;
 	}
@@ -1683,7 +1685,6 @@ inline static dtmd_helper_result_t dtmd_helper_process_enum_devices_implementati
 		else if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
 			&& (cmd->args_count == 6)
 			&& (cmd->args[0] != NULL)
-			&& (cmd->args[1] != NULL)
 			&& (cmd->args[3] != NULL)
 			&& (state->got_devices_count != 0))
 		{
@@ -1941,7 +1942,6 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_device_implementatio
 		else if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
 			&& (cmd->args_count == 6)
 			&& (cmd->args[0] != NULL)
-			&& (cmd->args[1] != NULL)
 			&& (cmd->args[3] != NULL))
 		{
 			if (state->result_device == NULL)
@@ -2059,7 +2059,6 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_partition_implementa
 		if ((strcmp(cmd->cmd, dtmd_response_argument_partition) == 0)
 			&& (cmd->args_count == 6)
 			&& (cmd->args[0] != NULL)
-			&& (cmd->args[1] != NULL)
 			&& (cmd->args[3] != NULL)
 			&& (state->result_partition == NULL))
 		{
