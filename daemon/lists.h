@@ -30,7 +30,7 @@ extern "C" {
 struct removable_partition
 {
 	char *path;
-	char *fstype;
+	char *fstype; // optional
 	char *label; // optional
 	unsigned char is_mounted;
 	char *mnt_point; // optional
@@ -76,17 +76,23 @@ extern unsigned int clients_count;
 
 int add_media_block(const char *path, dtmd_removable_media_type_t media_type);
 int remove_media_block(const char *path);
+int change_media_block(const char *path, dtmd_removable_media_type_t media_type);
+
 int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label);
 int remove_media_partition(const char *block, const char *partition);
+int change_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label);
+
 void remove_all_media(void);
 
 int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
 int remove_stateful_media(const char *path);
 int change_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
+
 void remove_all_stateful_media(void);
 
 int add_client(int client);
 int remove_client(int client);
+
 void remove_all_clients(void);
 
 #ifdef __cplusplus

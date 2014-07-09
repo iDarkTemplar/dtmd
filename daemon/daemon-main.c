@@ -628,7 +628,6 @@ int main(int argc, char **argv)
 		case dtmd_info_partition:
 			if ((dtmd_dev_device->path != NULL)
 				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-				&& (dtmd_dev_device->fstype != NULL)
 				&& (dtmd_dev_device->path_parent != NULL))
 			{
 				if (is_result_fatal_error(add_media_partition(dtmd_dev_device->path_parent,
@@ -789,7 +788,6 @@ int main(int argc, char **argv)
 					case dtmd_info_partition:
 						if ((dtmd_dev_device->path != NULL)
 							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-							&& (dtmd_dev_device->fstype != NULL)
 							&& (dtmd_dev_device->path_parent != NULL))
 						{
 							rc = add_media_partition(dtmd_dev_device->path_parent,
@@ -845,6 +843,27 @@ int main(int argc, char **argv)
 				case dtmd_device_action_change:
 					switch (dtmd_dev_device->type)
 					{
+					case dtmd_info_device:
+						if ((dtmd_dev_device->path != NULL)
+							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
+						{
+							rc = change_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type);
+						}
+						break;
+
+					case dtmd_info_partition:
+						if ((dtmd_dev_device->path != NULL)
+							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
+							&& (dtmd_dev_device->path_parent != NULL))
+						{
+							rc = change_media_partition(dtmd_dev_device->path_parent,
+								dtmd_dev_device->media_type,
+								dtmd_dev_device->path,
+								dtmd_dev_device->fstype,
+								dtmd_dev_device->label);
+						}
+						break;
+
 					case dtmd_info_stateful_device:
 						if ((dtmd_dev_device->path != NULL)
 							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)

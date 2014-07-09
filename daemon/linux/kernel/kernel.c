@@ -496,27 +496,20 @@ static int helper_read_partition(dtmd_device_system_t *device_system, const char
 	device_info->state        = dtmd_removable_media_state_unknown;
 
 	result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
-	if (is_result_failure(result))
+	if (is_result_fatal_error(result))
 	{
-		goto helper_read_partition_exit_6;
-	}
-
-	if (device_info->fstype == NULL)
-	{
-		result = result_fail;
 		goto helper_read_partition_exit_5;
 	}
 
 	*device = device_info;
 	return result_success;
 
-helper_read_partition_exit_6:
+helper_read_partition_exit_5:
 	if (device_info->fstype != NULL)
 	{
 		free((char*) device_info->fstype);
 	}
 
-helper_read_partition_exit_5:
 	if (device_info->label != NULL)
 	{
 		free((char*) device_info->label);
@@ -1868,16 +1861,8 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				device_info->state = dtmd_removable_media_state_unknown;
 
 				result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
-				if (is_result_failure(result))
+				if (is_result_fatal_error(result))
 				{
-					goto device_system_monitor_receive_device_exit_4;
-				}
-
-				result = result_fatal_error;
-
-				if (device_info->fstype == NULL)
-				{
-					result = result_fail;
 					goto device_system_monitor_receive_device_exit_3;
 				}
 				break;
@@ -1902,7 +1887,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 					break;
 
 				default:
-					goto device_system_monitor_receive_device_exit_4;
+					goto device_system_monitor_receive_device_exit_3;
 				}
 				break;
 
@@ -1921,6 +1906,8 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			break;
 		}
 
+		result = result_fatal_error;
+
 		switch (device_info->type)
 		{
 		case dtmd_info_partition:
@@ -1929,7 +1916,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			{
 				WRITE_LOG(LOG_ERR, "Invalid device path");
 				result = result_fail;
-				goto device_system_monitor_receive_device_exit_4;
+				goto device_system_monitor_receive_device_exit_3;
 			}
 
 			*last_delim = 0;
@@ -1938,14 +1925,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			{
 				WRITE_LOG(LOG_ERR, "Invalid device path");
 				result = result_fail;
-				goto device_system_monitor_receive_device_exit_4;
+				goto device_system_monitor_receive_device_exit_3;
 			}
 
 			device_info->path_parent = (char*) malloc(strlen(devices_dir) + strlen(last_delim) + 1);
 			if (device_info->path_parent == NULL)
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
-				goto device_system_monitor_receive_device_exit_4;
+				goto device_system_monitor_receive_device_exit_3;
 			}
 
 			strcpy((char*) device_info->path_parent, devices_dir);
@@ -1971,13 +1958,12 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 
 	return result_fail;
 
-device_system_monitor_receive_device_exit_4:
+device_system_monitor_receive_device_exit_3:
 	if (device_info->fstype != NULL)
 	{
 		free((char*) device_info->fstype);
 	}
 
-device_system_monitor_receive_device_exit_3:
 	if (device_info->label != NULL)
 	{
 		free((char*) device_info->label);

@@ -426,6 +426,13 @@ invoke_mount_exit_loop:
 		local_label     = stateful_media[dev]->label;
 	}
 
+	if (local_fstype == NULL)
+	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device doesn't have recognized filesystem", path);
+		result = result_fail;
+		goto invoke_mount_error_1;
+	}
+
 	if (local_mnt_point != NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device is already mounted", path);

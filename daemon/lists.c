@@ -139,6 +139,11 @@ int remove_media_block(const char *path)
 
 					notify_remove_partition(del->partition[j]->path);
 
+					if (del->partition[j]->fstype != NULL)
+					{
+						free(del->partition[j]->fstype);
+					}
+
 					if (del->partition[j]->label != NULL)
 					{
 						free(del->partition[j]->label);
@@ -155,7 +160,6 @@ int remove_media_block(const char *path)
 					}
 
 					free(del->partition[j]->path);
-					free(del->partition[j]->fstype);
 					free(del->partition[j]);
 				}
 
@@ -171,6 +175,33 @@ int remove_media_block(const char *path)
 		}
 	}
 
+	return result_fail;
+}
+
+int change_media_block(const char *path, dtmd_removable_media_type_t media_type)
+{
+	unsigned int i;
+
+	for (i = 0; i < media_count; ++i)
+	{
+		if (strcmp(media[i]->path, path) == 0)
+		{
+			if (media[i]->type == media_type)
+			{
+				// nothing seems to have changed
+				return result_fail;
+			}
+
+			media[i]->type  = media_type;
+
+			notify_disk_changed(media[i]->path,
+				media[i]->type);
+
+			return result_success;
+		}
+	}
+
+	WRITE_LOG_ARGS(LOG_ERR, "Caught false event about disk change: device name %s", path);
 	return result_fail;
 }
 
@@ -214,11 +245,18 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 				goto add_media_partition_error_2;
 			}
 
-			cur_partition->fstype = strdup(fstype);
-			if (cur_partition->fstype == NULL)
+			if (fstype != NULL)
 			{
-				WRITE_LOG(LOG_ERR, "Memory allocation failure");
-				goto add_media_partition_error_3;
+				cur_partition->fstype = strdup(fstype);
+				if (cur_partition->fstype == NULL)
+				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
+					goto add_media_partition_error_3;
+				}
+			}
+			else
+			{
+				cur_partition->fstype = NULL;
 			}
 
 			if (label != NULL)
@@ -266,7 +304,10 @@ add_media_partition_error_5:
 	}
 
 add_media_partition_error_4:
-	free(cur_partition->fstype);
+	if (cur_partition->fstype != NULL)
+	{
+		free(cur_partition->fstype);
+	}
 
 add_media_partition_error_3:
 	free(cur_partition->path);
@@ -321,6 +362,11 @@ int remove_media_partition(const char *block, const char *partition)
 
 					notify_remove_partition(del->path);
 
+					if (del->fstype != NULL)
+					{
+						free(del->fstype);
+					}
+
 					if (del->label != NULL)
 					{
 						free(del->label);
@@ -337,7 +383,6 @@ int remove_media_partition(const char *block, const char *partition)
 					}
 
 					free(del->path);
-					free(del->fstype);
 					free(del);
 
 					return result_success;
@@ -346,6 +391,101 @@ int remove_media_partition(const char *block, const char *partition)
 		}
 	}
 
+	return result_fail;
+}
+
+int change_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label)
+{
+	unsigned int i;
+	unsigned int j;
+
+	for (i = 0; i < media_count; ++i)
+	{
+		if ((strcmp(media[i]->path, block) == 0) && (media[i]->type == media_type))
+		{
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				if (strcmp(media[i]->partition[j]->path, partition) == 0)
+				{
+					if ((((media[i]->partition[j]->fstype == NULL)
+								&& (fstype == NULL))
+							|| ((media[i]->partition[j]->fstype != NULL)
+								&& (fstype != NULL)
+								&& (strcmp(media[i]->partition[j]->fstype, fstype) == 0)))
+						&& (((media[i]->partition[j]->label == NULL)
+								&& (label == NULL))
+							|| ((media[i]->partition[j]->label != NULL)
+								&& (label != NULL)
+							&& (strcmp(media[i]->partition[j]->label, label) == 0))))
+					{
+						// nothing seems to have changed
+						return result_fail;
+					}
+
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
+						media[i]->partition[j]->is_mounted = 0;
+					}
+
+					if (media[i]->partition[j]->fstype != NULL)
+					{
+						free(media[i]->partition[j]->fstype);
+						media[i]->partition[j]->fstype = NULL;
+					}
+
+					if (media[i]->partition[j]->label != NULL)
+					{
+						free(media[i]->partition[j]->label);
+						media[i]->partition[j]->label = NULL;
+					}
+
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						free(media[i]->partition[j]->mnt_point);
+						media[i]->partition[j]->mnt_point = NULL;
+					}
+
+					if (media[i]->partition[j]->mnt_opts != NULL)
+					{
+						free(media[i]->partition[j]->mnt_opts);
+						media[i]->partition[j]->mnt_opts = NULL;
+					}
+
+					if (fstype != NULL)
+					{
+						media[i]->partition[j]->fstype = strdup(fstype);
+						if (media[i]->partition[j]->fstype == NULL)
+						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							return result_fatal_error;
+						}
+					}
+
+					if (label != NULL)
+					{
+						media[i]->partition[j]->label = decode_label(label);
+						if (media[i]->partition[j]->label == NULL)
+						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							return result_fatal_error;
+						}
+					}
+
+					notify_partition_changed(media[i]->partition[j]->path,
+						media[i]->partition[j]->fstype,
+						media[i]->partition[j]->label,
+						media[i]->path);
+
+					return result_success;
+				}
+			}
+
+			break;
+		}
+	}
+
+	WRITE_LOG_ARGS(LOG_ERR, "Caught false event about partition change: device name %s", partition);
 	return result_fail;
 }
 
@@ -369,6 +509,11 @@ void remove_all_media(void)
 
 					notify_remove_partition(media[i]->partition[j]->path);
 
+					if (media[i]->partition[j]->fstype != NULL)
+					{
+						free(media[i]->partition[j]->fstype);
+					}
+
 					if (media[i]->partition[j]->label != NULL)
 					{
 						free(media[i]->partition[j]->label);
@@ -385,7 +530,6 @@ void remove_all_media(void)
 					}
 
 					free(media[i]->partition[j]->path);
-					free(media[i]->partition[j]->fstype);
 					free(media[i]->partition[j]);
 				}
 

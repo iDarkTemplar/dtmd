@@ -318,15 +318,29 @@ int notify_remove_disk(const char *path)
 	return result_success;
 }
 
+int notify_disk_changed(const char *path, dtmd_removable_media_type_t type)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, dtmd_notification_disk_changed "(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
+	}
+
+	return result_success;
+}
+
 int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path)
 {
 	unsigned int i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_add_partition "(\"%s\", \"%s\", %s%s%s, \"%s\")\n",
+		dprintf(clients[i]->clientfd, dtmd_notification_add_partition "(\"%s\", %s%s%s, %s%s%s, \"%s\")\n",
 			path,
-			fstype,
+			(fstype != NULL) ? ("\"") : (""),
+			(fstype != NULL) ? (fstype) : ("nil"),
+			(fstype != NULL) ? ("\"") : (""),
 			(label != NULL) ? ("\"") : (""),
 			(label != NULL) ? (label) : ("nil"),
 			(label != NULL) ? ("\"") : (""),
@@ -343,6 +357,26 @@ int notify_remove_partition(const char *path)
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_remove_partition "(\"%s\")\n", path);
+	}
+
+	return result_success;
+}
+
+int notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path)
+{
+	unsigned int i;
+
+	for (i = 0; i < clients_count; ++i)
+	{
+		dprintf(clients[i]->clientfd, dtmd_notification_partition_changed "(\"%s\", %s%s%s, %s%s%s, \"%s\")\n",
+			path,
+			(fstype != NULL) ? ("\"") : (""),
+			(fstype != NULL) ? (fstype) : ("nil"),
+			(fstype != NULL) ? ("\"") : (""),
+			(label != NULL) ? ("\"") : (""),
+			(label != NULL) ? (label) : ("nil"),
+			(label != NULL) ? ("\"") : (""),
+			parent_path);
 	}
 
 	return result_success;
@@ -466,9 +500,11 @@ static int print_partition(int client_number, unsigned int device, unsigned int 
 	}
 #endif /* NDEBUG */
 
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_partition "(\"%s\", \"%s\", %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_partition "(\"%s\", %s%s%s, %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
 		media[device]->partition[partition]->path,
-		media[device]->partition[partition]->fstype,
+		((media[device]->partition[partition]->fstype != NULL) ? ("\"") : ("")),
+		((media[device]->partition[partition]->fstype != NULL) ? (media[device]->partition[partition]->fstype) : ("nil")),
+		((media[device]->partition[partition]->fstype != NULL) ? ("\"") : ("")),
 		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
 		((media[device]->partition[partition]->label != NULL) ? (media[device]->partition[partition]->label) : ("nil")),
 		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
