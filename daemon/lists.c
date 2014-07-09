@@ -23,6 +23,7 @@
 #include "daemon/label.h"
 #include "daemon/actions.h"
 #include "daemon/log.h"
+#include "daemon/return_codes.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +49,7 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 	{
 		if (strcmp(media[i]->path, path) == 0)
 		{
-			return 0;
+			return result_fail;
 		}
 	}
 
@@ -83,7 +84,7 @@ int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 
 	notify_add_disk(cur_media->path, cur_media->type);
 
-	return 1;
+	return result_success;
 
 add_media_block_error_3:
 	free(cur_media->path);
@@ -92,7 +93,7 @@ add_media_block_error_2:
 	free(cur_media);
 
 add_media_block_error_1:
-	return -1;
+	return result_fatal_error;
 }
 
 int remove_media_block(const char *path)
@@ -114,14 +115,12 @@ int remove_media_block(const char *path)
 				media[i] = media[media_count];
 				media[media_count] = del;
 
+				// NOTE: consider non-fatal error on shrinking realloc failure
 				tmp = (struct removable_media**) realloc(media, sizeof(struct removable_media*) * media_count);
-				if (tmp == NULL)
+				if (tmp != NULL)
 				{
-					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return -1;
+					media = tmp;
 				}
-
-				media = tmp;
 			}
 			else
 			{
@@ -140,6 +139,11 @@ int remove_media_block(const char *path)
 
 					notify_remove_partition(del->partition[j]->path);
 
+					if (del->partition[j]->fstype != NULL)
+					{
+						free(del->partition[j]->fstype);
+					}
+
 					if (del->partition[j]->label != NULL)
 					{
 						free(del->partition[j]->label);
@@ -156,7 +160,6 @@ int remove_media_block(const char *path)
 					}
 
 					free(del->partition[j]->path);
-					free(del->partition[j]->fstype);
 					free(del->partition[j]);
 				}
 
@@ -168,11 +171,38 @@ int remove_media_block(const char *path)
 			free(del->path);
 			free(del);
 
-			return 1;
+			return result_success;
 		}
 	}
 
-	return 0;
+	return result_fail;
+}
+
+int change_media_block(const char *path, dtmd_removable_media_type_t media_type)
+{
+	unsigned int i;
+
+	for (i = 0; i < media_count; ++i)
+	{
+		if (strcmp(media[i]->path, path) == 0)
+		{
+			if (media[i]->type == media_type)
+			{
+				// nothing seems to have changed
+				return result_fail;
+			}
+
+			media[i]->type  = media_type;
+
+			notify_disk_changed(media[i]->path,
+				media[i]->type);
+
+			return result_success;
+		}
+	}
+
+	WRITE_LOG_ARGS(LOG_ERR, "Caught false event about disk change: device name %s", path);
+	return result_fail;
 }
 
 int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label)
@@ -184,7 +214,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 	struct removable_partition **tmp;
 
 	rc = add_media_block(block, media_type);
-	if (rc < 0)
+	if (is_result_fatal_error(rc))
 	{
 		return rc;
 	}
@@ -197,7 +227,7 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 			{
 				if (strcmp(media[i]->partition[j]->path, partition) == 0)
 				{
-					return 0;
+					return result_fail;
 				}
 			}
 
@@ -215,11 +245,18 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 				goto add_media_partition_error_2;
 			}
 
-			cur_partition->fstype = strdup(fstype);
-			if (cur_partition->fstype == NULL)
+			if (fstype != NULL)
 			{
-				WRITE_LOG(LOG_ERR, "Memory allocation failure");
-				goto add_media_partition_error_3;
+				cur_partition->fstype = strdup(fstype);
+				if (cur_partition->fstype == NULL)
+				{
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
+					goto add_media_partition_error_3;
+				}
+			}
+			else
+			{
+				cur_partition->fstype = NULL;
 			}
 
 			if (label != NULL)
@@ -253,12 +290,12 @@ int add_media_partition(const char *block, dtmd_removable_media_type_t media_typ
 
 			notify_add_partition(cur_partition->path, cur_partition->fstype, cur_partition->label, media[i]->path);
 
-			return 1;
+			return result_success;
 		}
 	}
 
 	WRITE_LOG(LOG_ERR, "BUG: reached code which should be unreachable");
-	return -2; // -2 means bug
+	return result_bug;
 
 add_media_partition_error_5:
 	if (cur_partition->label != NULL)
@@ -267,7 +304,10 @@ add_media_partition_error_5:
 	}
 
 add_media_partition_error_4:
-	free(cur_partition->fstype);
+	if (cur_partition->fstype != NULL)
+	{
+		free(cur_partition->fstype);
+	}
 
 add_media_partition_error_3:
 	free(cur_partition->path);
@@ -276,7 +316,7 @@ add_media_partition_error_2:
 	free(cur_partition);
 
 add_media_partition_error_1:
-	return -1;
+	return result_fatal_error;
 }
 
 int remove_media_partition(const char *block, const char *partition)
@@ -302,14 +342,12 @@ int remove_media_partition(const char *block, const char *partition)
 						media[i]->partition[j] = media[i]->partition[media[i]->partitions_count];
 						media[i]->partition[media[i]->partitions_count] = del;
 
+						// NOTE: consider non-fatal error on shrinking realloc failure
 						tmp = (struct removable_partition**) realloc(media[i]->partition, sizeof(struct removable_partition*) * media[i]->partitions_count);
-						if (tmp == NULL)
+						if (tmp != NULL)
 						{
-							WRITE_LOG(LOG_ERR, "Memory allocation failure");
-							return -1;
+							media[i]->partition = tmp;
 						}
-
-						media[i]->partition = tmp;
 					}
 					else
 					{
@@ -323,6 +361,11 @@ int remove_media_partition(const char *block, const char *partition)
 					}
 
 					notify_remove_partition(del->path);
+
+					if (del->fstype != NULL)
+					{
+						free(del->fstype);
+					}
 
 					if (del->label != NULL)
 					{
@@ -340,16 +383,110 @@ int remove_media_partition(const char *block, const char *partition)
 					}
 
 					free(del->path);
-					free(del->fstype);
 					free(del);
 
-					return 1;
+					return result_success;
 				}
 			}
 		}
 	}
 
-	return 0;
+	return result_fail;
+}
+
+int change_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label)
+{
+	unsigned int i;
+	unsigned int j;
+
+	for (i = 0; i < media_count; ++i)
+	{
+		if ((strcmp(media[i]->path, block) == 0) && (media[i]->type == media_type))
+		{
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				if (strcmp(media[i]->partition[j]->path, partition) == 0)
+				{
+					if ((((media[i]->partition[j]->fstype == NULL)
+								&& (fstype == NULL))
+							|| ((media[i]->partition[j]->fstype != NULL)
+								&& (fstype != NULL)
+								&& (strcmp(media[i]->partition[j]->fstype, fstype) == 0)))
+						&& (((media[i]->partition[j]->label == NULL)
+								&& (label == NULL))
+							|| ((media[i]->partition[j]->label != NULL)
+								&& (label != NULL)
+							&& (strcmp(media[i]->partition[j]->label, label) == 0))))
+					{
+						// nothing seems to have changed
+						return result_fail;
+					}
+
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
+						media[i]->partition[j]->is_mounted = 0;
+					}
+
+					if (media[i]->partition[j]->fstype != NULL)
+					{
+						free(media[i]->partition[j]->fstype);
+						media[i]->partition[j]->fstype = NULL;
+					}
+
+					if (media[i]->partition[j]->label != NULL)
+					{
+						free(media[i]->partition[j]->label);
+						media[i]->partition[j]->label = NULL;
+					}
+
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						free(media[i]->partition[j]->mnt_point);
+						media[i]->partition[j]->mnt_point = NULL;
+					}
+
+					if (media[i]->partition[j]->mnt_opts != NULL)
+					{
+						free(media[i]->partition[j]->mnt_opts);
+						media[i]->partition[j]->mnt_opts = NULL;
+					}
+
+					if (fstype != NULL)
+					{
+						media[i]->partition[j]->fstype = strdup(fstype);
+						if (media[i]->partition[j]->fstype == NULL)
+						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							return result_fatal_error;
+						}
+					}
+
+					if (label != NULL)
+					{
+						media[i]->partition[j]->label = decode_label(label);
+						if (media[i]->partition[j]->label == NULL)
+						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							return result_fatal_error;
+						}
+					}
+
+					notify_partition_changed(media[i]->partition[j]->path,
+						media[i]->partition[j]->fstype,
+						media[i]->partition[j]->label,
+						media[i]->path);
+
+					return result_success;
+				}
+			}
+
+			break;
+		}
+	}
+
+	WRITE_LOG_ARGS(LOG_ERR, "Caught false event about partition change: device name %s", partition);
+	return result_fail;
 }
 
 void remove_all_media(void)
@@ -372,6 +509,11 @@ void remove_all_media(void)
 
 					notify_remove_partition(media[i]->partition[j]->path);
 
+					if (media[i]->partition[j]->fstype != NULL)
+					{
+						free(media[i]->partition[j]->fstype);
+					}
+
 					if (media[i]->partition[j]->label != NULL)
 					{
 						free(media[i]->partition[j]->label);
@@ -388,7 +530,6 @@ void remove_all_media(void)
 					}
 
 					free(media[i]->partition[j]->path);
-					free(media[i]->partition[j]->fstype);
 					free(media[i]->partition[j]);
 				}
 
@@ -418,7 +559,7 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 	{
 		if (strcmp(stateful_media[i]->path, path) == 0)
 		{
-			return 0;
+			return result_fail;
 		}
 	}
 
@@ -483,7 +624,7 @@ int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type,
 
 	notify_add_stateful_device(cur_media->path, cur_media->type, cur_media->state, cur_media->fstype, cur_media->label);
 
-	return 1;
+	return result_success;
 
 add_stateful_media_error_5:
 	if (cur_media->label != NULL)
@@ -504,7 +645,7 @@ add_stateful_media_error_2:
 	free(cur_media);
 
 add_stateful_media_error_1:
-	return -1;
+	return result_fatal_error;
 }
 
 int remove_stateful_media(const char *path)
@@ -525,14 +666,12 @@ int remove_stateful_media(const char *path)
 				stateful_media[i] = stateful_media[stateful_media_count];
 				stateful_media[stateful_media_count] = del;
 
+				// NOTE: consider non-fatal error on shrinking realloc failure
 				tmp = (struct removable_stateful_media**) realloc(stateful_media, sizeof(struct removable_stateful_media*) * stateful_media_count);
-				if (tmp == NULL)
+				if (tmp != NULL)
 				{
-					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return -1;
+					stateful_media = tmp;
 				}
-
-				stateful_media = tmp;
 			}
 			else
 			{
@@ -570,11 +709,11 @@ int remove_stateful_media(const char *path)
 			free(del->path);
 			free(del);
 
-			return 1;
+			return result_success;
 		}
 	}
 
-	return 0;
+	return result_fail;
 }
 
 int change_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
@@ -599,7 +738,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 					&& (strcmp(stateful_media[i]->label, label) == 0))))
 			{
 				// nothing seems to have changed
-				return 0;
+				return result_fail;
 			}
 
 			if (stateful_media[i]->mnt_point != NULL)
@@ -641,7 +780,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 				if (stateful_media[i]->fstype == NULL)
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return -1;
+					return result_fatal_error;
 				}
 			}
 
@@ -651,7 +790,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 				if (stateful_media[i]->label == NULL)
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return -1;
+					return result_fatal_error;
 				}
 			}
 
@@ -661,12 +800,12 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 				stateful_media[i]->fstype,
 				stateful_media[i]->label);
 
-			return 1;
+			return result_success;
 		}
 	}
 
-	WRITE_LOG(LOG_ERR, "Caught false event about stateful device change");
-	return -1;
+	WRITE_LOG_ARGS(LOG_ERR, "Caught false event about stateful device change: device name %s", path);
+	return result_fail;
 }
 
 void remove_all_stateful_media(void)
@@ -725,7 +864,7 @@ int add_client(int client)
 	{
 		if (clients[i]->clientfd == client)
 		{
-			return 0;
+			return result_fail;
 		}
 	}
 
@@ -750,7 +889,7 @@ int add_client(int client)
 	clients = tmp;
 	clients[clients_count-1] = cur_client;
 
-	return 1;
+	return result_success;
 
 add_client_error_2:
 	free(cur_client);
@@ -758,7 +897,7 @@ add_client_error_2:
 add_client_error_1:
 	shutdown(client, SHUT_RDWR);
 	close(client);
-	return -1;
+	return result_fatal_error;
 }
 
 int remove_client(int client)
@@ -779,14 +918,12 @@ int remove_client(int client)
 				clients[i] = clients[clients_count];
 				clients[clients_count] = del;
 
+				// NOTE: consider non-fatal error on shrinking realloc failure
 				tmp = (struct client**) realloc(clients, sizeof(struct client*)*clients_count);
-				if (tmp == NULL)
+				if (tmp != NULL)
 				{
-					WRITE_LOG(LOG_ERR, "Memory allocation failure");
-					return -1;
+					clients = tmp;
 				}
-
-				clients = tmp;
 			}
 			else
 			{
@@ -798,11 +935,11 @@ int remove_client(int client)
 			close(del->clientfd);
 			free(del);
 
-			return 1;
+			return result_success;
 		}
 	}
 
-	return 0;
+	return result_fail;
 }
 
 void remove_all_clients(void)

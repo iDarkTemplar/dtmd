@@ -66,11 +66,17 @@ typedef enum dtmd_removable_media_state
 #define dtmd_notification_remove_disk "remove_disk"
 /* parameters: path */
 
+#define dtmd_notification_disk_changed "disk_changed"
+/* parameters: path, type */
+
 #define dtmd_notification_add_partition "add_partition"
-/* parameters: path, fstype, label (or NULL), parent_path */
+/* parameters: path, fstype (or NULL), label (or NULL), parent_path */
 
 #define dtmd_notification_remove_partition "remove_partition"
 /* parameters: path */
+
+#define dtmd_notification_partition_changed "partition_changed"
+/* parameters: path, fstype (or NULL), label (or NULL), parent_path */
 
 #define dtmd_notification_add_stateful_device "add_stateful_device"
 /* parameters: path, type, state, fstype (or NULL), label (or NULL) */
@@ -96,7 +102,7 @@ typedef enum dtmd_removable_media_state
  *	returns:
  *		devices: count
  *		device: "path, type, partitions_count"
- *		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+ *		partition: "path, fstype (or NULL), label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
  *		stateful_devices: count
  *		stateful_device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
  *
@@ -110,7 +116,7 @@ typedef enum dtmd_removable_media_state
  *
  *	returns:
  *		device: "path, type, partitions_count"
- *		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+ *		partition: "path, fstype (or NULL), label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
  *
  *		or "failed" on fail
  */
@@ -121,7 +127,7 @@ typedef enum dtmd_removable_media_state
  *		"partition path"
  *
  *	returns:
- *		partition: "path, fstype, label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
+ *		partition: "path, fstype (or NULL), label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
  *
  *		or "failed" on fail
  */

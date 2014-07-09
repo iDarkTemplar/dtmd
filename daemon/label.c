@@ -230,11 +230,11 @@ char* decode_label(const char *label)
 			}
 			else
 			{
-					cur_result[0] = '\\';
-					cur_result[1] = '0' + (((*label) & 0700) >> 6);
-					cur_result[2] = '0' + (((*label) &  070) >> 3);
-					cur_result[3] = '0' + ( (*label) &   07);
-					cur_result += 3;
+				cur_result[0] = '\\';
+				cur_result[1] = '0' + (((*label) & 0700) >> 6);
+				cur_result[2] = '0' + (((*label) &  070) >> 3);
+				cur_result[3] = '0' + ( (*label) &   07);
+				cur_result += 3;
 			}
 		}
 

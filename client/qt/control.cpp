@@ -59,6 +59,9 @@ Control::Control()
 	QObject::connect(this, SIGNAL(signalBuildMenu()),
 		this, SLOT(slotBuildMenu()), Qt::QueuedConnection);
 
+	QObject::connect(this, SIGNAL(signalExitSignalled(QString,QString)),
+		this, SLOT(slotExitSignalled(QString,QString)), Qt::QueuedConnection);
+
 	QObject::connect(&m_tray, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
 		this, SLOT(tray_activated(QSystemTrayIcon::ActivationReason)), Qt::QueuedConnection);
 
@@ -281,7 +284,7 @@ void Control::BuildMenu()
 		{
 			for (std::vector<dtmd::stateful_device>::iterator dev = m_stateful_devices.begin(); dev != m_stateful_devices.end(); ++dev)
 			{
-				if (dev->state == dtmd_removable_media_state_ok)
+				if ((dev->state == dtmd_removable_media_state_ok) && (dev->fstype.empty()))
 				{
 					bool is_mounted = !(dev->mnt_point.empty());
 					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
@@ -334,47 +337,50 @@ void Control::BuildMenu()
 			{
 				for (std::vector<dtmd::partition>::iterator it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
 				{
-					bool is_mounted = !(it->mnt_point.empty());
-					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
-						QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str()));
-
-					QScopedPointer<QCustomDeviceAction> action;
-					action.reset(new QCustomDeviceAction(QObject::trUtf8("Open device"),
-						menu,
-						dev - m_devices.begin(),
-						it - dev->partitions.begin(),
-						QString::fromLocal8Bit(it->path.c_str())));
-
-					QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-						this, SLOT(triggeredOpen(uint,uint,QString)), Qt::DirectConnection);
-
-					menu->addAction(action.take());
-
-					if (is_mounted)
+					if (!it->fstype.empty())
 					{
-						action.reset(new QCustomDeviceAction(QObject::trUtf8("Unmount device"),
+						bool is_mounted = !(it->mnt_point.empty());
+						QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
+							QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str()));
+
+						QScopedPointer<QCustomDeviceAction> action;
+						action.reset(new QCustomDeviceAction(QObject::trUtf8("Open device"),
 							menu,
 							dev - m_devices.begin(),
 							it - dev->partitions.begin(),
 							QString::fromLocal8Bit(it->path.c_str())));
 
 						QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-							this, SLOT(triggeredUnmount(uint,uint,QString)), Qt::DirectConnection);
+							this, SLOT(triggeredOpen(uint,uint,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
-					}
-					else
-					{
-						action.reset(new QCustomDeviceAction(QObject::trUtf8("Mount device"),
-							menu,
-							dev - m_devices.begin(),
-							it - dev->partitions.begin(),
-							QString::fromLocal8Bit(it->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-							this, SLOT(triggeredMount(uint,uint,QString)), Qt::DirectConnection);
+						if (is_mounted)
+						{
+							action.reset(new QCustomDeviceAction(QObject::trUtf8("Unmount device"),
+								menu,
+								dev - m_devices.begin(),
+								it - dev->partitions.begin(),
+								QString::fromLocal8Bit(it->path.c_str())));
 
-						menu->addAction(action.take());
+							QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
+								this, SLOT(triggeredUnmount(uint,uint,QString)), Qt::DirectConnection);
+
+							menu->addAction(action.take());
+						}
+						else
+						{
+							action.reset(new QCustomDeviceAction(QObject::trUtf8("Mount device"),
+								menu,
+								dev - m_devices.begin(),
+								it - dev->partitions.begin(),
+								QString::fromLocal8Bit(it->path.c_str())));
+
+							QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
+								this, SLOT(triggeredMount(uint,uint,QString)), Qt::DirectConnection);
+
+							menu->addAction(action.take());
+						}
 					}
 				}
 			}
@@ -458,6 +464,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				if (it == ptr->m_devices.end())
 				{
 					ptr->m_devices.push_back(dtmd::device(cmd.args[0], dtmd_string_to_device_type(cmd.args[1].c_str())));
+					modified = true;
 				}
 			} // unlock
 			else if ((cmd.cmd == dtmd_notification_remove_disk) && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
@@ -476,10 +483,31 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				if (it != ptr->m_devices.end())
 				{
 					ptr->m_devices.erase(it);
+					modified = true;
+				}
+			} // unlock
+			else if ((cmd.cmd == dtmd_notification_disk_changed) && (cmd.args.size() == 2) && (!cmd.args[0].empty()) && (!cmd.args[1].empty()))
+			{ // lock
+				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
+
+				std::vector<dtmd::device>::iterator it;
+				for (it = ptr->m_devices.begin(); it != ptr->m_devices.end(); ++it)
+				{
+					if (cmd.args[0] == it->path)
+					{
+						break;
+					}
+				}
+
+				if (it != ptr->m_devices.end())
+				{
+					dtmd_removable_media_type_t last_type = it->type;
+					it->type = dtmd_string_to_device_type(cmd.args[1].c_str());
+					modified = true;
 				}
 			} // unlock
 			else if ((cmd.cmd == dtmd_notification_add_partition) && (cmd.args.size() == 4)
-				&& (!cmd.args[0].empty()) && (!cmd.args[1].empty()) && (!cmd.args[3].empty()))
+				&& (!cmd.args[0].empty()) && (!cmd.args[3].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
@@ -506,13 +534,45 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					if (it == dev->partitions.end())
 					{
 						dev->partitions.push_back(dtmd::partition(cmd.args[0], cmd.args[1], cmd.args[2]));
-						title = QObject::trUtf8("Device attached");
-						message = QString::fromLocal8Bit(cmd.args[2].empty() ? cmd.args[0].c_str() : cmd.args[2].c_str());
+
+						if (!cmd.args[1].empty())
+						{
+							title = QObject::trUtf8("Device attached");
+							message = QString::fromLocal8Bit(cmd.args[2].empty() ? cmd.args[0].c_str() : cmd.args[2].c_str());
+						}
+
 						modified = true;
 					}
 				}
 			} // unlock
 			else if ((cmd.cmd == dtmd_notification_remove_partition) && (cmd.args.size() == 1) && (!cmd.args[0].empty()))
+			{ // lock
+				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
+
+				std::vector<dtmd::device>::iterator dev;
+				for (dev = ptr->m_devices.begin(); dev != ptr->m_devices.end(); ++dev)
+				{
+					std::vector<dtmd::partition>::iterator it;
+					for (it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
+					{
+						if (cmd.args[0] == it->path)
+						{
+							break;
+						}
+					}
+
+					if (it != dev->partitions.end())
+					{
+						title = QObject::trUtf8("Device removed");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						dev->partitions.erase(it);
+						modified = true;
+						break;
+					}
+				}
+			} // unlock
+			else if ((cmd.cmd == dtmd_notification_partition_changed) && (cmd.args.size() == 4)
+				&& (!cmd.args[0].empty()) && (!cmd.args[3].empty()))
 			{ // lock
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
@@ -538,10 +598,12 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 
 					if (it != dev->partitions.end())
 					{
-						title = QObject::trUtf8("Device removed");
+						it->fstype = cmd.args[1];
+						it->label  = cmd.args[2];
+
+						title = QObject::trUtf8("Device changed");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						modified = true;
-						dev->partitions.erase(it);
 					}
 				}
 			} // unlock
@@ -626,6 +688,8 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					it->state = dtmd_string_to_device_state(cmd.args[2].c_str());
 					it->fstype = cmd.args[3];
 					it->label = cmd.args[4];
+					it->mnt_point.clear();
+					it->mnt_opts.clear();
 
 					if ((last_state != dtmd_removable_media_state_ok)
 						&& (it->state == dtmd_removable_media_state_ok))
@@ -649,20 +713,46 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
 				std::vector<dtmd::device>::iterator dev;
-				for (dev = ptr->m_devices.begin(); (!modified) && (dev != ptr->m_devices.end()); ++dev)
+				for (dev = ptr->m_devices.begin(); dev != ptr->m_devices.end(); ++dev)
 				{
 					std::vector<dtmd::partition>::iterator it;
 					for (it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
 					{
 						if (cmd.args[0] == it->path)
 						{
-							it->mnt_point = cmd.args[1];
-							it->mnt_opts  = cmd.args[2];
-							title = QObject::trUtf8("Device mounted");
-							message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
-							modified = true;
 							break;
 						}
+					}
+
+					if (it != dev->partitions.end())
+					{
+						it->mnt_point = cmd.args[1];
+						it->mnt_opts  = cmd.args[2];
+						title = QObject::trUtf8("Device mounted");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+						break;
+					}
+				}
+
+				if (!modified)
+				{
+					std::vector<dtmd::stateful_device>::iterator it2;
+					for (it2 = ptr->m_stateful_devices.begin(); it2 != ptr->m_stateful_devices.end(); ++it2)
+					{
+						if (cmd.args[0] == it2->path)
+						{
+							break;
+						}
+					}
+
+					if (it2 != ptr->m_stateful_devices.end())
+					{
+						it2->mnt_point = cmd.args[1];
+						it2->mnt_opts  = cmd.args[2];
+						title = QObject::trUtf8("Device mounted");
+						message = QString::fromLocal8Bit(it2->label.empty() ? it2->path.c_str() : it2->label.c_str());
+						modified = true;
 					}
 				}
 			} // unlock
@@ -671,20 +761,46 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
 				std::vector<dtmd::device>::iterator dev;
-				for (dev = ptr->m_devices.begin(); (!modified) && (dev != ptr->m_devices.end()); ++dev)
+				for (dev = ptr->m_devices.begin(); dev != ptr->m_devices.end(); ++dev)
 				{
 					std::vector<dtmd::partition>::iterator it;
 					for (it = dev->partitions.begin(); it != dev->partitions.end(); ++it)
 					{
 						if (cmd.args[0] == it->path)
 						{
-							it->mnt_point.clear();
-							it->mnt_opts.clear();
-							title = QObject::trUtf8("Device unmounted");
-							message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
-							modified = true;
 							break;
 						}
+					}
+
+					if (it != dev->partitions.end())
+					{
+						it->mnt_point.clear();
+						it->mnt_opts.clear();
+						title = QObject::trUtf8("Device unmounted");
+						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
+						modified = true;
+						break;
+					}
+				}
+
+				if (!modified)
+				{
+					std::vector<dtmd::stateful_device>::iterator it2;
+					for (it2 = ptr->m_stateful_devices.begin(); it2 != ptr->m_stateful_devices.end(); ++it2)
+					{
+						if (cmd.args[0] == it2->path)
+						{
+							break;
+						}
+					}
+
+					if (it2 != ptr->m_stateful_devices.end())
+					{
+						it2->mnt_point.clear();
+						it2->mnt_opts.clear();
+						title = QObject::trUtf8("Device unmounted");
+						message = QString::fromLocal8Bit(it2->label.empty() ? it2->path.c_str() : it2->label.c_str());
+						modified = true;
 					}
 				}
 			} // unlock
@@ -692,23 +808,25 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 			if (modified)
 			{
 				ptr->triggerBuildMenu();
-				ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
+
+				if ((!title.isEmpty()) || (!message.isEmpty()))
+				{
+					ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
+				}
 			}
 		}
 		catch (const std::exception &e)
 		{
-			QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error") + QString("\n") + QObject::trUtf8("Error message: ") + QString::fromLocal8Bit(e.what()));
-			ptr->exit();
+			ptr->exitSignalled(QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error") + QString("\n") + QObject::trUtf8("Error message: ") + QString::fromLocal8Bit(e.what()));
 		}
 		catch (...)
 		{
-			QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error"));
-			ptr->exit();
+			ptr->exitSignalled(QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error"));
 		}
 	}
 	else
 	{
-		ptr->exit();
+		ptr->exitSignalled(QObject::trUtf8("Exiting"), QObject::trUtf8("Daemon sent exit message"));
 	}
 }
 
@@ -752,6 +870,11 @@ void Control::exit()
 	QApplication::exit();
 }
 
+void Control::exitSignalled(QString title, QString message)
+{
+	emit signalExitSignalled(title, message);
+}
+
 void Control::slotShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint)
 {
 	m_tray.showMessage(title, message, icon, millisecondsTimeoutHint);
@@ -761,4 +884,10 @@ void Control::slotShowMessage(app_state state, QString title, QString message, Q
 void Control::slotBuildMenu()
 {
 	BuildMenu();
+}
+
+void Control::slotExitSignalled(QString title, QString message)
+{
+	QMessageBox::critical(NULL, title, message);
+	this->exit();
 }

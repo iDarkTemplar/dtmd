@@ -21,6 +21,7 @@
 #include "daemon/system_module.h"
 #include "daemon/lists.h"
 #include "daemon/log.h"
+#include "daemon/return_codes.h"
 
 #include <libudev.h>
 #include <stdlib.h>
@@ -230,11 +231,13 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 
 	dtmd_info_t *device_info;
 
+#ifndef NDEBUG
 	if ((enumeration == NULL)
 		|| (device == NULL))
 	{
-		return -1;
+		return result_bug;
 	}
+#endif /* NDEBUG */
 
 	for (dev_list_entry = enumeration->dev_list_entry; dev_list_entry != NULL; dev_list_entry = enumeration->dev_list_entry)
 	{
@@ -248,7 +251,7 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 		if (dev == NULL)
 		{
 			WRITE_LOG(LOG_ERR, "Udev failure");
-			return -1;
+			return result_fatal_error;
 		}
 
 		path = udev_device_get_devnode(dev);
@@ -256,7 +259,7 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 		{
 			WRITE_LOG(LOG_ERR, "Udev failure");
 			udev_device_unref(dev);
-			return -1;
+			return result_fatal_error;
 		}
 
 		devtype = udev_device_get_devtype(dev);
@@ -268,13 +271,13 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				udev_device_unref(dev);
-				return -1;
+				return result_fatal_error;
 			}
 
 			device_system_fill_device(dev, path, device_info);
 
 			*device = device_info;
-			return 1;
+			return result_success;
 		}
 		else if (strcmp(devtype, "partition") == 0)
 		{
@@ -283,20 +286,20 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				udev_device_unref(dev);
-				return -1;
+				return result_fatal_error;
 			}
 
 			device_system_fill_partition(dev, path, device_info);
 
 			*device = device_info;
-			return 1;
+			return result_success;
 		}
 
 		udev_device_unref(dev);
 	}
 
 	*device = NULL;
-	return 0;
+	return result_fail;
 }
 
 void device_system_free_enumerated_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t *device)
@@ -419,14 +422,14 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					udev_device_unref(dev);
-					return -1;
+					return result_fatal_error;
 				}
 
 				device_system_fill_device(dev, path, device_info);
 
 				*device = device_info;
 				*action = act;
-				return 1;
+				return result_success;
 			}
 			else if (strcmp(devtype, "partition") == 0)
 			{
@@ -435,14 +438,14 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					udev_device_unref(dev);
-					return -1;
+					return result_fatal_error;
 				}
 
 				device_system_fill_partition(dev, path, device_info);
 
 				*device = device_info;
 				*action = act;
-				return 1;
+				return result_success;
 			}
 		}
 
@@ -450,14 +453,14 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 	}
 	else
 	{
-		WRITE_LOG(LOG_ERR, "Udev failure");
-		return -1;
+		WRITE_LOG(LOG_ERR, "Udev failed to receive device");
+		return result_fatal_error;
 	}
 
 device_system_monitor_get_device_exit:
 	*device = NULL;
 	*action = dtmd_device_action_unknown;
-	return 0;
+	return result_fail;
 }
 
 void device_system_monitor_free_device(dtmd_device_monitor_t *monitor, dtmd_info_t *device)

@@ -3,7 +3,7 @@ project(Dark-Templar-Mount-Daemon)
 cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 1)
-set(DTMD_VERSION_MINOR 7)
+set(DTMD_VERSION_MINOR 8)
 set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
@@ -13,7 +13,7 @@ set(CPACK_PACKAGE_VERSION_PATCH ${DTMD_VERSION_PATCH})
 set(CPACK_GENERATOR "TBZ2")
 set(CPACK_SOURCE_GENERATOR "TBZ2")
 set(CPACK_SOURCE_IGNORE_FILES
-	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*;ignore;TODO")
+	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*;ignore;TODO;cppcheck-linux.sh")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${DTMD_VERSION}")
 # MUST be after CPACK_* variables.
 include(CPack)
@@ -68,8 +68,10 @@ if (OS_LINUX)
 	message(STATUS "set LINUX_NO_UDEV to switch interface from udev to linux kernel")
 endif (OS_LINUX)
 
+message(STATUS "set DISABLE_CONSOLE_CLIENT to disable console client")
 message(STATUS "set DISABLE_CXX to disable dtmd-library++ library")
 message(STATUS "set CLIENT_QT to force enable or disable Qt client")
+message(STATUS "set DISABLE_LIBVERSION to disable libraries versioning")
 
 # don't USE -O3 with GCC, it causes less precise calculations
 if (CMAKE_COMPILER_IS_GNUCC)
@@ -151,7 +153,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
-set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h )
+set ( DAEMON_HEADERS dtmd.h               daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
 set ( DAEMON_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
@@ -199,19 +201,30 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
+if (NOT DEFINED DISABLE_LIBVERSION)
+	set_target_properties( dtmd-misc PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+endif (NOT DEFINED DISABLE_LIBVERSION)
 target_link_libraries( dtmd-misc )
 
 add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
+if (NOT DEFINED DISABLE_LIBVERSION)
+	set_target_properties( dtmd-library PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+endif (NOT DEFINED DISABLE_LIBVERSION)
 target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
 
-add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
-target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
+if (NOT DEFINED DISABLE_CONSOLE_CLIENT)
+	add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
+	target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
+endif (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 
 if (NOT DEFINED DISABLE_CXX)
 	add_library( dtmd-library++ SHARED ${LIBRARY_CXX_SOURCES} ${LIBRARY_CXX_HEADERS} )
+	if (NOT DEFINED DISABLE_LIBVERSION)
+		set_target_properties( dtmd-library++ PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+	endif (NOT DEFINED DISABLE_LIBVERSION)
 	target_link_libraries( dtmd-library++ ${LIBRARY_CXX_LIBS} dtmd-library dtmd-misc )
 endif (NOT DEFINED DISABLE_CXX)
 
@@ -247,7 +260,10 @@ endforeach (CURRENT_TEST)
 install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
-install(TARGETS dtmd         RUNTIME DESTINATION bin)
+
+if (NOT DEFINED DISABLE_CONSOLE_CLIENT)
+	install(TARGETS dtmd         RUNTIME DESTINATION bin)
+endif (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 
 install(FILES "dtmd.h"                 DESTINATION "${HEADERS_PREFIX}")
 install(FILES "library/dtmd-misc.h"    DESTINATION "${HEADERS_PREFIX}")

@@ -53,8 +53,8 @@ class partition
 public:
 	partition();
 	explicit partition(const dtmd_partition_t *part);
-	partition(const std::string &l_path,
-		const std::string &l_fstype,
+	explicit partition(const std::string &l_path,
+		const std::string &l_fstype = std::string(),
 		const std::string &l_label = std::string(),
 		const std::string &l_mnt_point = std::string(),
 		const std::string &l_mnt_opts = std::string());

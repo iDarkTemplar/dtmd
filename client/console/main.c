@@ -62,11 +62,22 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 				print_first(first);
 				fprintf(stdout, "Disk removed\nPath: %s\n", cmd->args[0]);
 			}
-			else if ((strcmp(cmd->cmd, dtmd_notification_add_partition) == 0) && (cmd->args_count == 4)
-				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[3] != NULL))
+			else if ((strcmp(cmd->cmd, dtmd_notification_disk_changed) == 0) && (cmd->args_count == 2)
+				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
 			{
 				print_first(first);
-				fprintf(stdout, "Partition added\nParent device: %s\nPath: %s\nFilesystem type: %s\n", cmd->args[3], cmd->args[0], cmd->args[1]);
+				fprintf(stdout, "Disk changed\nPath: %s\nType: %s\n", cmd->args[0], cmd->args[1]);
+			}
+			else if ((strcmp(cmd->cmd, dtmd_notification_add_partition) == 0) && (cmd->args_count == 4)
+				&& (cmd->args[0] != NULL) && (cmd->args[3] != NULL))
+			{
+				print_first(first);
+				fprintf(stdout, "Partition added\nParent device: %s\nPath: %s\n", cmd->args[3], cmd->args[0]);
+
+				if (cmd->args[1] != NULL)
+				{
+					fprintf(stdout, "Filesystem type: %s\n", cmd->args[1]);
+				}
 
 				if (cmd->args[2] != NULL)
 				{
@@ -78,6 +89,22 @@ void client_callback(void *arg, const dtmd_command_t *cmd)
 			{
 				print_first(first);
 				fprintf(stdout, "Partition removed\nPath: %s\n", cmd->args[0]);
+			}
+			else if ((strcmp(cmd->cmd, dtmd_notification_partition_changed) == 0) && (cmd->args_count == 4)
+				&& (cmd->args[0] != NULL) && (cmd->args[3] != NULL))
+			{
+				print_first(first);
+				fprintf(stdout, "Partition changed\nParent device: %s\nPath: %s\n", cmd->args[3], cmd->args[0]);
+
+				if (cmd->args[1] != NULL)
+				{
+					fprintf(stdout, "Filesystem type: %s\n", cmd->args[1]);
+				}
+
+				if (cmd->args[2] != NULL)
+				{
+					fprintf(stdout, "Label: %s\n", cmd->args[2]);
+				}
 			}
 			else if ((strcmp(cmd->cmd, dtmd_notification_add_stateful_device) == 0) && (cmd->args_count == 5)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
@@ -156,7 +183,11 @@ void printUsage(char *app)
 void client_print_partition(const dtmd_partition_t *partition)
 {
 	fprintf(stdout, "Path: %s\n", partition->path);
-	fprintf(stdout, "Filesystem type: %s\n", partition->fstype);
+
+	if (partition->fstype != NULL)
+	{
+		fprintf(stdout, "Filesystem type: %s\n", partition->fstype);
+	}
 
 	if (partition->label != NULL)
 	{
@@ -184,6 +215,11 @@ void client_print_device(const dtmd_device_t *device)
 
 	for (i = 0; i < device->partitions_count; ++i)
 	{
+		if (i != 0)
+		{
+			fprintf(stdout, "\n");
+		}
+
 		fprintf(stdout, "Partition %u:\n", i);
 		client_print_partition(device->partition[i]);
 	}

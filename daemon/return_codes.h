@@ -18,37 +18,18 @@
  *
  */
 
-#ifndef CONFIG_FILE_H
-#define CONFIG_FILE_H
+#ifndef DTMD_RETURN_CODES_H
+#define DTMD_RETURN_CODES_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#define result_success 1 /* > 0 means success, it doesn't have to be 1 */
+#define result_fail 0 /* Generic fail, non-fatal, may be part of normal daemon operation */
+#define result_client_error -1 /* fatal client error, client must be disconnected */
+#define result_fatal_error -2 /* fatal daemon error, daemon must be stopped */
+#define result_bug -3 /* daemon bug, should never happen, but if it happens, maybe panic? */
 
-enum mount_by_value_enum
-{
-	mount_by_device_name = 0,
-	mount_by_device_label
-};
+#define is_result_successful(x) ((x) > 0)
+#define is_result_failure(x) ((x) <= 0)
+#define is_result_nonfatal_error(x) ((x) == 0)
+#define is_result_fatal_error(x) ((x) < 0)
 
-extern int daemonize;
-extern int use_syslog;
-extern int unmount_on_exit;
-extern enum mount_by_value_enum mount_by_value;
-extern char *mount_dir;
-extern int create_mount_dir_on_startup;
-extern int clear_mount_dir;
-
-#define read_config_return_ok 0
-#define read_config_return_no_file -1
-
-int read_config(void);
-void free_config(void);
-
-const char* get_mount_options_for_fs_from_config(const char *fstype);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* CONFIG_FILE_H */
+#endif /* DTMD_RETURN_CODES_H */

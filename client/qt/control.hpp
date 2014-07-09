@@ -70,6 +70,8 @@ private:
 
 	void showMessage(app_state state, const QString &title, const QString &message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
 
+	void exitSignalled(QString title, QString message);
+
 	void setIconState(app_state state, int millisecondsTimeoutHint);
 	void triggerBuildMenu();
 
@@ -99,14 +101,17 @@ private slots:
 	void tray_activated(QSystemTrayIcon::ActivationReason reason);
 	void tray_messageClicked();
 
-	void exit();
-
 	void slotShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
 	void slotBuildMenu();
+
+	void exit();
+	void slotExitSignalled(QString title, QString message);
 
 signals:
 	void signalShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
 	void signalBuildMenu();
+
+	void signalExitSignalled(QString title, QString message);
 };
 
 #endif /* QT_CONTROL_HPP */
