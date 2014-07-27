@@ -284,7 +284,7 @@ void Control::BuildMenu()
 		{
 			for (std::vector<dtmd::stateful_device>::iterator dev = m_stateful_devices.begin(); dev != m_stateful_devices.end(); ++dev)
 			{
-				if ((dev->state == dtmd_removable_media_state_ok) && (dev->fstype.empty()))
+				if ((dev->state == dtmd_removable_media_state_ok) && (!(dev->fstype.empty())))
 				{
 					bool is_mounted = !(dev->mnt_point.empty());
 					QMenu *menu = new_menu->addMenu(iconFromType(dev->type, is_mounted),
@@ -501,7 +501,6 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 
 				if (it != ptr->m_devices.end())
 				{
-					dtmd_removable_media_type_t last_type = it->type;
 					it->type = dtmd_string_to_device_type(cmd.args[1].c_str());
 					modified = true;
 				}

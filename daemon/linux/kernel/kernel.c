@@ -2112,7 +2112,7 @@ static void* device_system_worker_function(void *arg)
 							if (strcmp(device_system->devices[device_index]->device->path, device->path) == 0)
 							{
 								found_device_type = dtmd_info_device;
-								break;
+								goto device_system_worker_function_device_found;
 							}
 
 							if ((device->type == dtmd_info_partition)
@@ -2130,15 +2130,14 @@ static void* device_system_worker_function(void *arg)
 										&& (strcmp(device_system->devices[device_index]->partitions[partition_index]->path, device->path) == 0))
 									{
 										found_device_type = dtmd_info_partition;
-										break;
+										goto device_system_worker_function_device_found;
 									}
 								}
 							}
 						}
 					}
 
-					if ((found_device_type == dtmd_info_unknown)
-						&& (device->type != dtmd_info_partition))
+					if (device->type != dtmd_info_partition)
 					{
 						for (device_index = 0; device_index < device_system->stateful_devices_count; ++device_index)
 						{
@@ -2146,10 +2145,12 @@ static void* device_system_worker_function(void *arg)
 								&& (strcmp(device_system->stateful_devices[device_index]->path, device->path) == 0))
 							{
 								found_device_type = dtmd_info_stateful_device;
-								break;
+								goto device_system_worker_function_device_found;
 							}
 						}
 					}
+
+device_system_worker_function_device_found:
 
 					switch (action)
 					{
