@@ -569,15 +569,6 @@ int main(int argc, char **argv)
 		goto exit_4_pipe;
 	}
 
-	if (daemonize)
-	{
-		if (is_result_failure(redirectStdio()))
-		{
-			result = -1;
-			goto exit_4_pipe;
-		}
-	}
-
 	snprintf(buffer, sizeof(buffer), "%10d\n", getpid());
 	if (write(lockfd, buffer, sizeof(buffer) - 1) != sizeof(buffer) - 1)
 	{
@@ -603,6 +594,15 @@ int main(int argc, char **argv)
 
 		result = -1;
 		goto exit_4_pipe;
+	}
+
+	if (daemonize)
+	{
+		if (is_result_failure(redirectStdio()))
+		{
+			result = -1;
+			goto exit_4_pipe;
+		}
 	}
 
 	if (!daemonize)
