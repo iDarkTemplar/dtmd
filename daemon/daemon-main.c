@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include <dtmd.h>
 #include "daemon/dtmd-internal.h"
@@ -91,7 +92,26 @@ int setSigHandlers(void)
 		}
 	}
 
-	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
+	action.sa_handler = SIG_IGN;
+
+	if (sigaction(SIGPIPE, &action, NULL) < 0)
+	{
+		return result_fatal_error;
+	}
+
+	return result_success;
+}
+
+int unblockAllSignals(void)
+{
+	sigset_t set;
+
+	if (sigfillset(&set) < 0)
+	{
+		return result_fatal_error;
+	}
+
+	if (sigprocmask(SIG_UNBLOCK, &set, NULL) < 0)
 	{
 		return result_fatal_error;
 	}
@@ -479,6 +499,8 @@ int main(int argc, char **argv)
 			close(daemonpipe[1]);
 			daemonpipe[1] = -1;
 
+			waitpid(child, &rc, 0);
+
 			if ((read(daemonpipe[0], &daemondata, sizeof(unsigned char)) != sizeof(unsigned char))
 				|| (daemondata != 1))
 			{
@@ -495,6 +517,65 @@ int main(int argc, char **argv)
 		// child - daemon
 		close(daemonpipe[0]);
 		daemonpipe[0] = -1;
+	}
+
+	if (daemonize)
+	{
+		if (setsid() == -1)
+		{
+			result = -1;
+			goto exit_4_pipe;
+		}
+
+		child = fork();
+		if (child == -1)
+		{
+			result = -1;
+			goto exit_4_pipe;
+		}
+		else if (child != 0)
+		{
+			// parent - exit
+			close(socketfd);
+			close(lockfd);
+			close(daemonpipe[1]);
+			daemonpipe[1] = -1;
+			result = 0;
+			goto exit_1;
+		}
+
+		// child - daemon
+	}
+
+	if (is_result_failure(unblockAllSignals()))
+	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error unblocking signal handlers\n");
+		}
+
+		result = -1;
+		goto exit_4_pipe;
+	}
+
+	if (is_result_failure(setSigHandlers()))
+	{
+		if (!daemonize)
+		{
+			fprintf(stderr, "Error setting signal handlers\n");
+		}
+
+		result = -1;
+		goto exit_4_pipe;
+	}
+
+	if (daemonize)
+	{
+		if (is_result_failure(redirectStdio()))
+		{
+			result = -1;
+			goto exit_4_pipe;
+		}
 	}
 
 	snprintf(buffer, sizeof(buffer), "%10d\n", getpid());
@@ -522,33 +603,6 @@ int main(int argc, char **argv)
 
 		result = -1;
 		goto exit_4_pipe;
-	}
-
-	rc = setSigHandlers();
-	if (is_result_failure(rc))
-	{
-		if (!daemonize)
-		{
-			fprintf(stderr, "Error setting signal handlers\n");
-		}
-
-		result = -1;
-		goto exit_4_pipe;
-	}
-
-	if (daemonize)
-	{
-		if (setsid() == -1)
-		{
-			result = -1;
-			goto exit_4_pipe;
-		}
-
-		if (is_result_failure(redirectStdio()))
-		{
-			result = -1;
-			goto exit_4_pipe;
-		}
 	}
 
 	if (!daemonize)
