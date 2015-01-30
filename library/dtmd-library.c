@@ -437,8 +437,7 @@ static void* dtmd_worker_function(void *arg)
 				goto dtmd_worker_function_error;
 			}
 		}
-
-		if (fds[1].revents & POLLIN)
+		else if (fds[1].revents & POLLIN)
 		{
 			rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
 			if (rc <= 0)
@@ -1016,7 +1015,7 @@ static dtmd_result_t dtmd_helper_wait_for_input(int handle, int timeout)
 
 	fd.fd      = handle;
 	fd.events  = POLLIN;
-	fd.revents = POLLOUT;
+	fd.revents = 0;
 
 	rc = poll(&fd, 1, timeout);
 
