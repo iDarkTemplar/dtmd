@@ -44,6 +44,18 @@ typedef enum dtmd_removable_media_state
 	dtmd_removable_media_state_ok      = 3
 } dtmd_removable_media_state_t;
 
+typedef enum dtmd_error_code
+{
+	dtmd_error_code_generic_error = 0,
+	dtmd_error_code_no_such_device = 1,
+	dtmd_error_code_fstype_not_recognized = 2,
+	dtmd_error_code_unsupported_fstype = 3,
+	dtmd_error_code_device_already_mounted = 4,
+	dtmd_error_code_device_not_mounted = 5,
+	dtmd_error_code_failed_parsing_mount_options = 6,
+	dtmd_error_code_mount_point_busy = 7
+} dtmd_error_code_t;
+
 #ifdef __cplusplus
 }
 #endif

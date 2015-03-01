@@ -2991,11 +2991,6 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 
 	switch (data)
 	{
-	case 0: // error
-		rc = result_fail;
-		/*goto device_system_monitor_get_device_error_2; */
-		break;
-
 	case 1: // data
 		if (monitor->first != NULL)
 		{
@@ -3015,19 +3010,20 @@ int device_system_monitor_get_device(dtmd_device_monitor_t *monitor, dtmd_info_t
 			*action = delete_item->action;
 			free(delete_item);
 
-			pthread_mutex_unlock(&(monitor->system->control_mutex));
-
-			return result_success;
+			rc = result_success;
+			/*goto device_system_monitor_get_device_error_2; */
+			break;
 		}
 
 		// NOTE: passthrough
 
+	case 0: // error
 	case 2: // exit
 		*device = NULL;
 		*action = dtmd_device_action_unknown;
-		pthread_mutex_unlock(&(monitor->system->control_mutex));
-
-		return result_fail;
+		rc = result_fail;
+		/*goto device_system_monitor_get_device_error_2; */
+		break;
 	}
 
 device_system_monitor_get_device_error_2:
