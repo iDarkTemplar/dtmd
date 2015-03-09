@@ -44,6 +44,9 @@ dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);
 const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state);
 dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string);
 
+const char* dtmd_error_code_to_string(dtmd_error_code_t code);
+dtmd_error_code_t dtmd_string_to_error_code(const char *string);
+
 #ifdef __cplusplus
 }
 #endif

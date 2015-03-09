@@ -46,14 +46,15 @@ typedef enum dtmd_removable_media_state
 
 typedef enum dtmd_error_code
 {
-	dtmd_error_code_generic_error = 0,
-	dtmd_error_code_no_such_device = 1,
-	dtmd_error_code_fstype_not_recognized = 2,
-	dtmd_error_code_unsupported_fstype = 3,
-	dtmd_error_code_device_already_mounted = 4,
-	dtmd_error_code_device_not_mounted = 5,
-	dtmd_error_code_failed_parsing_mount_options = 6,
-	dtmd_error_code_mount_point_busy = 7
+	dtmd_error_code_unknown                      = 0,
+	dtmd_error_code_generic_error                = 1,
+	dtmd_error_code_no_such_device               = 2,
+	dtmd_error_code_fstype_not_recognized        = 3,
+	dtmd_error_code_unsupported_fstype           = 4,
+	dtmd_error_code_device_already_mounted       = 5,
+	dtmd_error_code_device_not_mounted           = 6,
+	dtmd_error_code_failed_parsing_mount_options = 7,
+	dtmd_error_code_mount_point_busy             = 8
 } dtmd_error_code_t;
 
 #ifdef __cplusplus
@@ -69,6 +70,16 @@ typedef enum dtmd_error_code
 #define dtmd_string_state_empty   "empty"
 #define dtmd_string_state_clear   "clear"
 #define dtmd_string_state_ok      "ok"
+
+#define dtmd_string_error_code_unknown                      "unknown"
+#define dtmd_string_error_code_generic_error                "generic error"
+#define dtmd_string_error_code_no_such_device               "no such device"
+#define dtmd_string_error_code_fstype_not_recognized        "fstype not recognized"
+#define dtmd_string_error_code_unsupported_fstype           "unsupported fstype"
+#define dtmd_string_error_code_device_already_mounted       "device already mounted"
+#define dtmd_string_error_code_device_not_mounted           "device not mounted"
+#define dtmd_string_error_code_failed_parsing_mount_options "failed parsing mount options"
+#define dtmd_string_error_code_mount_point_busy             "mount point busy"
 
 /* Notification types */
 

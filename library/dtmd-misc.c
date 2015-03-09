@@ -24,16 +24,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-static const char *str_unknown_or_persistent = dtmd_string_device_unknown_or_persistent;
-static const char *str_cdrom                 = dtmd_string_device_cdrom;
-static const char *str_removable_disk        = dtmd_string_device_removable_disk;
-static const char *str_sd_card               = dtmd_string_device_sd_card;
-
-static const char *str_removable_media_state_unknown = dtmd_string_state_unknown;
-static const char *str_removable_media_state_empty   = dtmd_string_state_empty;
-static const char *str_removable_media_state_clear   = dtmd_string_state_clear;
-static const char *str_removable_media_state_ok      = dtmd_string_state_ok;
-
 int dtmd_validate_command(const char *buffer)
 {
 	const char *cur;
@@ -299,17 +289,17 @@ const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type)
 	switch (type)
 	{
 	case dtmd_removable_media_cdrom:
-		return str_cdrom;
+		return dtmd_string_device_cdrom;
 
 	case dtmd_removable_media_removable_disk:
-		return str_removable_disk;
+		return dtmd_string_device_removable_disk;
 
 	case dtmd_removable_media_sd_card:
-		return str_sd_card;
+		return dtmd_string_device_sd_card;
 
 	case dtmd_removable_media_unknown_or_persistent:
 	default:
-		return str_unknown_or_persistent;
+		return dtmd_string_device_unknown_or_persistent;
 	}
 }
 
@@ -317,15 +307,15 @@ dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
 {
 	if (string != NULL)
 	{
-		if (strcmp(string, str_cdrom) == 0)
+		if (strcmp(string, dtmd_string_device_cdrom) == 0)
 		{
 			return dtmd_removable_media_cdrom;
 		}
-		else if (strcmp(string, str_removable_disk) == 0)
+		else if (strcmp(string, dtmd_string_device_removable_disk) == 0)
 		{
 			return dtmd_removable_media_removable_disk;
 		}
-		else if (strcmp(string, str_sd_card) == 0)
+		else if (strcmp(string, dtmd_string_device_sd_card) == 0)
 		{
 			return dtmd_removable_media_sd_card;
 		}
@@ -339,17 +329,17 @@ const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state)
 	switch (state)
 	{
 	case dtmd_removable_media_state_empty:
-		return str_removable_media_state_empty;
+		return dtmd_string_state_empty;
 
 	case dtmd_removable_media_state_clear:
-		return str_removable_media_state_clear;
+		return dtmd_string_state_clear;
 
 	case dtmd_removable_media_state_ok:
-		return str_removable_media_state_ok;
+		return dtmd_string_state_ok;
 
 	case dtmd_removable_media_state_unknown:
 	default:
-		return str_removable_media_state_unknown;
+		return dtmd_string_state_unknown;
 	}
 }
 
@@ -357,19 +347,94 @@ dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string)
 {
 	if (string != NULL)
 	{
-		if (strcmp(string, str_removable_media_state_empty) == 0)
+		if (strcmp(string, dtmd_string_state_empty) == 0)
 		{
 			return dtmd_removable_media_state_empty;
 		}
-		else if (strcmp(string, str_removable_media_state_clear) == 0)
+		else if (strcmp(string, dtmd_string_state_clear) == 0)
 		{
 			return dtmd_removable_media_state_clear;
 		}
-		else if (strcmp(string, str_removable_media_state_ok) == 0)
+		else if (strcmp(string, dtmd_string_state_ok) == 0)
 		{
 			return dtmd_removable_media_state_ok;
 		}
 	}
 
 	return dtmd_removable_media_state_unknown;
+}
+
+const char* dtmd_error_code_to_string(dtmd_error_code_t code)
+{
+	switch (code)
+	{
+	case dtmd_error_code_generic_error:
+		return dtmd_string_error_code_generic_error;
+
+	case dtmd_error_code_no_such_device:
+		return dtmd_string_error_code_no_such_device;
+
+	case dtmd_error_code_fstype_not_recognized:
+		return dtmd_string_error_code_fstype_not_recognized;
+
+	case dtmd_error_code_unsupported_fstype:
+		return dtmd_string_error_code_unsupported_fstype;
+
+	case dtmd_error_code_device_already_mounted:
+		return dtmd_string_error_code_device_already_mounted;
+
+	case dtmd_error_code_device_not_mounted:
+		return dtmd_string_error_code_device_not_mounted;
+
+	case dtmd_error_code_failed_parsing_mount_options:
+		return dtmd_string_error_code_failed_parsing_mount_options;
+
+	case dtmd_error_code_mount_point_busy:
+		return dtmd_string_error_code_failed_parsing_mount_options;
+
+	case dtmd_error_code_unknown:
+	default:
+		return dtmd_string_error_code_unknown;
+	}
+}
+
+dtmd_error_code_t dtmd_string_to_error_code(const char *string)
+{
+	if (string != NULL)
+	{
+		if (strcmp(string, dtmd_string_error_code_generic_error) == 0)
+		{
+			return dtmd_error_code_generic_error;
+		}
+		else if (strcmp(string, dtmd_string_error_code_no_such_device) == 0)
+		{
+			return dtmd_error_code_no_such_device;
+		}
+		else if (strcmp(string, dtmd_string_error_code_fstype_not_recognized) == 0)
+		{
+			return dtmd_error_code_fstype_not_recognized;
+		}
+		else if (strcmp(string, dtmd_string_error_code_unsupported_fstype) == 0)
+		{
+			return dtmd_error_code_unsupported_fstype;
+		}
+		else if (strcmp(string, dtmd_string_error_code_device_already_mounted) == 0)
+		{
+			return dtmd_error_code_device_already_mounted;
+		}
+		else if (strcmp(string, dtmd_string_error_code_device_not_mounted) == 0)
+		{
+			return dtmd_error_code_device_not_mounted;
+		}
+		else if (strcmp(string, dtmd_string_error_code_failed_parsing_mount_options) == 0)
+		{
+			return dtmd_error_code_failed_parsing_mount_options;
+		}
+		else if (strcmp(string, dtmd_string_error_code_mount_point_busy) == 0)
+		{
+			return dtmd_error_code_mount_point_busy;
+		}
+	}
+
+	return dtmd_error_code_unknown;
 }
