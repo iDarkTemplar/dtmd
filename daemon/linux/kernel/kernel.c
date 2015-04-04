@@ -2642,7 +2642,7 @@ void device_system_deinit(dtmd_device_system_t *system)
 dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t *system)
 {
 	dtmd_device_enumeration_t *enumeration;
-	void **tmp;
+	void *tmp;
 	uint32_t devices_count;
 	uint32_t i, j, k;
 
@@ -2761,7 +2761,7 @@ device_system_enumerate_devices_error_1:
 
 void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumeration)
 {
-	void **tmp;
+	void *tmp;
 	uint32_t i;
 
 	if (enumeration != NULL)
@@ -2836,7 +2836,7 @@ void device_system_free_enumerated_device(dtmd_device_enumeration_t *enumeration
 dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *system)
 {
 	dtmd_device_monitor_t *monitor;
-	void **tmp;
+	void *tmp;
 
 	if (system == NULL)
 	{
@@ -2898,7 +2898,7 @@ device_system_start_monitoring_error_1:
 
 void device_system_stop_monitoring(dtmd_device_monitor_t *monitor)
 {
-	void **tmp;
+	void *tmp;
 	uint32_t i;
 
 	if (monitor != NULL)
