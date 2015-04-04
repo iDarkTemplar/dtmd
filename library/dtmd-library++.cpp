@@ -536,6 +536,11 @@ bool library::isStateInvalid() const
 	return dtmd_is_state_invalid(this->m_handle);
 }
 
+dtmd_error_code_t library::getCodeOfCommandFail() const
+{
+	return dtmd_get_code_of_command_fail(this->m_handle);
+}
+
 void library::local_callback(void *arg, const dtmd_command_t *cmd)
 {
 	library *lib = (library*) arg;

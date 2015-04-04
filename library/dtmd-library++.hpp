@@ -139,6 +139,7 @@ public:
 	dtmd_result_t list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list);
 
 	bool isStateInvalid() const;
+	dtmd_error_code_t getCodeOfCommandFail() const;
 
 private:
 	// delete default constructor, copy constructor and assign operator

@@ -91,6 +91,9 @@ dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, unsig
 dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, unsigned int *supported_filesystem_options_count, const char ***supported_filesystem_options_list);
 int dtmd_is_state_invalid(dtmd_t *handle);
 
+// if error is command_failed, detailed error code can be with following function
+dtmd_error_code_t dtmd_get_code_of_command_fail(dtmd_t *handle);
+
 void dtmd_free_devices_array(dtmd_t *handle, unsigned int device_count, dtmd_device_t **devices);
 void dtmd_free_device(dtmd_t *handle, dtmd_device_t *device);
 void dtmd_free_partition(dtmd_t *handle, dtmd_partition_t *partition);

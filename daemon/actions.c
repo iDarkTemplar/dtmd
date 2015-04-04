@@ -140,8 +140,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			// TODO: error-code dtmd_error_code_no_such_device
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -186,8 +185,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			// TODO: error-code dtmd_error_code_no_such_device
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_partition "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -227,8 +225,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			// TODO: error-code dtmd_error_code_no_such_device
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_stateful_device "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_stateful_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -253,12 +250,12 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			// TODO: error-code error_code
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s, \"%s\")\n",
 				cmd->args[0],
 				((cmd->args[1] != NULL) ? ("\"") : ("")),
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
-				((cmd->args[1] != NULL) ? ("\"") : (""))) < 0)
+				((cmd->args[1] != NULL) ? ("\"") : ("")),
+				dtmd_error_code_to_string(error_code)) < 0)
 			{
 				return result_client_error;
 			}
@@ -279,8 +276,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			// TODO: error-code error_code
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
 			{
 				return result_client_error;
 			}

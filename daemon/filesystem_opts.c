@@ -24,6 +24,8 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
+#include <dtmd-misc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -952,8 +954,7 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 	if ((fsopts == NULL) || (fsopts->external_fstype != NULL))
 #endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
 	{
-		// TODO: error-code dtmd_error_code_unsupported_fstype
-		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
+		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\", \"%s\")\n", filesystem, dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype)) < 0)
 		{
 			return result_client_error;
 		}

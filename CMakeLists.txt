@@ -3,8 +3,8 @@ project(Dark-Templar-Mount-Daemon)
 cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 1)
-set(DTMD_VERSION_MINOR 8)
-set(DTMD_VERSION_PATCH 4)
+set(DTMD_VERSION_MINOR 9)
+set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
@@ -247,7 +247,7 @@ set (TEST_SOURCES_decode_label daemon/label.c tests/decode_label_test.c tests/dt
 set (TEST_LIBS_decode_label )
 
 set (TEST_SOURCES_filesystem_opts daemon/filesystem_opts.c tests/filesystem_opts_test.c tests/dt_tests.h)
-set (TEST_LIBS_filesystem_opts )
+set (TEST_LIBS_filesystem_opts dtmd-misc)
 
 set (ALL_TESTS commands decode_label filesystem_opts)
 foreach (CURRENT_TEST ${ALL_TESTS})

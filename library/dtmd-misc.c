@@ -390,7 +390,7 @@ const char* dtmd_error_code_to_string(dtmd_error_code_t code)
 		return dtmd_string_error_code_failed_parsing_mount_options;
 
 	case dtmd_error_code_mount_point_busy:
-		return dtmd_string_error_code_failed_parsing_mount_options;
+		return dtmd_string_error_code_mount_point_busy;
 
 	case dtmd_error_code_unknown:
 	default:
