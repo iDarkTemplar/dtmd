@@ -18,6 +18,10 @@
  *
  */
 
+#if (defined OS_FreeBSD)
+#define _WITH_GETLINE
+#endif /* (defined OS_FreeBSD) */
+
 #include "daemon/config_file.h"
 #include "daemon/filesystem_opts.h"
 #include "daemon/return_codes.h"

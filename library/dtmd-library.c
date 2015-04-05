@@ -18,6 +18,10 @@
  *
  */
 
+#if (defined OS_FreeBSD)
+#define _WITH_DPRINTF
+#endif /* (defined OS_FreeBSD) */
+
 #include <dtmd-library.h>
 
 #include <stdlib.h>

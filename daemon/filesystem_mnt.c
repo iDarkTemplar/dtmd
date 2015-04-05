@@ -37,11 +37,16 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#if (OS == Linux) && (!defined __USE_GNU)
+#if (defined OS_Linux) && (!defined __USE_GNU)
 #define __USE_GNU
-#endif /* (OS == Linux) && (!defined __USE_GNU) */
+#endif /* (defined OS_Linux) && (!defined __USE_GNU) */
 
 #include <sys/socket.h>
+
+#if (defined OS_FreeBSD)
+#include <sys/un.h>
+#include <sys/ucred.h>
+#endif /* (defined OS_FreeBSD) */
 
 typedef enum dir_state
 {
@@ -50,12 +55,12 @@ typedef enum dir_state
 	dir_state_not_empty
 } dir_state_t;
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 static const char * const mount_ext_cmd = "/bin/mount";
 static const char * const unmount_ext_cmd = "/bin/umount";
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
-#if OS == Linux
+#if (defined OS_Linux)
 static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 {
 	struct ucred credentials;
@@ -73,16 +78,28 @@ static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 
 	return result_success;
 }
-#endif /* OS == Linux */
+#endif /* (defined OS_Linux) */
 
-/*
-freebsd:
-struct xucred peercred;
-LOCAL_PEERCRED
-peercred.cr_version == XUCRED_VERSION
-*uid = peercred.cr_uid;
-*gid = peercred.cr_gid;
-*/
+#if (defined OS_FreeBSD)
+static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
+{
+	struct xucred credentials;
+	unsigned int xucred_length = sizeof(struct xucred);
+
+	if ((getsockopt(socket_fd, SOL_SOCKET, LOCAL_PEERCRED, &credentials, &xucred_length) != 0)
+		|| (xucred_length != sizeof(struct xucred))
+		|| (credentials.cr_version != XUCRED_VERSION))
+	{
+		WRITE_LOG(LOG_ERR, "Failed obtaining credentials of client");
+		return result_client_error;
+	}
+
+	*uid = credentials.cr_uid;
+	*gid = credentials.cr_gid;
+
+	return result_success;
+}
+#endif /* (defined OS_FreeBSD) */
 
 static dir_state_t get_dir_state(const char *dirname)
 {
@@ -115,7 +132,7 @@ static dir_state_t get_dir_state(const char *dirname)
 	}
 }
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 static int invoke_mount_external(int client_number,
 	const char *path,
 	const char *mount_path,
@@ -199,7 +216,7 @@ invoke_mount_external_error_2:
 invoke_mount_external_error_1:
 	return result;
 }
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 static int invoke_mount_internal(int client_number,
 	const char *path,
@@ -245,7 +262,16 @@ static int invoke_mount_internal(int client_number,
 	mount_full_opts[string_full_len] = 0;
 	mount_opts[string_len] = 0;
 
+#if (defined OS_Linux)
 	result = mount(path, mount_path, fstype, mount_flags, mount_opts);
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	// TODO: mount in FreeBSD
+	//result = mount(path, mount_path, fstype, mount_flags, mount_opts);
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 	if (result == 0)
 	{
@@ -467,18 +493,18 @@ invoke_mount_exit_loop:
 
 	if (mount_options == NULL)
 	{
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 		if (fsopts->external_fstype != NULL)
 		{
 			mount_options = get_mount_options_for_fs_from_config(fsopts->external_fstype);
 		}
 		else
 		{
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 			mount_options = get_mount_options_for_fs_from_config(fsopts->fstype);
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 		}
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 	}
 
 	if (mount_options == NULL)
@@ -576,18 +602,18 @@ invoke_mount_exit_loop:
 		}
 	}
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external_fstype != NULL)
 	{
 		result = invoke_mount_external(client_number, path, mount_path, fsopts->external_fstype, &fsopts_list);
 	}
 	else
 	{
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 		result = invoke_mount_internal(client_number, path, mount_path, fsopts->fstype, &fsopts_list);
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 	}
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	if (is_result_failure(result))
 	{
@@ -609,7 +635,7 @@ invoke_mount_error_1:
 	return result;
 }
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 static int invoke_unmount_external(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
@@ -659,7 +685,7 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 		return result_fail;
 	}
 }
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 static int invoke_unmount_internal(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
@@ -691,7 +717,16 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 
 	// TODO: check that it's original mounter who requests unmount or root?
 
+#if (defined OS_Linux)
 	result = umount(mnt_point);
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	result = unmount(mnt_point, 0);
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
+
 	if (result != 0)
 	{
 		saved_errno = errno;
@@ -747,18 +782,18 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 		goto invoke_unmount_common_error_1;
 	}
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external_fstype != NULL)
 	{
 		result = invoke_unmount_external(client_number, path, mnt_point, fsopts->external_fstype, error_code);
 	}
 	else
 	{
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 		result = invoke_unmount_internal(client_number, path, mnt_point, fsopts->fstype, error_code);
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 	}
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 	if (is_result_successful(result))
 	{

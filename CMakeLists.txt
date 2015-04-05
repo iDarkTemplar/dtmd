@@ -29,14 +29,13 @@ set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to in
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
 message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
 message(STATUS "To change config directory use -DCONFIG_DIR=path")
-message(STATUS "To change location directory of mtab file use -DMTAB_DIR=path")
 message(STATUS "To disable syslog use -DDISABLE_SYSLOG=1")
 
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
-add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	message(STATUS "To change location directory of mtab file use -DMTAB_DIR=path")
 	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT=1")
 endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 
@@ -53,17 +52,17 @@ endif (NOT DEFINED INSTALL_DIR_LIB)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 	set (OS_LINUX true)
-	add_definitions(-DOS=Linux)
+	add_definitions(-DOS_Linux)
+	add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
 	if (DEFINED DISABLE_EXT_MOUNT)
 		add_definitions(-DDISABLE_EXT_MOUNT)
 	endif (DEFINED DISABLE_EXT_MOUNT)
-
 endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
 	set (OS_FREEBSD true)
-	add_definitions(-DOS=FreeBSD)
+	add_definitions(-DOS_FreeBSD)
 endif (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
 
 if (OS_LINUX)
@@ -182,25 +181,25 @@ set ( QT_IMAGES
 	client/qt/images/working.png
 )
 
-if (OS_LINUX)
-	if (LINUX_NO_UDEV)
-		include(FindPkgConfig)
+if (OS_LINUX AND (NOT DEFINED LINUX_NO_UDEV))
+	set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
+	set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
+	set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
+	message(STATUS "Subsystem: udev")
+endif (OS_LINUX AND (NOT DEFINED LINUX_NO_UDEV))
 
-		pkg_check_modules(BLKID blkid REQUIRED)
+if (OS_FREESD OR (OS_LINUX AND (DEFINED LINUX_NO_UDEV)))
+	include(FindPkgConfig)
 
-		include_directories( ${BLKID_INCLUDE_DIRS} )
+	pkg_check_modules(BLKID blkid REQUIRED)
 
-		set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${UNIX_KERNEL_SOURCES} )
-		set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${UNIX_KERNEL_HEADERS} )
-		set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${UNIX_KERNEL_LIBS}    ${BLKID_LIBRARIES} )
-		message(STATUS "Linux Subsystem: kernel")
-	else (LINUX_NO_UDEV)
-		set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${LINUX_UDEV_SOURCES} )
-		set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${LINUX_UDEV_HEADERS} )
-		set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${LINUX_UDEV_LIBS} )
-		message(STATUS "Linux Subsystem: udev")
-	endif (LINUX_NO_UDEV)
-endif (OS_LINUX)
+	include_directories( ${BLKID_INCLUDE_DIRS} )
+
+	set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${UNIX_KERNEL_SOURCES} )
+	set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${UNIX_KERNEL_HEADERS} )
+	set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${UNIX_KERNEL_LIBS}    ${BLKID_LIBRARIES} )
+	message(STATUS "Subsystem: kernel")
+endif (OS_FREESD OR (OS_LINUX AND (DEFINED LINUX_NO_UDEV)))
 
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
 if (NOT DEFINED DISABLE_LIBVERSION)

@@ -46,6 +46,13 @@
 
 #define dtmd_daemon_lock "/var/run/dtmd.pid"
 
+#if (defined OS_FreeBSD)
+#include <sys/event.h>
+#include <sys/mount.h>
+#error use EVFILT_FS
+#error use VQ_MOUNT / VQ_UNMOUNT
+#endif /* (defined OS_FreeBSD) */
+
 static volatile unsigned char continue_working  = 1;
 static unsigned char check_config_only = 0;
 
@@ -581,7 +588,7 @@ int main(int argc, char **argv)
 		goto exit_4_pipe;
 	}
 
-#ifdef _POSIX_SYNCHRONIZED_IO
+#if (defined _POSIX_SYNCHRONIZED_IO) && (_POSIX_SYNCHRONIZED_IO > 0)
 	if (fdatasync(lockfd) != 0)
 #else
 	if (fsync(lockfd) != 0)
@@ -1055,7 +1062,9 @@ exit_remove_client:
 	}
 
 exit_8:
+#if (defined OS_Linux)
 	unlink(dtmd_internal_mtab_temporary);
+#endif /* (defined OS_Linux) */
 
 	free(pollfds);
 

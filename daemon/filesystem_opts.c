@@ -18,6 +18,10 @@
  *
  */
 
+#if (defined OS_FreeBSD)
+#define _WITH_DPRINTF
+#endif /* (defined OS_FreeBSD) */
+
 #include "daemon/filesystem_opts.h"
 
 #include "daemon/lists.h"
@@ -63,6 +67,7 @@ MS_SYNCHRONOUS
 	sync
  */
 
+#if (defined OS_Linux)
 static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 {
 	{ "dirsync",     MS_DIRSYNC,     1 },
@@ -85,6 +90,7 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 	{ "loud",        MS_SILENT,      0 },
 	{ "strictatime", MS_STRICTATIME, 1 },
 	{ "sync",        MS_SYNCHRONOUS, 1 },
+	{ "nosync",      MS_SYNCHRONOUS, 0 },
 	{ NULL,          0,              0 }
 };
 
@@ -205,9 +211,182 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ "ro",         0 },
 	{ "rw",         0 },
 	{ "sync",       0 },
+	{ "nosync",     0 },
 	{ "dirsync",    0 },
 	{ NULL,         0 }
 };
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
+{
+	{ "noatime",    MNT_NOATIME,     1 },
+	{ "atime",      MNT_NOATIME,     0 },
+	{ "noexec",     MNT_NOEXEC,      1 },
+	{ "exec",       MNT_NOEXEC,      0 },
+	{ "nosuid",     MNT_NOSUID,      1 },
+	{ "suid",       MNT_NOSUID,      0 },
+	{ "ro",         MNT_RDONLY,      1 },
+	{ "rw",         MNT_RDONLY,      0 },
+	{ "noclusterr", MNT_NOCLUSTERR,  1 },
+	{ "clusterr",   MNT_NOCLUSTERR,  0 },
+	{ "noclusterw", MNT_NOCLUSTERW,  1 },
+	{ "clusterw",   MNT_NOCLUSTERW,  0 },
+	{ "sync",       MNT_SYNCHRONOUS, 1 },
+	{ "nosync",     MNT_SYNCHRONOUS, 0 },
+	{ "async",      MNT_ASYNC,       1 },
+	{ "noasync",    MNT_ASYNC,       0 },
+#ifdef MNT_ACLS
+	{ "acls",       MNT_ACLS,        1 },
+	{ "noacls",     MNT_ACLS,        0 },
+#endif /* MNT_ACLS */
+#ifdef MNT_NODEV
+	{ "dev",        MNT_NODEV,       0 },
+	{ "nodev",      MNT_NODEV,       1 },
+#endif /* MNT_NODEV */
+	{ NULL,         0,               0 }
+};
+
+#if 0
+static const struct dtmd_mount_option vfat_allow[] =
+{
+	{ "flush",        0 },
+	{ "utf8=",        1 },
+	{ "shortname=",   1 },
+	{ "umask=",       1 },
+	{ "dmask=",       1 },
+	{ "fmask=",       1 },
+	{ "codepage=",    1 },
+	{ "iocharset=",   1 },
+	{ "showexec",     0 },
+	{ "blocksize=",   1 },
+	{ "allow_utime=", 1 },
+	{ "check=",       1 },
+	{ "conv=",        1 },
+	{ NULL,           0 }
+};
+
+static const struct dtmd_mount_option ntfs3g_allow[] =
+{
+	{ "umask=",        1 },
+	{ "dmask=",        1 },
+	{ "fmask=",        1 },
+	{ "iocharset=",    1 },
+	{ "utf8",          0 },
+	{ "windows_names", 0 },
+	{ "allow_other",   0 },
+	{ NULL,            0 }
+};
+
+static const struct dtmd_mount_option iso9660_allow[] =
+{
+	{ "norock",     0 },
+	{ "nojoliet",   0 },
+	{ "iocharset=", 1 },
+	{ "mode=",      1 },
+	{ "dmode=",     1 },
+	{ "utf8",       0 },
+	{ "block=",     1 },
+	{ "conv=",      1 },
+	{ NULL,         0 }
+};
+
+static const struct dtmd_mount_option udf_allow[] =
+{
+	{ "iocharset=", 1 },
+	{ "umask=",     1 },
+	{ "mode=",      1 },
+	{ "dmode=",     1 },
+	{ "undelete",   0 },
+	{ NULL,         0 }
+};
+#endif /* 0 */
+static const struct dtmd_filesystem_options filesystem_mount_options[] =
+{
+#if 0
+	{
+		NULL, /* NOT EXTERNAL MOUNT */
+		"vfat",
+		vfat_allow,
+		"uid=",
+		"gid=",
+		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
+	},
+	{
+		"ntfs-3g", /* EXTERNAL MOUNT */
+		"ntfs-3g",
+		ntfs3g_allow,
+		"uid=",
+		"gid=",
+		"rw,nodev,nosuid,allow_other,dmask=0077"
+	},
+	{
+		"ntfs-3g", /* EXTERNAL MOUNT */
+		"ntfs",
+		ntfs3g_allow,
+		"uid=",
+		"gid=",
+		"rw,nodev,nosuid,allow_other,dmask=0077"
+	},
+	{
+		NULL, /* NOT EXTERNAL MOUNT */
+		"iso9660",
+		iso9660_allow,
+		"uid=",
+		"gid=",
+		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
+	},
+	{
+		NULL, /* NOT EXTERNAL MOUNT */
+		"udf",
+		udf_allow,
+		"uid=",
+		"gid=",
+		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
+	},
+#endif /* 0 */
+	{
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL
+	}
+};
+
+static const struct dtmd_mount_option any_fs_allowed_list[] =
+{
+	{ "noatime",    0 },
+	{ "atime",      0 },
+	{ "noexec",     0 },
+	{ "exec",       0 },
+	{ "nosuid",     0 },
+	{ "suid",       0 },
+	{ "ro",         0 },
+	{ "rw",         0 },
+	{ "noclusterr", 0 },
+	{ "clusterr",   0 },
+	{ "noclusterw", 0 },
+	{ "clusterw",   0 },
+	{ "sync",       0 },
+	{ "nosync",     0 },
+	{ "async",      0 },
+	{ "noasync",    0 },
+#ifdef MNT_ACLS
+	{ "acls",       0 },
+	{ "noacls",     0 },
+#endif /* MNT_NOACLS */
+#ifdef MNT_NODEV
+	{ "dev",        0 },
+	{ "nodev",      0 },
+#endif /* MNT_NODEV */
+	{ NULL,         0 }
+};
+
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 {
@@ -902,11 +1081,11 @@ int invoke_list_supported_filesystems(int client_number)
 			break;
 		}
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#else /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 		if (fsopts->external_fstype == NULL)
 		{
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 			if (first != 0)
 			{
 				first = 0;
@@ -923,10 +1102,10 @@ int invoke_list_supported_filesystems(int client_number)
 			{
 				return result_client_error;
 			}
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#else /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 		}
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 		++fsopts;
 	}
@@ -948,11 +1127,11 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 	int first = 1;
 
 	fsopts = get_fsopts_for_fs(filesystem);
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 	if (fsopts == NULL)
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#else /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 	if ((fsopts == NULL) || (fsopts->external_fstype != NULL))
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 	{
 		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\", \"%s\")\n", filesystem, dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype)) < 0)
 		{
