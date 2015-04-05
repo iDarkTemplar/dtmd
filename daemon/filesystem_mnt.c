@@ -404,7 +404,7 @@ invoke_mount_exit_loop:
 
 			if (error_code != NULL)
 			{
-				*error_code = dtmd_error_code_no_such_device;
+				*error_code = dtmd_error_code_no_such_removable_device;
 			}
 
 			goto invoke_mount_error_1;
@@ -811,7 +811,7 @@ invoke_unmount_exit_loop:
 
 			if (error_code != NULL)
 			{
-				*error_code = dtmd_error_code_no_such_device;
+				*error_code = dtmd_error_code_no_such_removable_device;
 			}
 
 			return result_fail;

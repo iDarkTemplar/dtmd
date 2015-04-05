@@ -371,8 +371,8 @@ const char* dtmd_error_code_to_string(dtmd_error_code_t code)
 	case dtmd_error_code_generic_error:
 		return dtmd_string_error_code_generic_error;
 
-	case dtmd_error_code_no_such_device:
-		return dtmd_string_error_code_no_such_device;
+	case dtmd_error_code_no_such_removable_device:
+		return dtmd_string_error_code_no_such_removable_device;
 
 	case dtmd_error_code_fstype_not_recognized:
 		return dtmd_string_error_code_fstype_not_recognized;
@@ -406,9 +406,9 @@ dtmd_error_code_t dtmd_string_to_error_code(const char *string)
 		{
 			return dtmd_error_code_generic_error;
 		}
-		else if (strcmp(string, dtmd_string_error_code_no_such_device) == 0)
+		else if (strcmp(string, dtmd_string_error_code_no_such_removable_device) == 0)
 		{
-			return dtmd_error_code_no_such_device;
+			return dtmd_error_code_no_such_removable_device;
 		}
 		else if (strcmp(string, dtmd_string_error_code_fstype_not_recognized) == 0)
 		{

@@ -48,7 +48,7 @@ typedef enum dtmd_error_code
 {
 	dtmd_error_code_unknown                      = 0,
 	dtmd_error_code_generic_error                = 1,
-	dtmd_error_code_no_such_device               = 2,
+	dtmd_error_code_no_such_removable_device     = 2,
 	dtmd_error_code_fstype_not_recognized        = 3,
 	dtmd_error_code_unsupported_fstype           = 4,
 	dtmd_error_code_device_already_mounted       = 5,
@@ -73,7 +73,7 @@ typedef enum dtmd_error_code
 
 #define dtmd_string_error_code_unknown                      "unknown"
 #define dtmd_string_error_code_generic_error                "generic error"
-#define dtmd_string_error_code_no_such_device               "no such device"
+#define dtmd_string_error_code_no_such_removable_device     "no such removable device"
 #define dtmd_string_error_code_fstype_not_recognized        "fstype not recognized"
 #define dtmd_string_error_code_unsupported_fstype           "unsupported fstype"
 #define dtmd_string_error_code_device_already_mounted       "device already mounted"
