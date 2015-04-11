@@ -18,11 +18,25 @@ set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${DTMD_VERSION}")
 # MUST be after CPACK_* variables.
 include(CPack)
 
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	set (OS_LINUX true)
+	add_definitions(-DOS_Linux)
+endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+	set (OS_FREEBSD true)
+	add_definitions(-DOS_FreeBSD)
+endif (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+
 # installation directory configuration
 set(INST_PREFIX "/usr" CACHE PATH "Prefix prepended to install directories")
 set(DATA_PREFIX "${INST_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories")
 set(CONFIG_DIR "/etc" CACHE PATH "Config files directory")
-set(MTAB_DIR "/etc" CACHE PATH "mtab file location directory")
+
+if (OS_LINUX)
+	set(MTAB_DIR "/etc" CACHE PATH "mtab file location directory")
+endif (OS_LINUX)
+
 set(HEADERS_PREFIX "${INST_PREFIX}/include" CACHE PATH "Prefix prepended to headers install directories")
 set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 
@@ -34,10 +48,10 @@ message(STATUS "To disable syslog use -DDISABLE_SYSLOG=1")
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+if (OS_LINUX)
 	message(STATUS "To change location directory of mtab file use -DMTAB_DIR=path")
 	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT=1")
-endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+endif (OS_LINUX)
 
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
 if (NOT DEFINED INSTALL_DIR_LIB)
@@ -50,20 +64,13 @@ if (NOT DEFINED INSTALL_DIR_LIB)
 	endif (${CMAKE_SIZEOF_VOID_P} EQUAL 8)
 endif (NOT DEFINED INSTALL_DIR_LIB)
 
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-	set (OS_LINUX true)
-	add_definitions(-DOS_Linux)
+if (OS_LINUX)
 	add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
 	if (DEFINED DISABLE_EXT_MOUNT)
 		add_definitions(-DDISABLE_EXT_MOUNT)
 	endif (DEFINED DISABLE_EXT_MOUNT)
-endif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-
-if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
-	set (OS_FREEBSD true)
-	add_definitions(-DOS_FreeBSD)
-endif (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+endif (OS_LINUX)
 
 if (OS_LINUX)
 	message(STATUS "set LINUX_UDEV to force enable udev backend or disable it and instead use linux kernel")
