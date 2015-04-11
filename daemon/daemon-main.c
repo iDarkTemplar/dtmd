@@ -46,13 +46,6 @@
 
 #define dtmd_daemon_lock "/var/run/dtmd.pid"
 
-#if (defined OS_FreeBSD)
-#include <sys/event.h>
-#include <sys/mount.h>
-#error use EVFILT_FS
-#error use VQ_MOUNT / VQ_UNMOUNT
-#endif /* (defined OS_FreeBSD) */
-
 static volatile unsigned char continue_working  = 1;
 static unsigned char check_config_only = 0;
 
@@ -653,10 +646,10 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
+	mountfd = init_mount_monitoring();
 	if (mountfd < 0)
 	{
-		WRITE_LOG(LOG_ERR, "Error opening mounts file descriptor");
+		WRITE_LOG(LOG_ERR, "Error opening mount monitor descriptor");
 		result = -1;
 		goto exit_6;
 	}
@@ -736,7 +729,12 @@ int main(int argc, char **argv)
 		goto exit_7;
 	}
 
+#if (defined OS_Linux)
 	if (is_result_fatal_error(check_mount_changes()))
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	if (is_result_fatal_error(check_mount_changes(-1)))
+#endif /* (defined OS_FreeBSD) */
 	{
 		result = -1;
 		goto exit_7;
@@ -772,7 +770,12 @@ int main(int argc, char **argv)
 		pollfds[1].revents = 0;
 
 		pollfds[2].fd = mountfd;
+#if (defined OS_Linux)
 		pollfds[2].events = POLLERR;
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		pollfds[2].events = POLLIN;
+#endif /* (defined OS_FreeBSD) */
 		pollfds[2].revents = 0;
 
 		for (i = 0; i < clients_count; ++i)
@@ -951,15 +954,30 @@ int main(int argc, char **argv)
 			}
 		}
 
+#if (defined OS_Linux)
 		if ((pollfds[2].revents & POLLHUP) || (pollfds[2].revents & POLLNVAL))
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		if ((pollfds[2].revents & POLLHUP) || (pollfds[2].revents & POLLERR) || (pollfds[2].revents & POLLNVAL))
+#endif /* (defined OS_FreeBSD) */
 		{
-			WRITE_LOG(LOG_ERR, "Invalid poll result on device monitoring socket");
+			WRITE_LOG(LOG_ERR, "Invalid poll result on mounts monitoring descriptor");
 			result = -1;
 			goto exit_8;
 		}
+#if (defined OS_Linux)
 		else if (pollfds[2].revents & POLLERR)
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		else if (pollfds[2].revents & POLLIN)
+#endif /* (defined OS_FreeBSD) */
 		{
+#if (defined OS_Linux)
 			if (is_result_fatal_error(check_mount_changes()))
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+			if (is_result_fatal_error(check_mount_changes(mountfd)))
+#endif /* (defined OS_FreeBSD) */
 			{
 				result = -1;
 				goto exit_8;
@@ -1084,7 +1102,7 @@ exit_7:
 
 	remove_all_media();
 	remove_all_stateful_media();
-	close(mountfd);
+	close_mount_monitoring(mountfd);
 
 exit_6:
 	device_system_stop_monitoring(dtmd_dev_mon);

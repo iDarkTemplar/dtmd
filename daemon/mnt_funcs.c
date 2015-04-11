@@ -27,16 +27,75 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
-#include <mntent.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/stat.h>
 #include <stdio.h>
+
+#if (defined OS_Linux)
+#include <mntent.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define is_mounted_now 1
 #define is_mounted_last 2
+#endif /* (defined OS_Linux) */
 
+#if (defined OS_FreeBSD)
+#include <sys/types.h>
+#include <sys/event.h>
+#include <sys/time.h>
+#include <sys/mount.h>
+#endif /* (defined OS_FreeBSD) */
+
+#if (defined OS_Linux)
+int init_mount_monitoring(void)
+{
+	int mountfd;
+
+	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
+	if (mountfd < 0)
+	{
+		WRITE_LOG(LOG_ERR, "Error opening mounts file descriptor");
+	}
+
+	return mountfd;
+}
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+int init_mount_monitoring(void)
+{
+	int queuefd;
+	int rc;
+	struct kevent evt;
+
+	queuefd = kqueue();
+	if (queuefd < 0)
+	{
+		WRITE_LOG(LOG_ERR, "Error opening kqueue");
+		return queuefd;
+	}
+
+	EV_SET(&evt, 0, EVFILT_FS, EV_ADD, 0, 0, 0);
+	rc = kevent(queuefd, &evt, 1, NULL, 0, NULL);
+	if (rc < 0)
+	{
+		WRITE_LOG(LOG_ERR, "Error adding mount/unmount notification event to kqueue");
+		close(queuefd);
+		return rc;
+	}
+
+	return queuefd;
+}
+#endif /* (defined OS_FreeBSD) */
+
+int close_mount_monitoring(int monitorfd)
+{
+	return close(monitorfd);
+}
+
+#if (defined OS_Linux)
 int check_mount_changes(void)
 {
 	unsigned int i;
@@ -288,7 +347,49 @@ int point_mount_count(const char *path, int max)
 
 	return result;
 }
+#endif /* (defined OS_Linux) */
 
+#if (defined OS_FreeBSD)
+int check_mount_changes(int mountfd)
+{
+	int rc;
+	struct kevent evt;
+	struct timespec timeout;
+
+	if (mountfd >= 0)
+	{
+		timeout.tv_sec  = 0;
+		timeout.tv_nsec = 0;
+
+		rc = kevent(mountfd, NULL, 0, &evt, 1, &timeout);
+		if (rc == 0)
+		{
+			return result_fail;
+		}
+		else if (rc < 0)
+		{
+			return result_fatal_error;
+		}
+
+		if (!(evt.fflags & (VQ_MOUNT | VQ_UNMOUNT)))
+		{
+			return result_fail;
+		}
+	}
+
+	// TODO: implement
+	return 0;
+}
+
+int point_mount_count(const char *path, int max)
+{
+	// TODO: implement
+	return 0;
+}
+
+#endif /* (defined OS_FreeBSD) */
+
+#if (defined OS_Linux)
 int add_to_mtab(const char *path, const char *mount_point, const char *type, const char *mount_opts)
 {
 	int result;
@@ -395,3 +496,4 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 
 	return result_success;
 }
+#endif /* (defined OS_Linux) */

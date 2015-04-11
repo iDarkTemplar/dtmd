@@ -25,11 +25,24 @@
 extern "C" {
 #endif
 
+int init_mount_monitoring(void);
+int close_mount_monitoring(int monitorfd);
+
+#if (defined OS_Linux)
 int check_mount_changes(void);
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+/* pass -1 to check for changes even while there are no events */
+int check_mount_changes(int mountfd);
+#endif /* (defined OS_FreeBSD) */
+
 int point_mount_count(const char *path, int max);
 
+#if (defined OS_Linux)
 int add_to_mtab(const char *path, const char *mount_point, const char *type, const char *mount_opts);
 int remove_from_mtab(const char *path, const char *mount_point, const char *type);
+#endif /* (defined OS_Linux) */
 
 #ifdef __cplusplus
 }

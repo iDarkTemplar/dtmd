@@ -268,10 +268,17 @@ set (TEST_LIBS_commands dtmd-misc)
 set (TEST_SOURCES_decode_label daemon/label.c tests/decode_label_test.c tests/dt_tests.h)
 set (TEST_LIBS_decode_label )
 
-set (TEST_SOURCES_filesystem_opts daemon/filesystem_opts.c tests/filesystem_opts_test.c tests/dt_tests.h)
-set (TEST_LIBS_filesystem_opts dtmd-misc)
+if (OS_LINUX)
+	set (TEST_SOURCES_filesystem_opts daemon/filesystem_opts.c tests/filesystem_opts_test.c tests/dt_tests.h)
+	set (TEST_LIBS_filesystem_opts dtmd-misc)
+endif (OS_LINUX)
 
-set (ALL_TESTS commands decode_label filesystem_opts)
+set (ALL_TESTS commands decode_label)
+
+if (OS_LINUX)
+	set (ALL_TESTS ${ALL_TESTS} filesystem_opts)
+endif (OS_LINUX)
+
 foreach (CURRENT_TEST ${ALL_TESTS})
 	add_executable( ${CURRENT_TEST}_test ${TEST_SOURCES_${CURRENT_TEST}})
 	target_link_libraries( ${CURRENT_TEST}_test ${TEST_LIBS_${CURRENT_TEST}} )
