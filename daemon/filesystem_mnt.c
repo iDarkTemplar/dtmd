@@ -132,7 +132,8 @@ static dir_state_t get_dir_state(const char *dirname)
 	}
 }
 
-#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux)
+#if (!defined DISABLE_EXT_MOUNT)
 static int invoke_mount_external(int client_number,
 	const char *path,
 	const char *mount_path,
@@ -216,7 +217,7 @@ invoke_mount_external_error_2:
 invoke_mount_external_error_1:
 	return result;
 }
-#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
 
 static int invoke_mount_internal(int client_number,
 	const char *path,
@@ -262,16 +263,7 @@ static int invoke_mount_internal(int client_number,
 	mount_full_opts[string_full_len] = 0;
 	mount_opts[string_len] = 0;
 
-#if (defined OS_Linux)
 	result = mount(path, mount_path, fstype, mount_flags, mount_opts);
-#else /* (defined OS_Linux) */
-#if (defined OS_FreeBSD)
-	// TODO: mount in FreeBSD
-	//result = mount(path, mount_path, fstype, mount_flags, mount_opts);
-#else /* (defined OS_FreeBSD) */
-#error Unsupported OS
-#endif /* (defined OS_FreeBSD) */
-#endif /* (defined OS_Linux) */
 
 	if (result == 0)
 	{
@@ -301,6 +293,19 @@ invoke_mount_internal_error_2:
 invoke_mount_internal_error_1:
 	return result;
 }
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+static int invoke_mount_external(int client_number,
+	const char *path,
+	const char *mount_path,
+	const char *fstype,
+	dtmd_fsopts_list_t *fsopts_list)
+{
+	// TODO: implement
+	return result_fatal_error;
+}
+#endif /* (defined OS_FreeBSD) */
 
 static char* calculate_path(const char *path, const char *label, enum mount_by_value_enum *mount_type)
 {
@@ -602,18 +607,26 @@ invoke_mount_exit_loop:
 		}
 	}
 
-#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux)
+#if (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external_fstype != NULL)
 	{
 		result = invoke_mount_external(client_number, path, mount_path, fsopts->external_fstype, &fsopts_list);
 	}
 	else
 	{
-#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
 		result = invoke_mount_internal(client_number, path, mount_path, fsopts->fstype, &fsopts_list);
-#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (!defined DISABLE_EXT_MOUNT)
 	}
-#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	result = invoke_mount_external(client_number, path, mount_path, fsopts->fstype, &fsopts_list);
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 	if (is_result_failure(result))
 	{
@@ -635,7 +648,8 @@ invoke_mount_error_1:
 	return result;
 }
 
-#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux)
+#if (!defined DISABLE_EXT_MOUNT)
 static int invoke_unmount_external(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
@@ -685,7 +699,7 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 		return result_fail;
 	}
 }
-#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
 
 static int invoke_unmount_internal(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
@@ -717,15 +731,7 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 
 	// TODO: check that it's original mounter who requests unmount or root?
 
-#if (defined OS_Linux)
 	result = umount(mnt_point);
-#else /* (defined OS_Linux) */
-#if (defined OS_FreeBSD)
-	result = unmount(mnt_point, 0);
-#else /* (defined OS_FreeBSD) */
-#error Unsupported OS
-#endif /* (defined OS_FreeBSD) */
-#endif /* (defined OS_Linux) */
 
 	if (result != 0)
 	{
@@ -762,6 +768,15 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 
 	return result;
 }
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+static int invoke_unmount_external(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
+{
+	// TODO: implement
+	return result_fatal_error;
+}
+#endif /* (defined OS_FreeBSD) */
 
 static int invoke_unmount_common(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
@@ -782,18 +797,26 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 		goto invoke_unmount_common_error_1;
 	}
 
-#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (defined OS_Linux)
+#if (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external_fstype != NULL)
 	{
 		result = invoke_unmount_external(client_number, path, mnt_point, fsopts->external_fstype, error_code);
 	}
 	else
 	{
-#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
 		result = invoke_unmount_internal(client_number, path, mnt_point, fsopts->fstype, error_code);
-#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+#if (!defined DISABLE_EXT_MOUNT)
 	}
-#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	result = invoke_unmount_external(client_number, path, mnt_point, fsopts->fstype, error_code);
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 	if (is_result_successful(result))
 	{

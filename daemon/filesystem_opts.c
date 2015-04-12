@@ -359,9 +359,7 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ "noatime",    0 },
 	{ "atime",      0 },
 	{ "noexec",     0 },
-	{ "exec",       0 },
 	{ "nosuid",     0 },
-	{ "suid",       0 },
 	{ "ro",         0 },
 	{ "rw",         0 },
 	{ "noclusterr", 0 },
@@ -377,7 +375,6 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ "noacls",     0 },
 #endif /* MNT_NOACLS */
 #ifdef MNT_NODEV
-	{ "dev",        0 },
 	{ "nodev",      0 },
 #endif /* MNT_NODEV */
 	{ NULL,         0 }

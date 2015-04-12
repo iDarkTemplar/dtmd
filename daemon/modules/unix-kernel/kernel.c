@@ -23,7 +23,10 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
+#if (defined OS_Linux)
 #include <blkid.h>
+#endif /* (defined OS_Linux) */
+
 #include <stdlib.h>
 #include <dirent.h>
 #include <stdint.h>
@@ -32,17 +35,19 @@
 #include <sys/stat.h>
 #include <stdio.h>
 
-#if OS == Linux
+#if (defined OS_Linux)
 #define __USE_GNU
-#endif /* OS == Linux */
+#endif /* (defined OS_Linux) */
 
 #include <net/if.h>
-#include <linux/netlink.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <limits.h>
 #include <poll.h>
+
+#if (defined OS_Linux)
+#include <linux/netlink.h>
 
 #define block_devices_dir "/sys/block"
 #define block_mmc_devices_dir "/sys/bus/mmc/devices"
@@ -52,7 +57,6 @@
 #define filename_removable "removable"
 #define filename_device_type "device/type"
 #define removable_correct_value 1
-#define devices_dir "/dev"
 #define block_sys_dir "/sys"
 #define block_dir_name "block"
 
@@ -78,6 +82,9 @@
 #define NETLINK_GROUP_KERNEL 1
 
 #define IFLIST_REPLY_BUFFER 8192
+#endif /* (defined OS_Linux) */
+
+#define devices_dir "/dev"
 
 struct dtmd_device_enumeration
 {
@@ -140,6 +147,7 @@ typedef struct dtmd_info_private
 	uint32_t counter;
 } dtmd_info_private_t;
 
+#if (defined OS_Linux)
 static int read_int_from_file(const char *filename)
 {
 	FILE *file;
@@ -330,6 +338,7 @@ helper_blkid_read_data_from_partition_error_1:
 
 	return result_fatal_error;
 }
+#endif /* (defined OS_Linux) */
 
 static void device_system_free_device(dtmd_info_t *device)
 {
@@ -375,6 +384,7 @@ static void device_system_free_device(dtmd_info_t *device)
 	}
 }
 
+#if (defined OS_Linux)
 static int open_netlink_socket(void)
 {
 	struct sockaddr_nl local;
@@ -550,6 +560,7 @@ helper_read_device_error_2:
 helper_read_device_error_1:
 	return result;
 }
+#endif /* (defined OS_Linux) */
 
 static int device_system_init_add_stateless_device(dtmd_device_system_t *device_system, dtmd_info_t *device)
 {
@@ -639,6 +650,7 @@ device_system_init_add_stateful_device_error_1:
 	return result;
 }
 
+#if (defined OS_Linux)
 static int helper_read_device_partitions(dtmd_device_system_t *device_system, dtmd_device_internal_t *device, const char *device_name)
 {
 	blkid_probe pr;
@@ -1358,6 +1370,15 @@ device_system_init_fill_devices_error_mmc_1:
 device_system_init_fill_devices_error_usb_1:
 	return result;
 }
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
+{
+	// TODO: implement
+	return result_fatal_error;
+}
+#endif /* (defined OS_FreeBSD) */
 
 static void device_system_free_all_devices(dtmd_device_system_t *device_system)
 {
@@ -1429,6 +1450,7 @@ static void device_system_free_monitor_item(dtmd_monitor_item_t *item)
 	free(item);
 }
 
+#if (defined OS_Linux)
 static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dtmd_device_action_type_t *action)
 {
 	struct sockaddr_nl kernel;
@@ -1788,6 +1810,15 @@ device_system_monitor_receive_device_exit_2:
 device_system_monitor_receive_device_exit_1:
 	return result;
 }
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dtmd_device_action_type_t *action)
+{
+	// TODO: implement
+	return result_fatal_error;
+}
+#endif /* (defined OS_FreeBSD) */
 
 static int device_system_monitor_add_item(dtmd_device_monitor_t *monitor, dtmd_info_t *device, dtmd_device_action_type_t action)
 {
@@ -2292,7 +2323,13 @@ dtmd_device_system_t* device_system_init(void)
 	device_system->monitors               = NULL;
 	device_system->monitor_count          = 0;
 
+#if (defined OS_Linux)
 	device_system->events_fd = open_netlink_socket();
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	// TODO: implement monitoring
+	goto device_system_init_error_2;
+#endif /* (defined OS_FreeBSD) */
 	if (device_system->events_fd < 0)
 	{
 		goto device_system_init_error_2;
@@ -2411,6 +2448,7 @@ void device_system_deinit(dtmd_device_system_t *system)
 		write(system->worker_control_pipe[1], &data, sizeof(char));
 		pthread_join(system->worker_thread, NULL);
 
+		// TODO: make sure it is closed in correct way for FreeBSD
 		close(system->events_fd);
 
 		if (system->enumerations != NULL)

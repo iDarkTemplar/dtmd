@@ -42,6 +42,7 @@ set(CMAKE_INSTALL_PREFIX "${INST_PREFIX}" CACHE INTERNAL "Prefix prepended to in
 
 message(STATUS "To change installation directory use -DINST_PREFIX=path, for example, -DINST_PREFIX=/usr")
 message(STATUS "To change data installation directory use -DDATA_PREFIX=path")
+message(STATUS "To change library installation path use -DINSTALL_DIR_LIB=path")
 message(STATUS "To change config directory use -DCONFIG_DIR=path")
 message(STATUS "To disable syslog use -DDISABLE_SYSLOG=1")
 
@@ -218,16 +219,22 @@ if (OS_LINUX AND BUILD_BACKEND_UDEV)
 	message(STATUS "Subsystem: udev")
 endif (OS_LINUX AND BUILD_BACKEND_UDEV)
 
-if (OS_FREESD OR (OS_LINUX AND (NOT BUILD_BACKEND_UDEV)))
-	pkg_check_modules(BLKID blkid REQUIRED)
-
-	include_directories( ${BLKID_INCLUDE_DIRS} )
+if (OS_FREEBSD OR (OS_LINUX AND (NOT BUILD_BACKEND_UDEV)))
+	if (OS_LINUX AND (NOT BUILD_BACKEND_UDEV))
+		pkg_check_modules(BLKID blkid REQUIRED)
+		include_directories( ${BLKID_INCLUDE_DIRS} )
+	endif (OS_LINUX AND (NOT BUILD_BACKEND_UDEV))
 
 	set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${UNIX_KERNEL_SOURCES} )
 	set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${UNIX_KERNEL_HEADERS} )
-	set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${UNIX_KERNEL_LIBS}    ${BLKID_LIBRARIES} )
-	message(STATUS "Subsystem: kernel")
-endif (OS_FREESD OR (OS_LINUX AND (NOT BUILD_BACKEND_UDEV)))
+	set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${UNIX_KERNEL_LIBS} )
+
+	if (OS_LINUX AND (NOT BUILD_BACKEND_UDEV))
+		set ( DAEMON_LIBS ${DAEMON_LIBS} ${BLKID_LIBRARIES} )
+	endif (OS_LINUX AND (NOT BUILD_BACKEND_UDEV))
+
+	message(STATUS "Subsystem: native")
+endif (OS_FREEBSD OR (OS_LINUX AND (NOT BUILD_BACKEND_UDEV)))
 
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
 if (NOT DEFINED DISABLE_LIBVERSION)
