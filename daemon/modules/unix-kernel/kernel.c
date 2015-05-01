@@ -108,9 +108,17 @@
 
 #define DEVD_SKIP_DEVICE "pass"
 
-#define DEVD_CREATE_STRING  "!system=DEVFS subsystem=CDEV type=CREATE cdev="
-#define DEVD_DESTROY_STRING "!system=DEVFS subsystem=CDEV type=DESTROY cdev="
-#define DEVD_CHANGE_STRING  "!system=DEVFS subsystem=CDEV type=MEDIACHANGE cdev="
+#define DEVD_NOTIFICATION_STRING "!"
+#define DEVD_SYSTEM_STRING "system="
+#define DEVD_SUBSYSTEM_STRING "subsystem="
+#define DEVD_TYPE_STRING "type="
+#define DEVD_CDEV_STRING "cdev="
+
+#define DEVD_STRING_SYSTEM_DEVFS "DEVFS"
+#define DEVD_STRING_SUBSYSTEM_CDEV "CDEV"
+#define DEVD_STRING_TYPE_CREATE "CREATE"
+#define DEVD_STRING_TYPE_DESTROY "DESTROY"
+#define DEVD_STRING_TYPE_MEDIACHANGE "MEDIACHANGE"
 #endif /* (defined OS_FreeBSD) */
 
 #define devices_dir "/dev"
@@ -2087,9 +2095,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			goto device_system_monitor_receive_device_exit_1;
 		}
 
-		pos = 0;
-
-		while (pos < len)
+		for (pos = 0; pos < len; pos += strlen(&(reply[pos])) + 1)
 		{
 			if (strncmp(&(reply[pos]), NETLINK_STRING_ACTION, strlen(NETLINK_STRING_ACTION)) == 0)
 			{
@@ -2130,8 +2136,6 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			{
 				devpath = &(reply[pos + strlen(NETLINK_STRING_DEVPATH)]);
 			}
-
-			pos += strlen(&(reply[pos])) + 1;
 		}
 
 		if ((action_type == dtmd_device_action_unknown)
@@ -2458,7 +2462,7 @@ helper_get_device_type_exit_1:
 static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dtmd_device_action_type_t *action)
 {
 	char reply[IFLIST_REPLY_BUFFER];
-	ssize_t len;
+	ssize_t len, pos;
 	int result;
 
 	struct gmesh mesh;
@@ -2472,35 +2476,65 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	dtmd_info_t *device_info;
 	dtmd_device_action_type_t action_type = dtmd_device_action_unknown;
 	char *devname = NULL;
+	char *devd_system = NULL;
+	char *devd_subsystem = NULL;
 
 	len = recv(fd, reply, sizeof(reply) - 1, MSG_WAITALL);
 	if (len > 0)
 	{
 		reply[len] = 0;
 
-		// TODO: proper parsing of attributes
-		if ((len > 0) && (reply[len-1] == '\n'))
+		for (pos = 0; pos < len; ++pos)
 		{
-			reply[len-1] = 0;
+			if (isspace(reply[pos]))
+			{
+				reply[pos] = 0;
+			}
 		}
 
-		if (strncmp(reply, DEVD_CREATE_STRING, strlen(DEVD_CREATE_STRING)) == 0)
+		if (strncmp(reply, DEVD_NOTIFICATION_STRING, strlen(DEVD_NOTIFICATION_STRING)) != 0)
 		{
-			action_type = dtmd_device_action_add;
-			devname = &(reply[strlen(DEVD_CREATE_STRING)]);
+			result = result_fail;
+			goto device_system_monitor_receive_device_exit_1;
 		}
-		else if (strncmp(reply, DEVD_DESTROY_STRING, strlen(DEVD_DESTROY_STRING)) == 0)
+
+		for (pos = 1; pos < len; pos += strlen(&(reply[pos])) + 1)
 		{
-			action_type = dtmd_device_action_remove;
-			devname = &(reply[strlen(DEVD_DESTROY_STRING)]);
-		}
-		else if (strncmp(reply, DEVD_CHANGE_STRING, strlen(DEVD_CHANGE_STRING)) == 0)
-		{
-			action_type = dtmd_device_action_change;
-			devname = &(reply[strlen(DEVD_CHANGE_STRING)]);
+			if (strncmp(&(reply[pos]), DEVD_SYSTEM_STRING, strlen(DEVD_SYSTEM_STRING)) == 0)
+			{
+				devd_system = &(reply[pos + strlen(DEVD_SYSTEM_STRING)]);
+			}
+			else if (strncmp(&(reply[pos]), DEVD_SUBSYSTEM_STRING, strlen(DEVD_SUBSYSTEM_STRING)) == 0)
+			{
+				devd_subsystem = &(reply[pos + strlen(DEVD_SUBSYSTEM_STRING)]);
+			}
+			else if (strncmp(&(reply[pos]), DEVD_TYPE_STRING, strlen(DEVD_TYPE_STRING)) == 0)
+			{
+				if (strcmp(&(reply[pos + strlen(DEVD_TYPE_STRING)]), DEVD_STRING_TYPE_CREATE) == 0)
+				{
+					action_type = dtmd_device_action_add;
+				}
+				else if (strcmp(&(reply[pos + strlen(DEVD_TYPE_STRING)]), DEVD_STRING_TYPE_DESTROY) == 0)
+				{
+					action_type = dtmd_device_action_remove;
+				}
+				else if (strcmp(&(reply[pos + strlen(DEVD_TYPE_STRING)]), DEVD_STRING_TYPE_MEDIACHANGE) == 0)
+				{
+					action_type = dtmd_device_action_change;
+				}
+			}
+			else if (strncmp(&(reply[pos]), DEVD_CDEV_STRING, strlen(DEVD_CDEV_STRING)) == 0)
+			{
+				devname = &(reply[pos + strlen(DEVD_CDEV_STRING)]);
+			}
 		}
 
 		if ((action_type == dtmd_device_action_unknown)
+			|| (devd_system == NULL)
+			|| (devd_subsystem == NULL)
+			|| (devname == NULL)
+			|| (strcmp(devd_system, DEVD_STRING_SYSTEM_DEVFS) != 0)
+			|| (strcmp(devd_subsystem, DEVD_STRING_SUBSYSTEM_CDEV) != 0)
 			|| (strncmp(devname, DEVD_SKIP_DEVICE, strlen(DEVD_SKIP_DEVICE)) == 0)
 			|| (strchr(devname, '/') != NULL))
 		{
@@ -2645,7 +2679,9 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				// if action is change, tolerate the error
 				if (action_type != dtmd_device_action_change)
 				{
+					/* NOTE: disabled log here because it writes about devices which should be just ignored
 					WRITE_LOG_ARGS(LOG_WARNING, "Couldn't find device type of device \"%s\"", devname);
+					*/
 					result = result_fail;
 					goto device_system_monitor_receive_device_exit_4;
 				}
