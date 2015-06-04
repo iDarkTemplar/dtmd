@@ -23,6 +23,10 @@
 
 #include <sys/types.h>
 
+#if (defined OS_FreeBSD)
+#include <stdint.h>
+#endif /* (defined OS_FreeBSD) */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -92,6 +96,10 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 
 int invoke_list_supported_filesystems(int client_number);
 int invoke_list_supported_filesystem_options(int client_number, const char *filesystem);
+
+#if (defined OS_FreeBSD)
+char* convert_option_flags_to_string(uint64_t flags);
+#endif /* (defined OS_FreeBSD) */
 
 #ifdef __cplusplus
 }

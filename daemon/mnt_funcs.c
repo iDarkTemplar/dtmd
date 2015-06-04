@@ -27,6 +27,10 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
+#if (defined OS_FreeBSD)
+#include "daemon/filesystem_opts.h"
+#endif /* (defined OS_FreeBSD) */
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -36,9 +40,6 @@
 #include <mntent.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
-#define is_mounted_now 1
-#define is_mounted_last 2
 #endif /* (defined OS_Linux) */
 
 #if (defined OS_FreeBSD)
@@ -47,6 +48,9 @@
 #include <sys/time.h>
 #include <sys/mount.h>
 #endif /* (defined OS_FreeBSD) */
+
+#define is_mounted_now 1
+#define is_mounted_last 2
 
 #if (defined OS_Linux)
 int init_mount_monitoring(void)
@@ -355,6 +359,13 @@ int check_mount_changes(int mountfd)
 	int rc;
 	struct kevent evt;
 	struct timespec timeout;
+	unsigned int i;
+	unsigned int j;
+	int count, current;
+	struct statfs *mounts;
+	char *options;
+
+	// TODO: merge it with Linux version?
 
 	if (mountfd >= 0)
 	{
@@ -377,14 +388,224 @@ int check_mount_changes(int mountfd)
 		}
 	}
 
-	// TODO: implement
-	return 0;
+	count = getmntinfo(&mounts, MNT_WAIT);
+	if (count == 0)
+	{
+		WRITE_LOG(LOG_ERR, "Failed obtaining mount info");
+		return result_fatal_error;
+	}
+
+	// stateless devices
+	for (i = 0; i < media_count; ++i)
+	{
+		for (j = 0; j < media[i]->partitions_count; ++j)
+		{
+			media[i]->partition[j]->is_mounted <<= 1;
+		}
+	}
+
+	// stateful devices
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		stateful_media[i]->is_mounted <<= 1;
+	}
+
+	for (current = 0; current < count; ++current)
+	{
+		// stateless devices
+		for (i = 0; i < media_count; ++i)
+		{
+			for (j = 0; j < media[i]->partitions_count; ++j)
+			{
+				if (strcmp(media[i]->partition[j]->path, mounts[current].f_mntfromname) == 0)
+				{
+					// skip devices mounted multiple times
+					if (!(media[i]->partition[j]->is_mounted & is_mounted_now))
+					{
+						media[i]->partition[j]->is_mounted |= is_mounted_now;
+
+						if ((media[i]->partition[j]->mnt_point == NULL) || (strcmp(media[i]->partition[j]->mnt_point, mounts[current].f_mntonname) != 0))
+						{
+							if (media[i]->partition[j]->mnt_point != NULL)
+							{
+								free(media[i]->partition[j]->mnt_point);
+							}
+
+							media[i]->partition[j]->mnt_point = strdup(mounts[current].f_mntonname);
+							if (media[i]->partition[j]->mnt_point == NULL)
+							{
+								WRITE_LOG(LOG_ERR, "Memory allocation failure");
+								goto check_mount_changes_error_1;
+							}
+						}
+
+						options = convert_option_flags_to_string(mounts[current].f_flags);
+						if (options == NULL)
+						{
+							goto check_mount_changes_error_1;
+						}
+
+						if (media[i]->partition[j]->mnt_opts != NULL)
+						{
+							free(media[i]->partition[j]->mnt_opts);
+						}
+
+						media[i]->partition[j]->mnt_opts = options;
+					}
+
+					goto check_mount_changes_break_cycles;
+				}
+			}
+		}
+
+		// stateful devices
+		for (i = 0; i < stateful_media_count; ++i)
+		{
+			if (strcmp(stateful_media[i]->path, mounts[current].f_mntfromname) == 0)
+			{
+				// skip devices mounted multiple times
+				if (!(stateful_media[i]->is_mounted & is_mounted_now))
+				{
+					stateful_media[i]->is_mounted |= is_mounted_now;
+
+					if ((stateful_media[i]->mnt_point == NULL) || (strcmp(stateful_media[i]->mnt_point, mounts[current].f_mntonname) != 0))
+					{
+						if (stateful_media[i]->mnt_point != NULL)
+						{
+							free(stateful_media[i]->mnt_point);
+						}
+
+						stateful_media[i]->mnt_point = strdup(mounts[current].f_mntonname);
+						if (stateful_media[i]->mnt_point == NULL)
+						{
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							goto check_mount_changes_error_1;
+						}
+					}
+
+					options = convert_option_flags_to_string(mounts[current].f_flags);
+					if (options == NULL)
+					{
+						goto check_mount_changes_error_1;
+					}
+
+					if (stateful_media[i]->mnt_opts != NULL)
+					{
+						free(stateful_media[i]->mnt_opts);
+					}
+
+					stateful_media[i]->mnt_opts = options;
+				}
+
+				goto check_mount_changes_break_cycles;
+			}
+		}
+
+	check_mount_changes_break_cycles:
+		;
+	}
+
+	// stateless devices
+	for (i = 0; i < media_count; ++i)
+	{
+		for (j = 0; j < media[i]->partitions_count; ++j)
+		{
+			if (media[i]->partition[j]->is_mounted & is_mounted_now)
+			{
+				if (!(media[i]->partition[j]->is_mounted & is_mounted_last))
+				{
+					notify_mount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point, media[i]->partition[j]->mnt_opts);
+					media[i]->partition[j]->is_mounted = is_mounted_now;
+				}
+			}
+			else
+			{
+				if (media[i]->partition[j]->is_mounted & is_mounted_last)
+				{
+					notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
+					media[i]->partition[j]->is_mounted = 0;
+
+					if (media[i]->partition[j]->mnt_point != NULL)
+					{
+						free(media[i]->partition[j]->mnt_point);
+						media[i]->partition[j]->mnt_point = NULL;
+					}
+
+					if (media[i]->partition[j]->mnt_opts != NULL)
+					{
+						free(media[i]->partition[j]->mnt_opts);
+						media[i]->partition[j]->mnt_opts = NULL;
+					}
+				}
+			}
+		}
+	}
+
+	// stateful devices
+	for (i = 0; i < stateful_media_count; ++i)
+	{
+		if (stateful_media[i]->is_mounted & is_mounted_now)
+		{
+			if (!(stateful_media[i]->is_mounted & is_mounted_last))
+			{
+				notify_mount(stateful_media[i]->path, stateful_media[i]->mnt_point, stateful_media[i]->mnt_opts);
+				stateful_media[i]->is_mounted = is_mounted_now;
+			}
+		}
+		else
+		{
+			if (stateful_media[i]->is_mounted & is_mounted_last)
+			{
+				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);
+				stateful_media[i]->is_mounted = 0;
+
+				if (stateful_media[i]->mnt_point != NULL)
+				{
+					free(stateful_media[i]->mnt_point);
+					stateful_media[i]->mnt_point = NULL;
+				}
+
+				if (stateful_media[i]->mnt_opts != NULL)
+				{
+					free(stateful_media[i]->mnt_opts);
+					stateful_media[i]->mnt_opts = NULL;
+				}
+			}
+		}
+	}
+
+	return result_success;
+
+check_mount_changes_error_1:
+	return result_fatal_error;
 }
 
 int point_mount_count(const char *path, int max)
 {
-	// TODO: implement
-	return 0;
+	int result = 0;
+	int count, i;
+	struct statfs *mounts;
+
+	count = getmntinfo(&mounts, MNT_WAIT);
+	if (count == 0)
+	{
+		WRITE_LOG(LOG_ERR, "Failed obtaining mount info");
+		return -1;
+	}
+
+	for (i = 0; i < count; ++i)
+	{
+		if (strcmp(mounts[i].f_mntonname, path) == 0)
+		{
+			++result;
+			if ((max > 0) && (result == max))
+			{
+				break;
+			}
+		}
+	}
+
+	return result;
 }
 
 #endif /* (defined OS_FreeBSD) */

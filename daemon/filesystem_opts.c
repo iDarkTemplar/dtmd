@@ -219,14 +219,14 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 #if (defined OS_FreeBSD)
 static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 {
-	{ "noatime",    MNT_NOATIME,     1 },
-	{ "atime",      MNT_NOATIME,     0 },
+	{ "ro",         MNT_RDONLY,      1 },
+	{ "rw",         MNT_RDONLY,      0 },
 	{ "noexec",     MNT_NOEXEC,      1 },
 	{ "exec",       MNT_NOEXEC,      0 },
 	{ "nosuid",     MNT_NOSUID,      1 },
 	{ "suid",       MNT_NOSUID,      0 },
-	{ "ro",         MNT_RDONLY,      1 },
-	{ "rw",         MNT_RDONLY,      0 },
+	{ "noatime",    MNT_NOATIME,     1 },
+	{ "atime",      MNT_NOATIME,     0 },
 	{ "noclusterr", MNT_NOCLUSTERR,  1 },
 	{ "clusterr",   MNT_NOCLUSTERR,  0 },
 	{ "noclusterw", MNT_NOCLUSTERW,  1 },
@@ -1176,3 +1176,65 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 
 	return result_success;
 }
+
+#if (defined OS_FreeBSD)
+char* convert_option_flags_to_string(uint64_t flags)
+{
+	int length = 0;
+	int count = 0;
+	char *result;
+	const struct dtmd_string_to_mount_flag *mntflagslist;
+
+	// TODO: a loop or a helper function?
+
+	mntflagslist = string_to_mount_flag_list;
+	while (mntflagslist->option != NULL)
+	{
+		if (((mntflagslist->enabled) && ((flags & mntflagslist->flag) == mntflagslist->flag))
+			|| ((!(mntflagslist->enabled)) && ((flags & mntflagslist->flag) == 0)))
+		{
+			length += strlen(mntflagslist->option);
+			if (count > 0)
+			{
+				++length;
+			}
+
+			++count;
+		}
+
+		++mntflagslist;
+	}
+
+	result = (char*) malloc(length + 1);
+	if (result == NULL)
+	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
+		return NULL;
+	}
+
+	length = 0;
+	mntflagslist = string_to_mount_flag_list;
+	while (mntflagslist->option != NULL)
+	{
+		if (((mntflagslist->enabled) && ((flags & mntflagslist->flag) == mntflagslist->flag))
+			|| ((!(mntflagslist->enabled)) && ((flags & mntflagslist->flag) == 0)))
+		{
+			strcpy(&(result[length]), mntflagslist->option);
+			length += strlen(mntflagslist->option);
+
+			if (count > 0)
+			{
+				strcpy(&(result[length]), ",");
+				++length;
+			}
+
+			++count;
+		}
+
+		++mntflagslist;
+	}
+
+	return result;
+}
+
+#endif /* (defined OS_FreeBSD) */
