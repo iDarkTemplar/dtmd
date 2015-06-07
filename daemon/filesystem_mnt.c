@@ -57,8 +57,11 @@ typedef enum dir_state
 
 #if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 static const char * const mount_ext_cmd = "/bin/mount";
-static const char * const unmount_ext_cmd = "/bin/umount";
 #endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+
+#if ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD)
+static const char * const unmount_ext_cmd = "/bin/umount";
+#endif /* ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD) */
 
 #if (defined OS_Linux)
 static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
@@ -299,11 +302,84 @@ invoke_mount_internal_error_1:
 static int invoke_mount_external(int client_number,
 	const char *path,
 	const char *mount_path,
-	const char *fstype,
+	const char *mount_cmd_exe,
 	dtmd_fsopts_list_t *fsopts_list)
 {
-	// TODO: implement
-	return result_fatal_error;
+
+	int result;
+
+	int total_len;
+	int mount_flags_start;
+	char *mount_cmd;
+	unsigned int string_full_len;
+
+	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0);
+	if (is_result_failure(result))
+	{
+		goto invoke_mount_external_error_1;
+	}
+
+	// calculate total length
+	mount_flags_start = strlen(mount_cmd_exe) + 1 + strlen(path) + 2 + strlen(mount_path) + 1;
+
+	if (string_full_len > 0)
+	{
+		mount_flags_start += strlen(" -o ");
+	}
+
+	total_len = mount_flags_start + string_full_len;
+
+	mount_cmd = (char*) malloc(total_len + 1);
+	if (mount_cmd == NULL)
+	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
+		result = result_fatal_error;
+		goto invoke_mount_external_error_1;
+	}
+
+	strcpy(mount_cmd, mount_cmd_exe);
+	strcat(mount_cmd, " ");
+	strcat(mount_cmd, path);
+	strcat(mount_cmd, " \"");
+	strcat(mount_cmd, mount_path);
+	strcat(mount_cmd, "\"");
+
+	// create flags and string
+	if (string_full_len > 0)
+	{
+		strcat(mount_cmd, " -o ");
+
+		result = fsopts_generate_string(fsopts_list, NULL, &(mount_cmd[mount_flags_start]), string_full_len);
+		if (is_result_failure(result))
+		{
+			goto invoke_mount_external_error_2;
+		}
+	}
+
+	mount_cmd[total_len] = 0;
+
+	result = system(mount_cmd);
+
+	free(mount_cmd);
+
+	switch (result)
+	{
+	case 16: /* problems writing or locking /etc/mtab */
+		WRITE_LOG(LOG_WARNING, "Failed to modify /etc/mtab");
+		/* NOTE: fallthrough */
+	case 0:  /* success */
+		WRITE_LOG_ARGS(LOG_INFO, "Mounted device '%s' to path '%s'", path, mount_path);
+		return result_success;
+	default:
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s' to path '%s' using external mount: error, code %d", path, mount_path, result);
+		return result_fail;
+	}
+
+invoke_mount_external_error_2:
+	free(mount_cmd);
+
+invoke_mount_external_error_1:
+	return result;
 }
 #endif /* (defined OS_FreeBSD) */
 
@@ -622,7 +698,7 @@ invoke_mount_exit_loop:
 #endif /* (!defined DISABLE_EXT_MOUNT) */
 #else /* (defined OS_Linux) */
 #if (defined OS_FreeBSD)
-	result = invoke_mount_external(client_number, path, mount_path, fsopts->fstype, &fsopts_list);
+	result = invoke_mount_external(client_number, path, mount_path, fsopts->mount_cmd, &fsopts_list);
 #else /* (defined OS_FreeBSD) */
 #error Unsupported OS
 #endif /* (defined OS_FreeBSD) */
@@ -648,8 +724,7 @@ invoke_mount_error_1:
 	return result;
 }
 
-#if (defined OS_Linux)
-#if (!defined DISABLE_EXT_MOUNT)
+#if ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD)
 static int invoke_unmount_external(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
@@ -699,8 +774,9 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 		return result_fail;
 	}
 }
-#endif /* (!defined DISABLE_EXT_MOUNT) */
+#endif /* ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD) */
 
+#if (defined OS_Linux)
 static int invoke_unmount_internal(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
@@ -769,14 +845,6 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 	return result;
 }
 #endif /* (defined OS_Linux) */
-
-#if (defined OS_FreeBSD)
-static int invoke_unmount_external(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
-{
-	// TODO: implement
-	return result_fatal_error;
-}
-#endif /* (defined OS_FreeBSD) */
 
 static int invoke_unmount_common(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {

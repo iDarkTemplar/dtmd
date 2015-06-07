@@ -33,17 +33,37 @@ extern "C" {
 
 struct dtmd_mount_option
 {
-	const char * option;
+	const char * const option;
 	unsigned char has_param;
+#if (defined OS_FreeBSD)
+	const char * const transformation;
+#endif /* (defined OS_FreeBSD) */
 };
 
 struct dtmd_filesystem_options
 {
+#if (defined OS_Linux)
 	const char * const external_fstype;
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+	const char * const mount_cmd;
+#endif /* (defined OS_FreeBSD) */
+
 	const char * const fstype;
 	const struct dtmd_mount_option * const options;
 	const char * const option_uid;
+
+#if (defined OS_FreeBSD)
+	const char * const option_uid_transformation;
+#endif /* (defined OS_FreeBSD) */
+
 	const char * const option_gid;
+
+#if (defined OS_FreeBSD)
+	const char * const option_gid_transformation;
+#endif /* (defined OS_FreeBSD) */
+
 	const char * const defaults;
 };
 
@@ -59,15 +79,23 @@ struct dtmd_fsopts_list_item
 	struct dtmd_string_to_mount_flag option;
 	unsigned int option_full_len;
 	unsigned int option_len;
+
+#if (defined OS_FreeBSD)
+	const char *transformation_string;
+#endif /* (defined OS_FreeBSD) */
 };
 
 struct dtmd_fsopts_list_id
 {
-	const char *id_option;
+	const char * id_option;
 	unsigned int id_option_len;
 
 	char *id_option_value;
 	unsigned int id_option_value_len;
+
+#if (defined OS_FreeBSD)
+	unsigned char transformed;
+#endif /* (defined OS_FreeBSD) */
 };
 
 typedef struct dtmd_fsopts_list
@@ -88,11 +116,15 @@ void free_options_list(dtmd_fsopts_list_t *fsopts_list);
 int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	unsigned int *options_full_string_length,
 	char *options_full_string_buffer,
-	unsigned int options_full_string_buffer_size,
+	unsigned int options_full_string_buffer_size
+#if (defined OS_Linux)
+	,
 	unsigned int *options_string_length,
 	char *options_string_buffer,
 	unsigned int options_string_buffer_size,
-	unsigned long *mount_flags);
+	unsigned long *mount_flags
+#endif /* (defined OS_Linux) */
+	);
 
 int invoke_list_supported_filesystems(int client_number);
 int invoke_list_supported_filesystem_options(int client_number, const char *filesystem);
