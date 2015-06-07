@@ -164,7 +164,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,dmask=0077"
+		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077"
 	},
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
@@ -172,7 +172,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,dmask=0077"
+		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077"
 	},
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
@@ -296,6 +296,7 @@ static const struct dtmd_mount_option udf_allow[] =
 static const struct dtmd_filesystem_options filesystem_mount_options[] =
 {
 	{
+		"msdosfs",
 		"mount_msdosfs",
 		"fat32",
 		vfat_allow,
@@ -303,9 +304,14 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		"-u ",
 		"gid=",
 		"-g ",
-		"rw,nodev,nosuid,dmask=755"
+		"rw"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",dmask=755"
 	},
 	{
+		"ntfs",
 		"ntfs-3g",
 		"ntfs",
 		ntfs3g_allow,
@@ -313,11 +319,16 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		NULL,
 		"gid=",
 		NULL,
-		"rw,nodev,nosuid,allow_other,dmask=0077"
+		"rw"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,allow_other,windows_names,dmask=0077"
 	},
 // TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
 #if 0
 	{
+		"cd9660",
 		"mount_cd9660",
 		"cd9660",
 		iso9660_allow,
@@ -325,9 +336,14 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		NULL,
 		NULL,
 		NULL,
-		"ro,nodev,nosuid,iocharset=utf8"
+		"ro"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,iocharset=utf8"
 	},
 	{
+		"udf",
 		"mount_udf",
 		"udf",
 		udf_allow,
@@ -335,7 +351,11 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		NULL,
 		NULL,
 		NULL,
-		"ro,nodev,nosuid,iocharset=utf8"
+		"ro"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,iocharset=utf8"
 	},
 #endif /* 0 */
 	{
@@ -823,6 +843,29 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 
 						++string_len_full;
 					}
+#if (defined OS_FreeBSD)
+					else
+					{
+						// TODO: use strncat for copying instead of manual checks and memcpy?
+						if (options_full_string_buffer != NULL)
+						{
+							if (string_len_full + strlen("-o ") <= options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									"-o ",
+									strlen("-o "));
+							}
+							else if (string_len_full < options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									"-o ",
+									options_full_string_buffer_size - string_len_full);
+							}
+						}
+
+						string_len_full += strlen("-o ");
+					}
+#endif /* (defined OS_FreeBSD) */
 
 					if (options_full_string_buffer != NULL)
 					{

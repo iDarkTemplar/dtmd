@@ -56,11 +56,11 @@ typedef enum dir_state
 } dir_state_t;
 
 #if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
-static const char * const mount_ext_cmd = "/bin/mount";
+static const char * const mount_ext_cmd = "mount";
 #endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
 
 #if ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD)
-static const char * const unmount_ext_cmd = "/bin/umount";
+static const char * const unmount_ext_cmd = "umount";
 #endif /* ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD) */
 
 #if (defined OS_Linux)
@@ -89,8 +89,8 @@ static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 	struct xucred credentials;
 	unsigned int xucred_length = sizeof(struct xucred);
 
-	if ((getsockopt(socket_fd, SOL_SOCKET, LOCAL_PEERCRED, &credentials, &xucred_length) != 0)
-		|| (xucred_length != sizeof(struct xucred))
+	if (((getsockopt(socket_fd, 0, LOCAL_PEERCRED, &credentials, &xucred_length)) != 0)
+		 || (xucred_length != sizeof(struct xucred))
 		|| (credentials.cr_version != XUCRED_VERSION))
 	{
 		WRITE_LOG(LOG_ERR, "Failed obtaining credentials of client");
@@ -324,7 +324,7 @@ static int invoke_mount_external(int client_number,
 
 	if (string_full_len > 0)
 	{
-		mount_flags_start += strlen(" -o ");
+		mount_flags_start += strlen(" ");
 	}
 
 	total_len = mount_flags_start + string_full_len;
@@ -338,25 +338,26 @@ static int invoke_mount_external(int client_number,
 	}
 
 	strcpy(mount_cmd, mount_cmd_exe);
+
+	// create flags and string
+	if (string_full_len > 0)
+	{
+		strcat(mount_cmd, " ");
+
+		result = fsopts_generate_string(fsopts_list, NULL, &(mount_cmd[strlen(mount_cmd_exe) + strlen(" ")]), string_full_len);
+		if (is_result_failure(result))
+		{
+			goto invoke_mount_external_error_2;
+		}
+
+		mount_cmd[strlen(mount_cmd_exe) + strlen(" ") + string_full_len] = 0;
+	}
+
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, path);
 	strcat(mount_cmd, " \"");
 	strcat(mount_cmd, mount_path);
 	strcat(mount_cmd, "\"");
-
-	// create flags and string
-	if (string_full_len > 0)
-	{
-		strcat(mount_cmd, " -o ");
-
-		result = fsopts_generate_string(fsopts_list, NULL, &(mount_cmd[mount_flags_start]), string_full_len);
-		if (is_result_failure(result))
-		{
-			goto invoke_mount_external_error_2;
-		}
-	}
-
-	mount_cmd[total_len] = 0;
 
 	result = system(mount_cmd);
 
@@ -880,7 +881,7 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 #endif /* (!defined DISABLE_EXT_MOUNT) */
 #else /* (defined OS_Linux) */
 #if (defined OS_FreeBSD)
-	result = invoke_unmount_external(client_number, path, mnt_point, fsopts->fstype, error_code);
+	result = invoke_unmount_external(client_number, path, mnt_point, fsopts->external_fstype, error_code);
 #else /* (defined OS_FreeBSD) */
 #error Unsupported OS
 #endif /* (defined OS_FreeBSD) */

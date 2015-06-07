@@ -42,9 +42,7 @@ struct dtmd_mount_option
 
 struct dtmd_filesystem_options
 {
-#if (defined OS_Linux)
 	const char * const external_fstype;
-#endif /* (defined OS_Linux) */
 
 #if (defined OS_FreeBSD)
 	const char * const mount_cmd;
