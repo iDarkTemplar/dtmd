@@ -40,6 +40,11 @@ struct dtmd_mount_option
 #endif /* (defined OS_FreeBSD) */
 };
 
+struct dtmd_mount_option_list
+{
+	const struct dtmd_mount_option * const item;
+};
+
 struct dtmd_filesystem_options
 {
 	const char * const external_fstype;
@@ -49,7 +54,7 @@ struct dtmd_filesystem_options
 #endif /* (defined OS_FreeBSD) */
 
 	const char * const fstype;
-	const struct dtmd_mount_option * const options;
+	const struct dtmd_mount_option_list * const options;
 	const char * const option_uid;
 
 #if (defined OS_FreeBSD)

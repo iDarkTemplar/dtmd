@@ -94,6 +94,23 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 	{ NULL,          0,              0 }
 };
 
+static const struct dtmd_mount_option any_fs_allowed_list[] =
+{
+	{ "exec",       0 },
+	{ "noexec",     0 },
+	{ "nodev",      0 },
+	{ "nosuid",     0 },
+	{ "atime",      0 },
+	{ "noatime",    0 },
+	{ "nodiratime", 0 },
+	{ "ro",         0 },
+	{ "rw",         0 },
+	{ "sync",       0 },
+	{ "nosync",     0 },
+	{ "dirsync",    0 },
+	{ NULL,         0 }
+};
+
 static const struct dtmd_mount_option vfat_allow[] =
 {
 	{ "flush",        0 },
@@ -112,8 +129,23 @@ static const struct dtmd_mount_option vfat_allow[] =
 	{ NULL,           0 }
 };
 
+static const struct dtmd_mount_option_list vfat_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ vfat_allow          },
+	{ NULL                }
+};
+
+// TODO: mandatory option norecover
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
+	{ "ro",            0 },
+	{ "rw",            0 },
+	{ "noatime",       0 },
+	{ "atime",         0 },
+	{ "relatime",      0 },
+	{ "nodev",         0 }, // TODO: make it mandatory
+	{ "nosuid",        0 }, // TODO: make it mandatory
 	{ "umask=",        1 },
 	{ "dmask=",        1 },
 	{ "fmask=",        1 },
@@ -122,6 +154,12 @@ static const struct dtmd_mount_option ntfs3g_allow[] =
 	{ "windows_names", 0 },
 	{ "allow_other",   0 },
 	{ NULL,            0 }
+};
+
+static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
+{
+	{ ntfs3g_allow },
+	{ NULL         }
 };
 
 static const struct dtmd_mount_option iso9660_allow[] =
@@ -137,6 +175,13 @@ static const struct dtmd_mount_option iso9660_allow[] =
 	{ NULL,         0 }
 };
 
+static const struct dtmd_mount_option_list iso9660_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ iso9660_allow       },
+	{ NULL                }
+};
+
 static const struct dtmd_mount_option udf_allow[] =
 {
 	{ "iocharset=", 1 },
@@ -147,13 +192,19 @@ static const struct dtmd_mount_option udf_allow[] =
 	{ NULL,         0 }
 };
 
-// TODO: ntfs-3g does NOT support all flags for other file systems. Discern them
+static const struct dtmd_mount_option_list udf_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ udf_allow           },
+	{ NULL                }
+};
+
 static const struct dtmd_filesystem_options filesystem_mount_options[] =
 {
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
 		"vfat",
-		vfat_allow,
+		vfat_allow_list,
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
@@ -161,7 +212,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
 		"ntfs-3g",
-		ntfs3g_allow,
+		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077"
@@ -169,7 +220,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
 		"ntfs",
-		ntfs3g_allow,
+		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077"
@@ -177,7 +228,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
 		"iso9660",
-		iso9660_allow,
+		iso9660_allow_list,
 		"uid=",
 		"gid=",
 		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
@@ -185,7 +236,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
 		"udf",
-		udf_allow,
+		udf_allow_list,
 		"uid=",
 		"gid=",
 		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
@@ -200,22 +251,6 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	}
 };
 
-static const struct dtmd_mount_option any_fs_allowed_list[] =
-{
-	{ "exec",       0 },
-	{ "noexec",     0 },
-	{ "nodev",      0 },
-	{ "nosuid",     0 },
-	{ "atime",      0 },
-	{ "noatime",    0 },
-	{ "nodiratime", 0 },
-	{ "ro",         0 },
-	{ "rw",         0 },
-	{ "sync",       0 },
-	{ "nosync",     0 },
-	{ "dirsync",    0 },
-	{ NULL,         0 }
-};
 #else /* (defined OS_Linux) */
 #if (defined OS_FreeBSD)
 static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
@@ -247,129 +282,6 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 	{ NULL,         0,               0 }
 };
 
-static const struct dtmd_mount_option vfat_allow[] =
-{
-	{ "large",      0, NULL  },
-	{ "longnames",  0, NULL  },
-	{ "shortnames", 0, NULL  },
-	{ "nowin95",    0, NULL  },
-	{ "dmask=",     1, "-M " },
-	{ "fmask=",     1, "-m " },
-	{ "codepage=",  1, "-D " },
-	{ "iocharset=", 1, "-L " },
-	{ NULL,         0, NULL  }
-};
-
-static const struct dtmd_mount_option ntfs3g_allow[] =
-{
-	{ "umask=",        1, NULL },
-	{ "dmask=",        1, NULL },
-	{ "fmask=",        1, NULL },
-	{ "iocharset=",    1, NULL },
-	{ "utf8",          0, NULL },
-	{ "windows_names", 0, NULL },
-	{ "allow_other",   0, NULL },
-	{ NULL,            0, NULL }
-};
-
-// TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
-#if 0
-static const struct dtmd_mount_option iso9660_allow[] =
-{
-	{ "extatt",       0, NULL  },
-	{ "gens",         0, NULL  },
-	{ "nojoliet",     0, NULL  },
-	{ "norrip",       0, NULL  },
-	{ "brokenjoliet", 0, NULL  },
-	{ "iocharset=",   1, "-C " },
-	{ NULL,           0, NULL  }
-};
-
-static const struct dtmd_mount_option udf_allow[] =
-{
-	{ "iocharset=",   1, "-C " },
-	{ NULL,           0, NULL  }
-};
-#endif /* 0 */
-
-// TODO: ntfs-3g does NOT support all flags for other file systems. Discern them
-static const struct dtmd_filesystem_options filesystem_mount_options[] =
-{
-	{
-		"msdosfs",
-		"mount_msdosfs",
-		"fat32",
-		vfat_allow,
-		"uid=",
-		"-u ",
-		"gid=",
-		"-g ",
-		"rw"
-#ifdef MNT_NODEV
-		",nodev"
-#endif /* MNT_NODEV */
-		",dmask=755"
-	},
-	{
-		"ntfs",
-		"ntfs-3g",
-		"ntfs",
-		ntfs3g_allow,
-		"uid=",
-		NULL,
-		"gid=",
-		NULL,
-		"rw"
-#ifdef MNT_NODEV
-		",nodev"
-#endif /* MNT_NODEV */
-		",nosuid,allow_other,windows_names,dmask=0077"
-	},
-// TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
-#if 0
-	{
-		"cd9660",
-		"mount_cd9660",
-		"cd9660",
-		iso9660_allow,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		"ro"
-#ifdef MNT_NODEV
-		",nodev"
-#endif /* MNT_NODEV */
-		",nosuid,iocharset=utf8"
-	},
-	{
-		"udf",
-		"mount_udf",
-		"udf",
-		udf_allow,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		"ro"
-#ifdef MNT_NODEV
-		",nodev"
-#endif /* MNT_NODEV */
-		",nosuid,iocharset=utf8"
-	},
-#endif /* 0 */
-	{
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL
-	}
-};
-
 static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
 	{ "noatime",    0, NULL },
@@ -394,6 +306,160 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ "nodev",      0, NULL },
 #endif /* MNT_NODEV */
 	{ NULL,         0, NULL }
+};
+
+static const struct dtmd_mount_option vfat_allow[] =
+{
+	{ "large",      0, NULL  },
+	{ "longnames",  0, NULL  },
+	{ "shortnames", 0, NULL  },
+	{ "nowin95",    0, NULL  },
+	{ "dmask=",     1, "-M " },
+	{ "fmask=",     1, "-m " },
+	{ "codepage=",  1, "-D " },
+	{ "iocharset=", 1, "-L " },
+	{ NULL,         0, NULL  }
+};
+
+static const struct dtmd_mount_option_list vfat_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ vfat_allow          },
+	{ NULL                }
+};
+
+static const struct dtmd_mount_option ntfs3g_allow[] =
+{
+	{ "ro",            0, NULL },
+	{ "rw",            0, NULL },
+	{ "noatime",       0, NULL },
+	{ "atime",         0, NULL },
+	{ "relatime",      0, NULL },
+	{ "umask=",        1, NULL },
+	{ "dmask=",        1, NULL },
+	{ "fmask=",        1, NULL },
+	{ "iocharset=",    1, NULL },
+	{ "utf8",          0, NULL },
+	{ "windows_names", 0, NULL },
+	{ "allow_other",   0, NULL },
+	{ NULL,            0, NULL }
+};
+
+static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
+{
+	{ ntfs3g_allow },
+	{ NULL         }
+};
+
+// TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
+#if 0
+static const struct dtmd_mount_option iso9660_allow[] =
+{
+	{ "extatt",       0, NULL  },
+	{ "gens",         0, NULL  },
+	{ "nojoliet",     0, NULL  },
+	{ "norrip",       0, NULL  },
+	{ "brokenjoliet", 0, NULL  },
+	{ "iocharset=",   1, "-C " },
+	{ NULL,           0, NULL  }
+};
+
+static const struct dtmd_mount_option_list iso9660_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ iso9660_allow       },
+	{ NULL                }
+};
+
+static const struct dtmd_mount_option udf_allow[] =
+{
+	{ "iocharset=",   1, "-C " },
+	{ NULL,           0, NULL  }
+};
+
+static const struct dtmd_mount_option_list udf_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ udf_allow           },
+	{ NULL                }
+};
+#endif /* 0 */
+
+static const struct dtmd_filesystem_options filesystem_mount_options[] =
+{
+	{
+		"msdosfs",
+		"mount_msdosfs",
+		"fat32",
+		vfat_allow_list,
+		"uid=",
+		"-u ",
+		"gid=",
+		"-g ",
+		"rw"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",dmask=755"
+	},
+	{
+		"ntfs",
+		"ntfs-3g",
+		"ntfs",
+		ntfs3g_allow_list,
+		"uid=",
+		NULL,
+		"gid=",
+		NULL,
+		"rw"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,allow_other,windows_names,dmask=0077"
+	},
+// TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
+#if 0
+	{
+		"cd9660",
+		"mount_cd9660",
+		"cd9660",
+		iso9660_allow_list,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		"ro"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,iocharset=utf8"
+	},
+	{
+		"udf",
+		"mount_udf",
+		"udf",
+		udf_allow_list,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		"ro"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,iocharset=utf8"
+	},
+#endif /* 0 */
+	{
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL
+	}
 };
 
 #else /* (defined OS_FreeBSD) */
@@ -432,41 +498,29 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 {
 	const struct dtmd_mount_option *option_list;
 	unsigned int minlen;
-	const struct dtmd_mount_option *options_lists_array[2];
-	unsigned int array_index;
-	unsigned int array_size;
-
-	options_lists_array[0] = any_fs_allowed_list;
+	const struct dtmd_mount_option_list *options_lists_array;
 
 	if (filesystem_list != NULL)
 	{
-		options_lists_array[1] = filesystem_list->options;
-		array_size = sizeof(options_lists_array)/sizeof(options_lists_array[0]);
-	}
-	else
-	{
-		options_lists_array[1] = NULL;
-		array_size = sizeof(options_lists_array)/sizeof(options_lists_array[0]) - 1;
-	}
-
-	for (array_index = 0; array_index < array_size; ++array_index)
-	{
-		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
+		for (options_lists_array = filesystem_list->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
 		{
-			if (option_list->has_param)
+			for (option_list = options_lists_array->item; option_list->option != NULL; ++option_list)
 			{
-				minlen = strlen(option_list->option);
+				if (option_list->has_param)
+				{
+					minlen = strlen(option_list->option);
 
-				if ((option_len > minlen) && (strncmp(option, option_list->option, minlen) == 0))
-				{
-					return option_list;
+					if ((option_len > minlen) && (strncmp(option, option_list->option, minlen) == 0))
+					{
+						return option_list;
+					}
 				}
-			}
-			else
-			{
-				if ((strlen(option_list->option) == option_len) && (strncmp(option, option_list->option, option_len) == 0))
+				else
 				{
-					return option_list;
+					if ((strlen(option_list->option) == option_len) && (strncmp(option, option_list->option, option_len) == 0))
+					{
+						return option_list;
+					}
 				}
 			}
 		}
@@ -1308,8 +1362,7 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 {
 	const struct dtmd_filesystem_options *fsopts;
 	const struct dtmd_mount_option *option_list;
-	const struct dtmd_mount_option *options_lists_array[2];
-	unsigned int array_index;
+	const struct dtmd_mount_option_list *options_lists_array;
 	int first = 1;
 
 	fsopts = get_fsopts_for_fs(filesystem);
@@ -1327,17 +1380,14 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 		return result_fail;
 	}
 
-	options_lists_array[0] = any_fs_allowed_list;
-	options_lists_array[1] = fsopts->options;
-
 	if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n" dtmd_response_argument_supported_filesystem_options_lists "(", filesystem) < 0)
 	{
 		return result_client_error;
 	}
 
-	for (array_index = 0; array_index < 2; ++array_index)
+	for (options_lists_array = fsopts->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
 	{
-		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
+		for (option_list = options_lists_array->item; option_list->option != NULL; ++option_list)
 		{
 			if (first != 0)
 			{
