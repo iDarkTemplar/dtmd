@@ -96,21 +96,25 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 
 static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
-	{ "exec",       0 },
-	{ "noexec",     0 },
-	{ "nodev",      0 },
-	{ "nosuid",     0 },
+	{ "nodev",      0 }, // TODO: make it mandatory
+	{ "nosuid",     0 }, // TODO: make it mandatory
 	{ "atime",      0 },
 	{ "noatime",    0 },
 	{ "nodiratime", 0 },
 	{ "ro",         0 },
 	{ "rw",         0 },
-	{ "sync",       0 },
-	{ "nosync",     0 },
-	{ "dirsync",    0 },
 	{ NULL,         0 }
 };
 
+static const struct dtmd_mount_option common_fs_allowed_list[] =
+{
+	{ "exec",    0 },
+	{ "noexec",  0 },
+	{ "sync",    0 },
+	{ "nosync",  0 },
+	{ "dirsync", 0 },
+	{ NULL,      0 }
+};
 static const struct dtmd_mount_option vfat_allow[] =
 {
 	{ "flush",        0 },
@@ -131,21 +135,15 @@ static const struct dtmd_mount_option vfat_allow[] =
 
 static const struct dtmd_mount_option_list vfat_allow_list[] =
 {
-	{ any_fs_allowed_list },
-	{ vfat_allow          },
-	{ NULL                }
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ vfat_allow             },
+	{ NULL                   }
 };
 
 // TODO: mandatory option norecover
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
-	{ "ro",            0 },
-	{ "rw",            0 },
-	{ "noatime",       0 },
-	{ "atime",         0 },
-	{ "relatime",      0 },
-	{ "nodev",         0 }, // TODO: make it mandatory
-	{ "nosuid",        0 }, // TODO: make it mandatory
 	{ "umask=",        1 },
 	{ "dmask=",        1 },
 	{ "fmask=",        1 },
@@ -153,13 +151,15 @@ static const struct dtmd_mount_option ntfs3g_allow[] =
 	{ "utf8",          0 },
 	{ "windows_names", 0 },
 	{ "allow_other",   0 },
+	{ "norecover",     0 },
 	{ NULL,            0 }
 };
 
 static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
 {
-	{ ntfs3g_allow },
-	{ NULL         }
+	{ any_fs_allowed_list },
+	{ ntfs3g_allow        },
+	{ NULL                }
 };
 
 static const struct dtmd_mount_option iso9660_allow[] =
@@ -177,9 +177,10 @@ static const struct dtmd_mount_option iso9660_allow[] =
 
 static const struct dtmd_mount_option_list iso9660_allow_list[] =
 {
-	{ any_fs_allowed_list },
-	{ iso9660_allow       },
-	{ NULL                }
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ iso9660_allow          },
+	{ NULL                   }
 };
 
 static const struct dtmd_mount_option udf_allow[] =
@@ -194,9 +195,10 @@ static const struct dtmd_mount_option udf_allow[] =
 
 static const struct dtmd_mount_option_list udf_allow_list[] =
 {
-	{ any_fs_allowed_list },
-	{ udf_allow           },
-	{ NULL                }
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ udf_allow              },
+	{ NULL                   }
 };
 
 static const struct dtmd_filesystem_options filesystem_mount_options[] =
@@ -286,10 +288,18 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
 	{ "noatime",    0, NULL },
 	{ "atime",      0, NULL },
-	{ "noexec",     0, NULL },
 	{ "nosuid",     0, NULL },
 	{ "ro",         0, NULL },
 	{ "rw",         0, NULL },
+#ifdef MNT_NODEV
+	{ "nodev",      0, NULL },
+#endif /* MNT_NODEV */
+	{ NULL,         0, NULL }
+};
+
+static const struct dtmd_mount_option common_fs_allowed_list[] =
+{
+	{ "noexec",     0, NULL },
 	{ "noclusterr", 0, NULL },
 	{ "clusterr",   0, NULL },
 	{ "noclusterw", 0, NULL },
@@ -302,12 +312,8 @@ static const struct dtmd_mount_option any_fs_allowed_list[] =
 	{ "acls",       0, NULL },
 	{ "noacls",     0, NULL },
 #endif /* MNT_NOACLS */
-#ifdef MNT_NODEV
-	{ "nodev",      0, NULL },
-#endif /* MNT_NODEV */
 	{ NULL,         0, NULL }
 };
-
 static const struct dtmd_mount_option vfat_allow[] =
 {
 	{ "large",      0, NULL  },
@@ -323,17 +329,14 @@ static const struct dtmd_mount_option vfat_allow[] =
 
 static const struct dtmd_mount_option_list vfat_allow_list[] =
 {
-	{ any_fs_allowed_list },
-	{ vfat_allow          },
-	{ NULL                }
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ vfat_allow             },
+	{ NULL                   }
 };
 
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
-	{ "ro",            0, NULL },
-	{ "rw",            0, NULL },
-	{ "noatime",       0, NULL },
-	{ "atime",         0, NULL },
 	{ "relatime",      0, NULL },
 	{ "umask=",        1, NULL },
 	{ "dmask=",        1, NULL },
@@ -342,13 +345,15 @@ static const struct dtmd_mount_option ntfs3g_allow[] =
 	{ "utf8",          0, NULL },
 	{ "windows_names", 0, NULL },
 	{ "allow_other",   0, NULL },
+	{ "norecover",     0, NULL },
 	{ NULL,            0, NULL }
 };
 
 static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
 {
-	{ ntfs3g_allow },
-	{ NULL         }
+	{ any_fs_allowed_list },
+	{ ntfs3g_allow        },
+	{ NULL                }
 };
 
 // TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
@@ -366,9 +371,10 @@ static const struct dtmd_mount_option iso9660_allow[] =
 
 static const struct dtmd_mount_option_list iso9660_allow_list[] =
 {
-	{ any_fs_allowed_list },
-	{ iso9660_allow       },
-	{ NULL                }
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ iso9660_allow          },
+	{ NULL                   }
 };
 
 static const struct dtmd_mount_option udf_allow[] =
@@ -379,9 +385,10 @@ static const struct dtmd_mount_option udf_allow[] =
 
 static const struct dtmd_mount_option_list udf_allow_list[] =
 {
-	{ any_fs_allowed_list },
-	{ udf_allow           },
-	{ NULL                }
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ udf_allow              },
+	{ NULL                   }
 };
 #endif /* 0 */
 
