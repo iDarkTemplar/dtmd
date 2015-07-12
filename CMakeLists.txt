@@ -35,6 +35,7 @@ set(CONFIG_DIR "/etc" CACHE PATH "Config files directory")
 
 if (OS_LINUX)
 	set(MTAB_DIR "/etc" CACHE PATH "mtab file location directory")
+	set(MTAB_WRITEABLE true CACHE BOOL "mtab is a writeable file")
 endif (OS_LINUX)
 
 set(HEADERS_PREFIX "${INST_PREFIX}/include" CACHE PATH "Prefix prepended to headers install directories")
@@ -50,6 +51,7 @@ add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
 
 if (OS_LINUX)
+	message(STATUS "If you use read-only mtab file, specify -DMTAB_WRITEABLE=false")
 	message(STATUS "To change location directory of mtab file use -DMTAB_DIR=path")
 	message(STATUS "To disable external mount using, use -DDISABLE_EXT_MOUNT=1")
 endif (OS_LINUX)
@@ -66,7 +68,11 @@ if (NOT DEFINED INSTALL_DIR_LIB)
 endif (NOT DEFINED INSTALL_DIR_LIB)
 
 if (OS_LINUX)
-	add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
+	if (MTAB_WRITEABLE)
+		add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
+	else (MTAB_WRITEABLE)
+		add_definitions(-DMTAB_READONLY)
+	endif (MTAB_WRITEABLE)
 
 	if (DEFINED DISABLE_EXT_MOUNT)
 		add_definitions(-DDISABLE_EXT_MOUNT)

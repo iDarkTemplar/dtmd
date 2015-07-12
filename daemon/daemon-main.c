@@ -1081,7 +1081,9 @@ exit_remove_client:
 
 exit_8:
 #if (defined OS_Linux)
+#if (!defined MTAB_READONLY)
 	unlink(dtmd_internal_mtab_temporary);
+#endif /* (!defined MTAB_READONLY) */
 #endif /* (defined OS_Linux) */
 
 	free(pollfds);

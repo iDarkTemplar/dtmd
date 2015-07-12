@@ -611,6 +611,7 @@ int point_mount_count(const char *path, int max)
 #endif /* (defined OS_FreeBSD) */
 
 #if (defined OS_Linux)
+#if (!defined MTAB_READONLY)
 int add_to_mtab(const char *path, const char *mount_point, const char *type, const char *mount_opts)
 {
 	int result;
@@ -717,4 +718,5 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 
 	return result_success;
 }
+#endif /* (!defined MTAB_READONLY) */
 #endif /* (defined OS_Linux) */

@@ -270,12 +270,14 @@ static int invoke_mount_internal(int client_number,
 
 	if (result == 0)
 	{
+#if (!defined MTAB_READONLY)
 		result = add_to_mtab(path, mount_path, fstype, mount_full_opts);
 		if (is_result_failure(result))
 		{
 			// NOTE: failing to modify /etc/mtab is non-fatal error
 			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
 		}
+#endif /* (!defined MTAB_READONLY) */
 
 		result = result_success;
 
@@ -832,12 +834,14 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 	}
 	else
 	{
+#if (!defined MTAB_READONLY)
 		result = remove_from_mtab(path, mnt_point, fstype);
 		if (is_result_failure(result))
 		{
 			// NOTE: failing to modify /etc/mtab is non-fatal error
 			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file);
 		}
+#endif /* (!defined MTAB_READONLY) */
 
 		WRITE_LOG_ARGS(LOG_INFO, "Unmounted device '%s' from path '%s'", path, mnt_point);
 		result = result_success;
