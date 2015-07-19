@@ -31,6 +31,8 @@
 extern "C" {
 #endif
 
+typedef int (*mount_option_validation_function_t)(const char *option, int option_len);
+
 struct dtmd_mount_option
 {
 	const char * const option;
@@ -38,6 +40,8 @@ struct dtmd_mount_option
 #if (defined OS_FreeBSD)
 	const char * const transformation;
 #endif /* (defined OS_FreeBSD) */
+
+	mount_option_validation_function_t validation_function;
 };
 
 struct dtmd_mount_option_list

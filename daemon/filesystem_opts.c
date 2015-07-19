@@ -34,6 +34,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/mount.h>
+#include <ctype.h>
 
 /* option: flag and strings
 MS_BIND (Linux 2.4 onward)
@@ -67,6 +68,19 @@ MS_SYNCHRONOUS
 	sync
  */
 
+static int validate_is_single_int(const char *option, int option_len);
+static int validate_is_access_mode(const char *option, int option_len);
+static int validate_is_string(const char *option, int option_len);
+static int validate_is_decimal_number(const char *option, int option_len);
+static int validate_is_octal_number(const char *option, int option_len);
+
+#if (defined OS_Linux)
+static int validate_vfat_is_shortname(const char *option, int option_len);
+static int validate_vfat_is_check(const char *option, int option_len);
+static int validate_vfat_is_conv(const char *option, int option_len);
+static int validate_iso9660_is_block(const char *option, int option_len);
+#endif /* (defined OS_Linux) */
+
 #if (defined OS_Linux)
 static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 {
@@ -96,41 +110,41 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 
 static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
-	{ "nodev",      0 },
-	{ "nosuid",     0 },
-	{ "atime",      0 },
-	{ "noatime",    0 },
-	{ "nodiratime", 0 },
-	{ "ro",         0 },
-	{ "rw",         0 },
-	{ NULL,         0 }
+	{ "nodev",      0, NULL },
+	{ "nosuid",     0, NULL },
+	{ "atime",      0, NULL },
+	{ "noatime",    0, NULL },
+	{ "nodiratime", 0, NULL },
+	{ "ro",         0, NULL },
+	{ "rw",         0, NULL },
+	{ NULL,         0, NULL }
 };
 
 static const struct dtmd_mount_option common_fs_allowed_list[] =
 {
-	{ "exec",    0 },
-	{ "noexec",  0 },
-	{ "sync",    0 },
-	{ "nosync",  0 },
-	{ "dirsync", 0 },
-	{ NULL,      0 }
+	{ "exec",    0, NULL },
+	{ "noexec",  0, NULL },
+	{ "sync",    0, NULL },
+	{ "nosync",  0, NULL },
+	{ "dirsync", 0, NULL },
+	{ NULL,      0, NULL }
 };
 static const struct dtmd_mount_option vfat_allow[] =
 {
-	{ "flush",        0 },
-	{ "utf8=",        1 },
-	{ "shortname=",   1 },
-	{ "umask=",       1 },
-	{ "dmask=",       1 },
-	{ "fmask=",       1 },
-	{ "codepage=",    1 },
-	{ "iocharset=",   1 },
-	{ "showexec",     0 },
-	{ "blocksize=",   1 },
-	{ "allow_utime=", 1 },
-	{ "check=",       1 },
-	{ "conv=",        1 },
-	{ NULL,           0 }
+	{ "flush",        0, NULL },
+	{ "utf8=",        1, &validate_is_single_int },
+	{ "shortname=",   1, &validate_vfat_is_shortname },
+	{ "umask=",       1, &validate_is_access_mode },
+	{ "dmask=",       1, &validate_is_access_mode },
+	{ "fmask=",       1, &validate_is_access_mode },
+	{ "codepage=",    1, &validate_is_string },
+	{ "iocharset=",   1, &validate_is_string },
+	{ "showexec",     0, NULL },
+	{ "blocksize=",   1, &validate_is_decimal_number },
+	{ "allow_utime=", 1, &validate_is_octal_number },
+	{ "check=",       1, &validate_vfat_is_check },
+	{ "conv=",        1, &validate_vfat_is_conv },
+	{ NULL,           0, NULL }
 };
 
 static const struct dtmd_mount_option_list vfat_allow_list[] =
@@ -143,15 +157,15 @@ static const struct dtmd_mount_option_list vfat_allow_list[] =
 
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
-	{ "umask=",        1 },
-	{ "dmask=",        1 },
-	{ "fmask=",        1 },
-	{ "iocharset=",    1 },
-	{ "utf8",          0 },
-	{ "windows_names", 0 },
-	{ "allow_other",   0 },
-	{ "norecover",     0 },
-	{ NULL,            0 }
+	{ "umask=",        1, &validate_is_access_mode },
+	{ "dmask=",        1, &validate_is_access_mode },
+	{ "fmask=",        1, &validate_is_access_mode },
+	{ "iocharset=",    1, &validate_is_string },
+	{ "utf8",          0, NULL },
+	{ "windows_names", 0, NULL },
+	{ "allow_other",   0, NULL },
+	{ "norecover",     0, NULL },
+	{ NULL,            0, NULL }
 };
 
 static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
@@ -163,15 +177,13 @@ static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
 
 static const struct dtmd_mount_option iso9660_allow[] =
 {
-	{ "norock",     0 },
-	{ "nojoliet",   0 },
-	{ "iocharset=", 1 },
-	{ "mode=",      1 },
-	{ "dmode=",     1 },
-	{ "utf8",       0 },
-	{ "block=",     1 },
-	{ "conv=",      1 },
-	{ NULL,         0 }
+	{ "norock",     0, NULL },
+	{ "nojoliet",   0, NULL },
+	{ "iocharset=", 1, &validate_is_string },
+	{ "mode=",      1, &validate_is_access_mode },
+	{ "utf8",       0, NULL },
+	{ "block=",     1, &validate_iso9660_is_block },
+	{ NULL,         0, NULL }
 };
 
 static const struct dtmd_mount_option_list iso9660_allow_list[] =
@@ -184,12 +196,12 @@ static const struct dtmd_mount_option_list iso9660_allow_list[] =
 
 static const struct dtmd_mount_option udf_allow[] =
 {
-	{ "iocharset=", 1 },
-	{ "umask=",     1 },
-	{ "mode=",      1 },
-	{ "dmode=",     1 },
-	{ "undelete",   0 },
-	{ NULL,         0 }
+	{ "iocharset", 0, NULL },
+	{ "umask=",    1, &validate_is_access_mode },
+	{ "undelete",  0, NULL },
+	{ "unhide",    0, NULL },
+	{ "nostrict",  0, NULL },
+	{ NULL,        0, NULL }
 };
 
 static const struct dtmd_mount_option_list udf_allow_list[] =
@@ -235,7 +247,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		iso9660_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500",
+		"ro,nodev,nosuid,iocharset=utf8,mode=0400",
 		"nodev,nosuid"
 	},
 	{
@@ -244,7 +256,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		udf_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,umask=0077",
+		"ro,nodev,nosuid,iocharset,umask=0077",
 		"nodev,nosuid"
 	},
 	{
@@ -291,45 +303,45 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 
 static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
-	{ "noatime",    0, NULL },
-	{ "atime",      0, NULL },
-	{ "nosuid",     0, NULL },
-	{ "ro",         0, NULL },
-	{ "rw",         0, NULL },
+	{ "noatime",    0, NULL, NULL },
+	{ "atime",      0, NULL, NULL },
+	{ "nosuid",     0, NULL, NULL },
+	{ "ro",         0, NULL, NULL },
+	{ "rw",         0, NULL, NULL },
 #ifdef MNT_NODEV
-	{ "nodev",      0, NULL },
+	{ "nodev",      0, NULL, NULL },
 #endif /* MNT_NODEV */
-	{ NULL,         0, NULL }
+	{ NULL,         0, NULL, NULL }
 };
 
 static const struct dtmd_mount_option common_fs_allowed_list[] =
 {
-	{ "noexec",     0, NULL },
-	{ "noclusterr", 0, NULL },
-	{ "clusterr",   0, NULL },
-	{ "noclusterw", 0, NULL },
-	{ "clusterw",   0, NULL },
-	{ "sync",       0, NULL },
-	{ "nosync",     0, NULL },
-	{ "async",      0, NULL },
-	{ "noasync",    0, NULL },
+	{ "noexec",     0, NULL, NULL },
+	{ "noclusterr", 0, NULL, NULL },
+	{ "clusterr",   0, NULL, NULL },
+	{ "noclusterw", 0, NULL, NULL },
+	{ "clusterw",   0, NULL, NULL },
+	{ "sync",       0, NULL, NULL },
+	{ "nosync",     0, NULL, NULL },
+	{ "async",      0, NULL, NULL },
+	{ "noasync",    0, NULL, NULL },
 #ifdef MNT_ACLS
-	{ "acls",       0, NULL },
-	{ "noacls",     0, NULL },
+	{ "acls",       0, NULL, NULL },
+	{ "noacls",     0, NULL, NULL },
 #endif /* MNT_NOACLS */
-	{ NULL,         0, NULL }
+	{ NULL,         0, NULL, NULL }
 };
 static const struct dtmd_mount_option vfat_allow[] =
 {
-	{ "large",      0, NULL  },
-	{ "longnames",  0, NULL  },
-	{ "shortnames", 0, NULL  },
-	{ "nowin95",    0, NULL  },
-	{ "dmask=",     1, "-M " },
-	{ "fmask=",     1, "-m " },
-	{ "codepage=",  1, "-D " },
-	{ "iocharset=", 1, "-L " },
-	{ NULL,         0, NULL  }
+	{ "large",      0, NULL,  NULL },
+	{ "longnames",  0, NULL,  NULL },
+	{ "shortnames", 0, NULL,  NULL },
+	{ "nowin95",    0, NULL,  NULL },
+	{ "dmask=",     1, "-M ", &validate_is_access_mode },
+	{ "fmask=",     1, "-m ", &validate_is_access_mode },
+	{ "codepage=",  1, "-D ", &validate_is_string },
+	{ "iocharset=", 1, "-L ", &validate_is_string },
+	{ NULL,         0, NULL,  NULL }
 };
 
 static const struct dtmd_mount_option_list vfat_allow_list[] =
@@ -342,16 +354,16 @@ static const struct dtmd_mount_option_list vfat_allow_list[] =
 
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
-	{ "relatime",      0, NULL },
-	{ "umask=",        1, NULL },
-	{ "dmask=",        1, NULL },
-	{ "fmask=",        1, NULL },
-	{ "iocharset=",    1, NULL },
-	{ "utf8",          0, NULL },
-	{ "windows_names", 0, NULL },
-	{ "allow_other",   0, NULL },
-	{ "norecover",     0, NULL },
-	{ NULL,            0, NULL }
+	{ "relatime",      0, NULL, NULL },
+	{ "umask=",        1, NULL, &validate_is_access_mode },
+	{ "dmask=",        1, NULL, &validate_is_access_mode },
+	{ "fmask=",        1, NULL, &validate_is_access_mode },
+	{ "iocharset=",    1, NULL, &validate_is_string },
+	{ "utf8",          0, NULL, NULL },
+	{ "windows_names", 0, NULL, NULL },
+	{ "allow_other",   0, NULL, NULL },
+	{ "norecover",     0, NULL, NULL },
+	{ NULL,            0, NULL, NULL }
 };
 
 static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
@@ -365,13 +377,13 @@ static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
 #if 0
 static const struct dtmd_mount_option iso9660_allow[] =
 {
-	{ "extatt",       0, NULL  },
-	{ "gens",         0, NULL  },
-	{ "nojoliet",     0, NULL  },
-	{ "norrip",       0, NULL  },
-	{ "brokenjoliet", 0, NULL  },
-	{ "iocharset=",   1, "-C " },
-	{ NULL,           0, NULL  }
+	{ "extatt",       0, NULL,  NULL },
+	{ "gens",         0, NULL,  NULL },
+	{ "nojoliet",     0, NULL,  NULL },
+	{ "norrip",       0, NULL,  NULL },
+	{ "brokenjoliet", 0, NULL,  NULL },
+	{ "iocharset=",   1, "-C ", &validate_is_string },
+	{ NULL,           0, NULL,  NULL }
 };
 
 static const struct dtmd_mount_option_list iso9660_allow_list[] =
@@ -384,8 +396,8 @@ static const struct dtmd_mount_option_list iso9660_allow_list[] =
 
 static const struct dtmd_mount_option udf_allow[] =
 {
-	{ "iocharset=",   1, "-C " },
-	{ NULL,           0, NULL  }
+	{ "iocharset=",   1, "-C ", &validate_is_string },
+	{ NULL,           0, NULL,  NULL }
 };
 
 static const struct dtmd_mount_option_list udf_allow_list[] =
@@ -670,6 +682,17 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			if (option_params == NULL)
 			{
 				return result_fail;
+			}
+
+			if (option_params->validation_function != NULL)
+			{
+				result = strlen(option_params->option);
+				result = option_params->validation_function(opt_start + result, opt_len - result);
+				if (is_result_failure(result))
+				{
+					WRITE_LOG_ARGS(LOG_WARNING, "Failed to validate options parameters: %s", options_list);
+					return result;
+				}
 			}
 
 			mntflagslist = string_to_mount_flag_list;
@@ -1509,3 +1532,154 @@ char* convert_option_flags_to_string(uint64_t flags)
 }
 
 #endif /* (defined OS_FreeBSD) */
+
+static int validate_is_single_int(const char *option, int option_len)
+{
+	if ((option_len == 1)
+		&& (((*option) == '0')
+			|| ((*option) == '1')))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_is_access_mode(const char *option, int option_len)
+{
+	if ((option_len != 4) || (option[0] != '0'))
+	{
+		return result_fail;
+	}
+
+	return validate_is_octal_number(option + 1, option_len - 1);
+}
+
+static int validate_is_string(const char *option, int option_len)
+{
+	int index;
+
+	for (index = 0; index < option_len; ++index)
+	{
+		if ((!isalnum(option[index]))
+			&& (option[index] != '-')
+			&& (option[index] != '_'))
+		{
+			return result_fail;
+		}
+	}
+
+	return result_success;
+}
+
+static int validate_is_decimal_number(const char *option, int option_len)
+{
+	int index;
+
+	for (index = 0; index < option_len; ++index)
+	{
+		if (!isdigit(option[index]))
+		{
+			return result_fail;
+		}
+	}
+
+	return result_success;
+}
+
+static int validate_is_octal_number(const char *option, int option_len)
+{
+	int index;
+
+	for (index = 0; index < option_len; ++index)
+	{
+		if ((option[index] < '0') || (option[index] > '7'))
+		{
+			return result_fail;
+		}
+	}
+
+	return result_success;
+}
+
+#if (defined OS_Linux)
+/* TODO: a lot of similar text checks, generalize them */
+static int validate_vfat_is_shortname(const char *option, int option_len)
+{
+	if ((option_len == 5)
+		&& ((strncmp(option, "lower", option_len) == 0)
+			|| (strncmp(option, "win95", option_len) == 0)
+			|| (strncmp(option, "winnt", option_len) == 0)
+			|| (strncmp(option, "mixed", option_len) == 0)))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_vfat_is_check(const char *option, int option_len)
+{
+	if ((option_len == 1)
+		&& (((*option) == 'r')
+			|| ((*option) == 'n')
+			|| ((*option) == 's')))
+	{
+		return result_success;
+	}
+	else if ((option_len == 6)
+		&& ((strncmp(option, "normal", option_len) == 0)
+			|| (strncmp(option, "strict", option_len) == 0)))
+	{
+		return result_success;
+	}
+	else if ((option_len == 7)
+		&& (strncmp(option, "relaxed", option_len) == 0))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_vfat_is_conv(const char *option, int option_len)
+{
+	if ((option_len == 1)
+		&& (((*option) == 'b')
+			|| ((*option) == 't')
+			|| ((*option) == 'a')))
+	{
+		return result_success;
+	}
+	else if ((option_len == 4)
+		&& ((strncmp(option, "text", option_len) == 0)
+			|| (strncmp(option, "auto", option_len) == 0)))
+	{
+		return result_success;
+	}
+	else if ((option_len == 6)
+		&& (strncmp(option, "binary", option_len) == 0))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_iso9660_is_block(const char *option, int option_len)
+{
+	if ((option_len == 3)
+		&& (strncmp(option, "512", option_len) == 0))
+	{
+		return result_success;
+	}
+	else if ((option_len == 4)
+		&& ((strncmp(option, "1024", option_len) == 0)
+			|| (strncmp(option, "2048", option_len) == 0)))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+#endif /* (defined OS_Linux) */
