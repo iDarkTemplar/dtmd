@@ -45,7 +45,8 @@ extern int clear_mount_dir;
 int read_config(void);
 void free_config(void);
 
-const char* get_mount_options_for_fs_from_config(const char *fstype);
+const char* get_default_mount_options_for_fs_from_config(const char *fstype);
+const char* get_mandatory_mount_options_for_fs_from_config(const char *fstype);
 
 #ifdef __cplusplus
 }

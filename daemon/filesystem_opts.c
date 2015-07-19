@@ -96,8 +96,8 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 
 static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
-	{ "nodev",      0 }, // TODO: make it mandatory
-	{ "nosuid",     0 }, // TODO: make it mandatory
+	{ "nodev",      0 },
+	{ "nosuid",     0 },
 	{ "atime",      0 },
 	{ "noatime",    0 },
 	{ "nodiratime", 0 },
@@ -141,7 +141,6 @@ static const struct dtmd_mount_option_list vfat_allow_list[] =
 	{ NULL                   }
 };
 
-// TODO: mandatory option norecover
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
 	{ "umask=",        1 },
@@ -209,7 +208,8 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		vfat_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
+		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush",
+		"nodev,nosuid"
 	},
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
@@ -217,7 +217,8 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077"
+		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077",
+		"nodev,nosuid,norecover"
 	},
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
@@ -225,7 +226,8 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077"
+		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077",
+		"nodev,nosuid,norecover"
 	},
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
@@ -233,7 +235,8 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		iso9660_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
+		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500",
+		"nodev,nosuid"
 	},
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
@@ -241,9 +244,11 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		udf_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
+		"ro,nodev,nosuid,iocharset=utf8,umask=0077",
+		"nodev,nosuid"
 	},
 	{
+		NULL,
 		NULL,
 		NULL,
 		NULL,
@@ -403,11 +408,15 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		"-u ",
 		"gid=",
 		"-g ",
-		"rw"
+		"rw,nosuid"
 #ifdef MNT_NODEV
 		",nodev"
 #endif /* MNT_NODEV */
-		",dmask=755"
+		",dmask=755",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
 	},
 	{
 		"ntfs",
@@ -422,7 +431,12 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 #ifdef MNT_NODEV
 		",nodev"
 #endif /* MNT_NODEV */
-		",nosuid,allow_other,windows_names,dmask=0077"
+		",nosuid,allow_other,windows_names,dmask=0077",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",norecover"
 	},
 // TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
 #if 0
@@ -439,7 +453,11 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 #ifdef MNT_NODEV
 		",nodev"
 #endif /* MNT_NODEV */
-		",nosuid,iocharset=utf8"
+		",nosuid,iocharset=utf8",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
 	},
 	{
 		"udf",
@@ -454,10 +472,15 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 #ifdef MNT_NODEV
 		",nodev"
 #endif /* MNT_NODEV */
-		",nosuid,iocharset=utf8"
+		",nosuid,iocharset=utf8",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
 	},
 #endif /* 0 */
 	{
+		NULL,
 		NULL,
 		NULL,
 		NULL,
@@ -507,27 +530,24 @@ static const struct dtmd_mount_option* find_option_in_list(const char *option, u
 	unsigned int minlen;
 	const struct dtmd_mount_option_list *options_lists_array;
 
-	if (filesystem_list != NULL)
+	for (options_lists_array = filesystem_list->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
 	{
-		for (options_lists_array = filesystem_list->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
+		for (option_list = options_lists_array->item; option_list->option != NULL; ++option_list)
 		{
-			for (option_list = options_lists_array->item; option_list->option != NULL; ++option_list)
+			if (option_list->has_param)
 			{
-				if (option_list->has_param)
-				{
-					minlen = strlen(option_list->option);
+				minlen = strlen(option_list->option);
 
-					if ((option_len > minlen) && (strncmp(option, option_list->option, minlen) == 0))
-					{
-						return option_list;
-					}
-				}
-				else
+				if ((option_len > minlen) && (strncmp(option, option_list->option, minlen) == 0))
 				{
-					if ((strlen(option_list->option) == option_len) && (strncmp(option, option_list->option, option_len) == 0))
-					{
-						return option_list;
-					}
+					return option_list;
+				}
+			}
+			else
+			{
+				if ((strlen(option_list->option) == option_len) && (strncmp(option, option_list->option, option_len) == 0))
+				{
+					return option_list;
 				}
 			}
 		}
@@ -614,9 +634,10 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 	void *tmp;
 
 	if ((options_list == NULL)
-		|| (fsopts_list == NULL))
+		|| (fsopts_list == NULL)
+		|| (fsopts == NULL))
 	{
-		WRITE_LOG(LOG_ERR, "Bug: parameter 'options list' or 'filesystem options list' is empty");
+		WRITE_LOG(LOG_ERR, "Bug: one of required parameters is empty");
 		return result_bug;
 	}
 
@@ -762,6 +783,8 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				return result_fatal_error;
 			}
 
+			free_options_list_id(&(fsopts_list->option_uid));
+
 			fsopts_list->option_uid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_uid.id_option_value == NULL)
 			{
@@ -803,6 +826,8 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				WRITE_LOG(LOG_ERR, "Gid to string conversion failed");
 				return result_fatal_error;
 			}
+
+			free_options_list_id(&(fsopts_list->option_gid));
 
 			fsopts_list->option_gid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_gid.id_option_value == NULL)

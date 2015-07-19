@@ -68,6 +68,7 @@ struct dtmd_filesystem_options
 #endif /* (defined OS_FreeBSD) */
 
 	const char * const defaults;
+	const char * const mandatory_options;
 };
 
 struct dtmd_string_to_mount_flag

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "daemon/filesystem_opts.h"
+#include "daemon/return_codes.h"
 #include "tests/dt_tests.h"
 
 #include <sys/mount.h>
@@ -86,8 +87,8 @@ int main(int argc, char **argv)
 
 	// Test 1: vfat
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_vfat, fsopts_vfat, NULL, NULL, &fsopts_list) == 1, "Test 1: vfat", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 1: vfat", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_vfat, fsopts_vfat, NULL, NULL, &fsopts_list) == result_success, "Test 1: vfat", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 1: vfat", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 142, "Test 1: vfat");
@@ -96,8 +97,8 @@ int main(int argc, char **argv)
 
 	// Test 2: ntfs-3g
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_ntfs_3g, fsopts_ntfs, NULL, NULL, &fsopts_list) == 1, "Test 2: ntfs-3g", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 2: ntfs-3g", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_ntfs_3g, fsopts_ntfs, NULL, NULL, &fsopts_list) == result_success, "Test 2: ntfs-3g", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 2: ntfs-3g", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 71, "Test 2: ntfs-3g");
@@ -106,8 +107,8 @@ int main(int argc, char **argv)
 
 	// Test 3: iso9660
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_iso9660, fsopts_iso9660, NULL, NULL, &fsopts_list) == 1, "Test 3: iso9660", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 3: iso9660", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_iso9660, fsopts_iso9660, NULL, NULL, &fsopts_list) == result_success, "Test 3: iso9660", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 3: iso9660", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 73, "Test 3: iso9660");
@@ -116,8 +117,8 @@ int main(int argc, char **argv)
 
 	// Test 4: udf
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_udf, fsopts_udf, NULL, NULL, &fsopts_list) == 1, "Test 4: udf", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 4: udf", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_udf, fsopts_udf, NULL, NULL, &fsopts_list) == result_success, "Test 4: udf", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 4: udf", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 53, "Test 4: udf");
@@ -126,8 +127,8 @@ int main(int argc, char **argv)
 
 	// Test 5: default options set 1
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(default_opts1, NULL, NULL, NULL, &fsopts_list) == 1, "Test 5: default options set 1", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 5: default options set 1", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(default_opts1, fsopts_vfat, NULL, NULL, &fsopts_list) == result_success, "Test 5: default options set 1", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 5: default options set 1", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 37, "Test 5: default options set 1");
@@ -136,8 +137,8 @@ int main(int argc, char **argv)
 
 	// Test 6: default options set 2
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(default_opts2, NULL, NULL, NULL, &fsopts_list) == 1, "Test 6: default options set 2", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 6: default options set 2", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(default_opts2, fsopts_vfat, NULL, NULL, &fsopts_list) == result_success, "Test 6: default options set 2", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 6: default options set 2", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 30, "Test 6: default options set 2");
@@ -146,23 +147,23 @@ int main(int argc, char **argv)
 
 	// Test 7: invalid options set 1
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(invalid_opts1, NULL, NULL, NULL, &fsopts_list) == 0, "Test 7: invalid options set 1", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(invalid_opts1, NULL, NULL, NULL, &fsopts_list) == result_bug, "Test 7: invalid options set 1", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	// Test 8: invalid options set 2
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(invalid_opts2, NULL, NULL, NULL, &fsopts_list) == 0, "Test 8: invalid options set 2", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(invalid_opts2, NULL, NULL, NULL, &fsopts_list) == result_bug, "Test 8: invalid options set 2", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	// Test 9: invalid options set for vfat
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(invalid_opts_vfat, fsopts_vfat, NULL, NULL, &fsopts_list) == 0, "Test 9: invalid options set for vfat", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(invalid_opts_vfat, fsopts_vfat, NULL, NULL, &fsopts_list) == result_fail, "Test 9: invalid options set for vfat", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	// Test 10: vfat with uid
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list("", fsopts_vfat, &uid, NULL, &fsopts_list) == 1, "Test 10: vfat with uid", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 10: vfat with uid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list("", fsopts_vfat, &uid, NULL, &fsopts_list) == result_success, "Test 10: vfat with uid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 10: vfat with uid", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 6, "Test 10: vfat with uid");
@@ -171,8 +172,8 @@ int main(int argc, char **argv)
 
 	// Test 11: vfat with gid
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list("", fsopts_vfat, NULL, &gid, &fsopts_list) == 1, "Test 11: vfat with gid", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 11: vfat with gid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list("", fsopts_vfat, NULL, &gid, &fsopts_list) == result_success, "Test 11: vfat with gid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 11: vfat with gid", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 7, "Test 11: vfat with gid");
@@ -181,8 +182,8 @@ int main(int argc, char **argv)
 
 	// Test 12: vfat with uid and gid
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list("", fsopts_vfat, &uid, &gid, &fsopts_list) == 1, "Test 12: vfat with uid and gid", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 12: vfat with uid and gid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list("", fsopts_vfat, &uid, &gid, &fsopts_list) == result_success, "Test 12: vfat with uid and gid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 12: vfat with uid and gid", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 14, "Test 12: vfat with uid and gid");
@@ -191,13 +192,23 @@ int main(int argc, char **argv)
 
 	// Test 13: vfat with options, uid and gid
 	init_options_list(&fsopts_list);
-	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_vfat, fsopts_vfat, &uid, &gid, &fsopts_list) == 1, "Test 13: vfat with options, uid and gid", free_options_list(&fsopts_list));
-	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == 1, "Test 13: vfat with options, uid and gid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(convert_options_to_list(filesystem_opts_vfat, fsopts_vfat, &uid, &gid, &fsopts_list) == result_success, "Test 13: vfat with options, uid and gid", free_options_list(&fsopts_list));
+	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 13: vfat with options, uid and gid", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
 	test_compare_comment(len_full == 157, "Test 13: vfat with options, uid and gid");
 	test_compare_comment(len == 157, "Test 13: vfat with options, uid and gid");
 	test_compare_comment(flags == 0, "Test 13: vfat with options, uid and gid");
+
+	// Test 14: invalid options set 1 for vfat
+	init_options_list(&fsopts_list);
+	test_compare_comment_deinit(convert_options_to_list(invalid_opts1, fsopts_vfat, NULL, NULL, &fsopts_list) == result_fail, "Test 14: invalid options set 1 for vfat", free_options_list(&fsopts_list));
+	free_options_list(&fsopts_list);
+
+	// Test 15: invalid options set 2 for vfat
+	init_options_list(&fsopts_list);
+	test_compare_comment_deinit(convert_options_to_list(invalid_opts2, fsopts_vfat, NULL, NULL, &fsopts_list) == result_fail, "Test 15: invalid options set 2 for vfat", free_options_list(&fsopts_list));
+	free_options_list(&fsopts_list);
 
 	return tests_result();
 }

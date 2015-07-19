@@ -472,6 +472,7 @@ int invoke_mount(int client_number, const char *path, const char *mount_options,
 	const char *local_mnt_point;
 	const char *local_fstype;
 	const char *local_label;
+	const char *mandatory_mount_options;
 
 	const struct dtmd_filesystem_options *fsopts;
 	dtmd_fsopts_list_t fsopts_list;
@@ -580,12 +581,12 @@ invoke_mount_exit_loop:
 #if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 		if (fsopts->external_fstype != NULL)
 		{
-			mount_options = get_mount_options_for_fs_from_config(fsopts->external_fstype);
+			mount_options = get_default_mount_options_for_fs_from_config(fsopts->external_fstype);
 		}
 		else
 		{
 #endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
-			mount_options = get_mount_options_for_fs_from_config(fsopts->fstype);
+			mount_options = get_default_mount_options_for_fs_from_config(fsopts->fstype);
 #if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
 		}
 #endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
@@ -604,6 +605,35 @@ invoke_mount_exit_loop:
 		if (error_code != NULL)
 		{
 			*error_code = dtmd_error_code_failed_parsing_mount_options;
+		}
+
+		goto invoke_mount_error_2;
+	}
+
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+	if (fsopts->external_fstype != NULL)
+	{
+		mandatory_mount_options = get_mandatory_mount_options_for_fs_from_config(fsopts->external_fstype);
+	}
+	else
+	{
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+		mandatory_mount_options = get_mandatory_mount_options_for_fs_from_config(fsopts->fstype);
+#if (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)
+	}
+#endif /* (defined OS_Linux) && (!defined DISABLE_EXT_MOUNT) */
+
+	if (mandatory_mount_options == NULL)
+	{
+		mandatory_mount_options = fsopts->mandatory_options;
+	}
+
+	result = convert_options_to_list(mandatory_mount_options, fsopts, NULL, NULL, &fsopts_list);
+	if (is_result_failure(result))
+	{
+		if (error_code != NULL)
+		{
+			*error_code = dtmd_error_code_generic_error;
 		}
 
 		goto invoke_mount_error_2;
