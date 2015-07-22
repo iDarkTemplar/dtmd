@@ -178,6 +178,10 @@ set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt
 set ( DAEMON_HEADERS                      daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
 set ( DAEMON_LIBS )
 
+set ( DTMD_CONFIG_SOURCES tools/dtmd-config.c )
+set ( DTMD_CONFIG_HEADERS )
+set ( DTMD_CONFIG_LIBS )
+
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS )
 set ( CONSOLE_CLIENT_LIBS )
@@ -268,6 +272,9 @@ target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 add_executable( dtmd-daemon ${DAEMON_SOURCES} ${DAEMON_HEADERS})
 target_link_libraries( dtmd-daemon ${DAEMON_LIBS} dtmd-misc )
 
+add_executable( dtmd-config ${DTMD_CONFIG_SOURCES} ${DTMD_CONFIG_HEADERS})
+target_link_libraries( dtmd-config ${DTMD_CONFIG_LIBS} )
+
 if (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 	add_executable( dtmd ${CONSOLE_CLIENT_SOURCES} ${CONSOLE_CLIENT_HEADERS})
 	target_link_libraries( dtmd dtmd-library ${CONSOLE_CLIENT_LIBS} )
@@ -319,7 +326,8 @@ endforeach (CURRENT_TEST)
 # installation config
 install(TARGETS dtmd-misc    LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
 install(TARGETS dtmd-library LIBRARY DESTINATION ${INSTALL_DIR_LIB} )
-install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin)
+install(TARGETS dtmd-daemon  RUNTIME DESTINATION sbin )
+install(TARGETS dtmd-config  RUNTIME DESTINATION bin )
 
 if (NOT DEFINED DISABLE_CONSOLE_CLIENT)
 	install(TARGETS dtmd         RUNTIME DESTINATION bin)
