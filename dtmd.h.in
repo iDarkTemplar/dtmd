@@ -21,7 +21,8 @@
 #ifndef DTMD_H
 #define DTMD_H
 
-#define dtmd_daemon_socket_addr "/var/run/dtmd.socket"
+#define dtmd_daemon_lock "@PIDFILE_PATH@"
+#define dtmd_daemon_socket_addr "@SOCKET_PATH@"
 #define dtmd_command_max_length 4096
 
 #ifdef __cplusplus

@@ -52,7 +52,7 @@ void command::fillFromCmd(const dtmd_command_t *cmd)
 		{
 			this->args.reserve(cmd->args_count);
 
-			for (unsigned int i = 0; i < cmd->args_count; ++i)
+			for (size_t i = 0; i < cmd->args_count; ++i)
 			{
 				if (cmd->args[i] != NULL)
 				{
@@ -192,7 +192,7 @@ void device::fillFromDevice(const dtmd_device_t *dev)
 		{
 			this->partitions.reserve(dev->partitions_count);
 
-			for (unsigned int i = 0; i < dev->partitions_count; ++i)
+			for (size_t i = 0; i < dev->partitions_count; ++i)
 			{
 				this->partitions.push_back(partition(dev->partition[i]));
 			}
@@ -327,9 +327,9 @@ library::~library()
 dtmd_result_t library::enum_devices(int timeout, std::vector<device> &devices, std::vector<stateful_device> &stateful_devices)
 {
 	dtmd_result_t result;
-	unsigned int count;
+	size_t count;
 	dtmd_device_t **devices_array;
-	unsigned int stateful_count;
+	size_t stateful_count;
 	dtmd_stateful_device_t **stateful_devices_array;
 
 	result = dtmd_enum_devices(this->m_handle, timeout, &count, &devices_array, &stateful_count, &stateful_devices_array);
@@ -344,12 +344,12 @@ dtmd_result_t library::enum_devices(int timeout, std::vector<device> &devices, s
 			devices.reserve(count);
 			stateful_devices.reserve(stateful_count);
 
-			for (unsigned int i = 0; i < count; ++i)
+			for (size_t i = 0; i < count; ++i)
 			{
 				devices.push_back(device(devices_array[i]));
 			}
 
-			for (unsigned int i = 0; i < stateful_count; ++i)
+			for (size_t i = 0; i < stateful_count; ++i)
 			{
 				stateful_devices.push_back(stateful_device(stateful_devices_array[i]));
 			}
@@ -458,9 +458,8 @@ dtmd_result_t library::unmount(int timeout, const std::string &path)
 dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list)
 {
 	dtmd_result_t result;
-	unsigned int supported_filesystems_count;
+	size_t supported_filesystems_count;
 	const char **supported_filesystems_array;
-	unsigned int i;
 
 	result = dtmd_list_supported_filesystems(this->m_handle, timeout, &supported_filesystems_count, &supported_filesystems_array);
 
@@ -472,7 +471,7 @@ dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::
 			{
 				supported_filesystems_list.reserve(supported_filesystems_count);
 
-				for (i = 0; i < supported_filesystems_count; ++i)
+				for (size_t i = 0; i < supported_filesystems_count; ++i)
 				{
 					if (supported_filesystems_array[i] != NULL)
 					{
@@ -496,9 +495,8 @@ dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::
 dtmd_result_t library::list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list)
 {
 	dtmd_result_t result;
-	unsigned int supported_filesystem_options_count;
+	size_t supported_filesystem_options_count;
 	const char **supported_filesystem_options_array;
-	unsigned int i;
 
 	result = dtmd_list_supported_filesystem_options(this->m_handle, timeout, filesystem.c_str(), &supported_filesystem_options_count, &supported_filesystem_options_array);
 
@@ -510,7 +508,7 @@ dtmd_result_t library::list_supported_filesystem_options(int timeout, const std:
 			{
 				supported_filesystem_options_list.reserve(supported_filesystem_options_count);
 
-				for (i = 0; i < supported_filesystem_options_count; ++i)
+				for (size_t i = 0; i < supported_filesystem_options_count; ++i)
 				{
 					if (supported_filesystem_options_array[i] != NULL)
 					{

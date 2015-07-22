@@ -62,7 +62,7 @@ struct dtmd_library
 
 	sem_t caller_socket;
 
-	unsigned int cur_pos;
+	size_t cur_pos;
 	char buffer[dtmd_command_max_length + 1];
 };
 
@@ -120,22 +120,22 @@ static int dtmd_helper_cmd_check_supported_filesystem_options(dtmd_command_t *cm
 static void dtmd_helper_free_device(dtmd_device_t *device);
 static void dtmd_helper_free_partition(dtmd_partition_t *partition);
 static void dtmd_helper_free_stateful_device(dtmd_stateful_device_t *stateful_device);
-static void dtmd_helper_free_supported_filesystems(unsigned int supported_filesystems_count, const char **supported_filesystems_list);
-static void dtmd_helper_free_supported_filesystem_options(unsigned int supported_filesystem_options_count, const char **supported_filesystem_options_list);
+static void dtmd_helper_free_supported_filesystems(size_t supported_filesystems_count, const char **supported_filesystems_list);
+static void dtmd_helper_free_supported_filesystem_options(size_t supported_filesystem_options_count, const char **supported_filesystem_options_list);
 
-static int dtmd_helper_string_to_int(const char *string, unsigned int *number);
+static int dtmd_helper_string_to_int(const char *string, size_t *number);
 
 static int dtmd_helper_validate_device(dtmd_device_t *device);
 static int dtmd_helper_validate_partition(dtmd_partition_t *partition);
 static int dtmd_helper_validate_stateful_device(dtmd_stateful_device_t *stateful_device);
-static int dtmd_helper_validate_supported_filesystems(unsigned int supported_filesystems_count, const char **supported_filesystems_list);
-static int dtmd_helper_validate_supported_filesystem_options(unsigned int supported_filesystem_options_count, const char **supported_filesystem_options_list);
+static int dtmd_helper_validate_supported_filesystems(size_t supported_filesystems_count, const char **supported_filesystems_list);
+static int dtmd_helper_validate_supported_filesystem_options(size_t supported_filesystem_options_count, const char **supported_filesystem_options_list);
 
 static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 
-static void dtmd_helper_free_string_array(unsigned int count, const char **data);
-static int dtmd_helper_validate_string_array(unsigned int count, const char **data);
+static void dtmd_helper_free_string_array(size_t count, const char **data);
+static int dtmd_helper_validate_string_array(size_t count, const char **data);
 
 dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
 {
@@ -369,7 +369,7 @@ dtmd_worker_function_exit:
 	pthread_exit(0);
 }
 
-dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *device_count, dtmd_device_t ***result, unsigned int *stateful_device_count, dtmd_stateful_device_t ***result_stateful)
+dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, size_t *device_count, dtmd_device_t ***result, size_t *stateful_device_count, dtmd_stateful_device_t ***result_stateful)
 {
 	char data = 0;
 	dtmd_command_t *cmd;
@@ -377,16 +377,16 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, unsigned int *devic
 	struct timespec time_cur, time_end;
 	char *eol;
 	int got_started = 0;
-	unsigned int result_count = 0;
-	unsigned int result_stateful_count = 0;
+	size_t result_count = 0;
+	size_t result_stateful_count = 0;
 	dtmd_device_t **result_devices = NULL;
 	dtmd_stateful_device_t **result_devices_stateful = NULL;
-	unsigned int device;
-	unsigned int partition;
+	size_t device;
+	size_t partition;
 	int got_devices_count = 0;
 	int got_stateful_devices_count = 0;
-	unsigned int expected_devices_count;
-	unsigned int expected_stateful_devices_count;
+	size_t expected_devices_count;
+	size_t expected_stateful_devices_count;
 
 	if (handle == NULL)
 	{
@@ -894,7 +894,7 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 	char *eol;
 	int got_started = 0;
 	dtmd_device_t *result_device = NULL;
-	unsigned int partition;
+	size_t partition;
 
 	if (handle == NULL)
 	{
@@ -1884,7 +1884,7 @@ dtmd_unmount_error_1:
 	return handle->result_state;
 }
 
-dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, unsigned int *supported_filesystems_count, const char ***supported_filesystems_list)
+dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, size_t *supported_filesystems_count, const char ***supported_filesystems_list)
 {
 	char data = 0;
 	dtmd_command_t *cmd;
@@ -1892,7 +1892,7 @@ dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, unsig
 	struct timespec time_cur, time_end;
 	char *eol;
 	int got_started = 0;
-	unsigned int result_count = 0;
+	size_t result_count = 0;
 	const char **result_list = NULL;
 	int got_result = 0;
 
@@ -2080,7 +2080,7 @@ dtmd_dtmd_list_supported_filesystems_error_1:
 	return handle->result_state;
 }
 
-dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, unsigned int *supported_filesystem_options_count, const char ***supported_filesystem_options_list)
+dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, size_t *supported_filesystem_options_count, const char ***supported_filesystem_options_list)
 {
 	char data = 0;
 	dtmd_command_t *cmd;
@@ -2088,7 +2088,7 @@ dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout
 	struct timespec time_cur, time_end;
 	char *eol;
 	int got_started = 0;
-	unsigned int result_count = 0;
+	size_t result_count = 0;
 	const char **result_list = NULL;
 	int got_result = 0;
 
@@ -2299,9 +2299,9 @@ dtmd_error_code_t dtmd_get_code_of_command_fail(dtmd_t *handle)
 	return handle->error_code;
 }
 
-void dtmd_free_devices_array(dtmd_t *handle, unsigned int device_count, dtmd_device_t **devices)
+void dtmd_free_devices_array(dtmd_t *handle, size_t device_count, dtmd_device_t **devices)
 {
-	unsigned int i;
+	size_t i;
 
 	if ((handle == NULL) || (devices == NULL))
 	{
@@ -2339,9 +2339,9 @@ void dtmd_free_partition(dtmd_t *handle, dtmd_partition_t *partition)
 	dtmd_helper_free_partition(partition);
 }
 
-void dtmd_free_stateful_devices_array(dtmd_t *handle, unsigned int stateful_device_count, dtmd_stateful_device_t **stateful_devices)
+void dtmd_free_stateful_devices_array(dtmd_t *handle, size_t stateful_device_count, dtmd_stateful_device_t **stateful_devices)
 {
-	unsigned int i;
+	size_t i;
 
 	if ((handle == NULL) || (stateful_devices == NULL))
 	{
@@ -2369,7 +2369,7 @@ void dtmd_free_stateful_device(dtmd_t *handle, dtmd_stateful_device_t *stateful_
 	dtmd_helper_free_stateful_device(stateful_device);
 }
 
-void dtmd_free_supported_filesystems_list(dtmd_t *handle, unsigned int supported_filesystems_count, const char **supported_filesystems_list)
+void dtmd_free_supported_filesystems_list(dtmd_t *handle, size_t supported_filesystems_count, const char **supported_filesystems_list)
 {
 	if ((handle == NULL) || (supported_filesystems_list == NULL))
 	{
@@ -2379,7 +2379,7 @@ void dtmd_free_supported_filesystems_list(dtmd_t *handle, unsigned int supported
 	dtmd_helper_free_supported_filesystems(supported_filesystems_count, supported_filesystems_list);
 }
 
-void dtmd_free_supported_filesystem_options_list(dtmd_t *handle, unsigned int supported_filesystem_options_count, const char **supported_filesystem_options_list)
+void dtmd_free_supported_filesystem_options_list(dtmd_t *handle, size_t supported_filesystem_options_count, const char **supported_filesystem_options_list)
 {
 	if ((handle == NULL) || (supported_filesystem_options_list == NULL))
 	{
@@ -2781,7 +2781,7 @@ static int dtmd_helper_cmd_check_supported_filesystem_options(dtmd_command_t *cm
 
 static void dtmd_helper_free_device(dtmd_device_t *device)
 {
-	unsigned int i;
+	size_t i;
 
 	if (device->path != NULL)
 	{
@@ -2864,19 +2864,19 @@ static void dtmd_helper_free_stateful_device(dtmd_stateful_device_t *stateful_de
 	free(stateful_device);
 }
 
-static void dtmd_helper_free_supported_filesystems(unsigned int supported_filesystems_count, const char **supported_filesystems_list)
+static void dtmd_helper_free_supported_filesystems(size_t supported_filesystems_count, const char **supported_filesystems_list)
 {
 	dtmd_helper_free_string_array(supported_filesystems_count, supported_filesystems_list);
 }
 
-static void dtmd_helper_free_supported_filesystem_options(unsigned int supported_filesystem_options_count, const char **supported_filesystem_options_list)
+static void dtmd_helper_free_supported_filesystem_options(size_t supported_filesystem_options_count, const char **supported_filesystem_options_list)
 {
 	dtmd_helper_free_string_array(supported_filesystem_options_count, supported_filesystem_options_list);
 }
 
-static int dtmd_helper_string_to_int(const char *string, unsigned int *number)
+static int dtmd_helper_string_to_int(const char *string, size_t *number)
 {
-	unsigned int result = 0;
+	size_t result = 0;
 
 	if (string[0] == 0)
 	{
@@ -2904,7 +2904,7 @@ static int dtmd_helper_string_to_int(const char *string, unsigned int *number)
 
 static int dtmd_helper_validate_device(dtmd_device_t *device)
 {
-	unsigned int i;
+	size_t i;
 
 	if ((device->path == NULL) || (device->type == dtmd_removable_media_unknown_or_persistent))
 	{
@@ -2960,12 +2960,12 @@ static int dtmd_helper_validate_stateful_device(dtmd_stateful_device_t *stateful
 	return 1;
 }
 
-static int dtmd_helper_validate_supported_filesystems(unsigned int supported_filesystems_count, const char **supported_filesystems_list)
+static int dtmd_helper_validate_supported_filesystems(size_t supported_filesystems_count, const char **supported_filesystems_list)
 {
 	return dtmd_helper_validate_string_array(supported_filesystems_count, supported_filesystems_list);
 }
 
-static int dtmd_helper_validate_supported_filesystem_options(unsigned int supported_filesystem_options_count, const char **supported_filesystem_options_list)
+static int dtmd_helper_validate_supported_filesystem_options(size_t supported_filesystem_options_count, const char **supported_filesystem_options_list)
 {
 	return dtmd_helper_validate_string_array(supported_filesystem_options_count, supported_filesystem_options_list);
 }
@@ -3055,9 +3055,9 @@ static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct t
 	return dtmd_ok;
 }
 
-static void dtmd_helper_free_string_array(unsigned int count, const char **data)
+static void dtmd_helper_free_string_array(size_t count, const char **data)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < count; ++i)
 	{
@@ -3070,9 +3070,9 @@ static void dtmd_helper_free_string_array(unsigned int count, const char **data)
 	free(data);
 }
 
-static int dtmd_helper_validate_string_array(unsigned int count, const char **data)
+static int dtmd_helper_validate_string_array(size_t count, const char **data)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < count; ++i)
 	{

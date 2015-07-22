@@ -207,11 +207,11 @@ void client_print_partition(const dtmd_partition_t *partition)
 
 void client_print_device(const dtmd_device_t *device)
 {
-	unsigned int i;
+	size_t i;
 
 	fprintf(stdout, "Path: %s\n", device->path);
 	fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(device->type));
-	fprintf(stdout, "Partitions: %u\n\n", device->partitions_count);
+	fprintf(stdout, "Partitions: %zu\n\n", device->partitions_count);
 
 	for (i = 0; i < device->partitions_count; ++i)
 	{
@@ -220,7 +220,7 @@ void client_print_device(const dtmd_device_t *device)
 			fprintf(stdout, "\n");
 		}
 
-		fprintf(stdout, "Partition %u:\n", i);
+		fprintf(stdout, "Partition %zu:\n", i);
 		client_print_partition(device->partition[i]);
 	}
 }
@@ -256,7 +256,7 @@ int client_enumerate(void)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, count_stateful, i;
+	size_t count, count_stateful, i;
 	dtmd_device_t **devices;
 	dtmd_stateful_device_t **stateful_devices;
 
@@ -275,18 +275,18 @@ int client_enumerate(void)
 		return -1;
 	}
 
-	fprintf(stdout, "Found %u devices\n\n", count + count_stateful);
+	fprintf(stdout, "Found %zu devices\n\n", count + count_stateful);
 
 	for (i = 0; i < count_stateful; ++i)
 	{
-		fprintf(stdout, "Device %u:\n", i);
+		fprintf(stdout, "Device %zu:\n", i);
 		client_print_stateful_device(stateful_devices[i]);
 		fprintf(stdout, "\n");
 	}
 
 	for (i = 0; i < count; ++i)
 	{
-		fprintf(stdout, "Device %u:\n", i + count_stateful);
+		fprintf(stdout, "Device %zu:\n", i + count_stateful);
 		client_print_device(devices[i]);
 		fprintf(stdout, "\n");
 	}
@@ -468,7 +468,7 @@ int client_list_supported_filesystems(void)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, i;
+	size_t count, i;
 	const char **filesystems;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
@@ -486,7 +486,7 @@ int client_list_supported_filesystems(void)
 		return -1;
 	}
 
-	fprintf(stdout, "Got %u supported filesystems:\n", count);
+	fprintf(stdout, "Got %zu supported filesystems:\n", count);
 
 	for (i = 0; i < count; ++i)
 	{
@@ -503,7 +503,7 @@ int client_list_supported_filesystem_options(const char *filesystem)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, i;
+	size_t count, i;
 	const char **options_list;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
@@ -521,7 +521,7 @@ int client_list_supported_filesystem_options(const char *filesystem)
 		return -1;
 	}
 
-	fprintf(stdout, "Got %u supported filesystem options for %s:\n", count, filesystem);
+	fprintf(stdout, "Got %zu supported filesystem options for %s:\n", count, filesystem);
 
 	for (i = 0; i < count; ++i)
 	{

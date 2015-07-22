@@ -44,8 +44,6 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
-#define dtmd_daemon_lock "/var/run/dtmd.pid"
-
 static volatile unsigned char continue_working  = 1;
 static unsigned char check_config_only = 0;
 
