@@ -29,16 +29,16 @@ class QCustomDeviceAction : public QAction
 
 public:
 	explicit QCustomDeviceAction(QObject *parent = 0);
-	QCustomDeviceAction(const QString &text, QObject *parent, unsigned int device, unsigned int partition, const QString &partition_name);
+	QCustomDeviceAction(const QString &text, QObject *parent, size_t device, size_t partition, const QString &partition_name);
 
 signals:
-	void triggered(unsigned int, unsigned int, QString);
+	void triggered(size_t, size_t, QString);
 
 public slots:
 
 protected:
-	unsigned int m_device;
-	unsigned int m_partition;
+	size_t m_device;
+	size_t m_partition;
 	QString m_partition_name;
 
 protected slots:

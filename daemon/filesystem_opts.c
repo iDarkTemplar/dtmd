@@ -536,10 +536,10 @@ const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 	}
 }
 
-static const struct dtmd_mount_option* find_option_in_list(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
+static const struct dtmd_mount_option* find_option_in_list(const char *option, size_t option_len, const struct dtmd_filesystem_options *filesystem_list)
 {
 	const struct dtmd_mount_option *option_list;
-	unsigned int minlen;
+	size_t minlen;
 	const struct dtmd_mount_option_list *options_lists_array;
 
 	for (options_lists_array = filesystem_list->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
@@ -605,7 +605,7 @@ static void free_options_list_id(struct dtmd_fsopts_list_id *id)
 
 void free_options_list(dtmd_fsopts_list_t *fsopts_list)
 {
-	unsigned int index = 0;
+	size_t index = 0;
 
 	if (fsopts_list != NULL)
 	{
@@ -637,10 +637,10 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 
 	const char *opt_start;
 	const char *opt_end;
-	unsigned int opt_len;
+	size_t opt_len;
 	int result;
 
-	unsigned int option_index;
+	size_t option_index;
 
 	struct dtmd_fsopts_list_item *option_item;
 	void *tmp;
@@ -890,25 +890,25 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 }
 
 int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
-	unsigned int *options_full_string_length,
+	size_t *options_full_string_length,
 	char *options_full_string_buffer,
-	unsigned int options_full_string_buffer_size
+	size_t options_full_string_buffer_size
 #if (defined OS_Linux)
 	,
-	unsigned int *options_string_length,
+	size_t *options_string_length,
 	char *options_string_buffer,
-	unsigned int options_string_buffer_size,
+	size_t options_string_buffer_size,
 	unsigned long *mount_flags
 #endif /* (defined OS_Linux) */
 	)
 {
-	unsigned int string_len_full = 0;
-	unsigned int current_item_full = 0;
-	unsigned int index;
+	size_t string_len_full = 0;
+	size_t current_item_full = 0;
+	size_t index;
 
 #if (defined OS_Linux)
-	unsigned int string_len = 0;
-	unsigned int current_item = 0;
+	size_t string_len = 0;
+	size_t current_item = 0;
 	unsigned long flags = 0;
 #endif /* (defined OS_Linux) */
 

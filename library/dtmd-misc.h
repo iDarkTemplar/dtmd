@@ -23,6 +23,8 @@
 
 #include <dtmd.h>
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,7 +32,7 @@ extern "C" {
 typedef struct dtmd_command
 {
 	char *cmd;
-	unsigned int args_count;
+	size_t args_count;
 	char **args;
 } dtmd_command_t;
 

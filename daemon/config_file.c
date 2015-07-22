@@ -52,10 +52,10 @@ struct config_mount_opts
 };
 
 static struct config_mount_opts **default_mount_opts_array = NULL;
-static unsigned int default_mount_opts_array_size = 0;
+static size_t default_mount_opts_array_size = 0;
 
 static struct config_mount_opts **mandatory_mount_opts_array = NULL;
-static unsigned int mandatory_mount_opts_array_size = 0;
+static size_t mandatory_mount_opts_array_size = 0;
 
 static const char *config_yes = "yes";
 static const char *config_no = "no";
@@ -83,7 +83,7 @@ static int insert_default_mount_opts_into_array(char *fs_name, char *fs_opts)
 {
 	void *tmp;
 	struct config_mount_opts *array_item;
-	unsigned int item = 0;
+	size_t item = 0;
 
 	for ( ; item < default_mount_opts_array_size; ++item)
 	{
@@ -138,7 +138,7 @@ static int insert_mandatory_mount_opts_into_array(char *fs_name, char *fs_opts)
 {
 	void *tmp;
 	struct config_mount_opts *array_item;
-	unsigned int item = 0;
+	size_t item = 0;
 
 	for ( ; item < mandatory_mount_opts_array_size; ++item)
 	{
@@ -191,7 +191,7 @@ insert_mandatory_mount_opts_into_array_error_1:
 
 static void free_default_mount_opts_array(void)
 {
-	unsigned int item = 0;
+	size_t item = 0;
 
 	if (default_mount_opts_array != NULL)
 	{
@@ -221,7 +221,7 @@ static void free_default_mount_opts_array(void)
 
 static void free_mandatory_mount_opts_array(void)
 {
-	unsigned int item = 0;
+	size_t item = 0;
 
 	if (mandatory_mount_opts_array != NULL)
 	{
@@ -595,9 +595,9 @@ void free_config(void)
 	free_mandatory_mount_opts_array();
 }
 
-static const char* generic_get_mount_options_for_fs_from_config(const char *fstype, struct config_mount_opts **mount_opts_array, unsigned int mount_opts_array_size)
+static const char* generic_get_mount_options_for_fs_from_config(const char *fstype, struct config_mount_opts **mount_opts_array, size_t mount_opts_array_size)
 {
-	unsigned int item = 0;
+	size_t item = 0;
 
 	if (mount_opts_array != NULL)
 	{

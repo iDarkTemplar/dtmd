@@ -28,7 +28,7 @@ QCustomDeviceAction::QCustomDeviceAction(QObject *parent)
 	QObject::connect(this, SIGNAL(triggered()), this, SLOT(retrigger()), Qt::DirectConnection);
 }
 
-QCustomDeviceAction::QCustomDeviceAction(const QString &text, QObject *parent, unsigned int device, unsigned int partition, const QString &partition_name)
+QCustomDeviceAction::QCustomDeviceAction(const QString &text, QObject *parent, size_t device, size_t partition, const QString &partition_name)
 	: QAction(text, parent),
 	m_device(device),
 	m_partition(partition),

@@ -102,8 +102,8 @@ int close_mount_monitoring(int monitorfd)
 #if (defined OS_Linux)
 int check_mount_changes(void)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	FILE *mntfile;
 	struct mntent *ent;
 
@@ -359,8 +359,8 @@ int check_mount_changes(int mountfd)
 	int rc;
 	struct kevent evt;
 	struct timespec timeout;
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	int count, current;
 	struct statfs *mounts;
 	char *options;

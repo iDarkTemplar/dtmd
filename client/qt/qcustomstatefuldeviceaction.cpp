@@ -27,7 +27,7 @@ QCustomStatefulDeviceAction::QCustomStatefulDeviceAction(QObject *parent)
 	QObject::connect(this, SIGNAL(triggered()), this, SLOT(retrigger()), Qt::DirectConnection);
 }
 
-QCustomStatefulDeviceAction::QCustomStatefulDeviceAction(const QString &text, QObject *parent, unsigned int stateful_device, const QString &device_name)
+QCustomStatefulDeviceAction::QCustomStatefulDeviceAction(const QString &text, QObject *parent, size_t stateful_device, const QString &device_name)
 	: QAction(text, parent),
 	m_device(stateful_device),
 	m_device_name(device_name)

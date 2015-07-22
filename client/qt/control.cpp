@@ -106,7 +106,7 @@ void Control::change_state_icon()
 	}
 } // unlock
 
-void Control::triggeredOpen(unsigned int device, unsigned int partition, QString partition_name)
+void Control::triggeredOpen(size_t device, size_t partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
 		|| (partition >= m_devices.at(device).partitions.size())
@@ -147,7 +147,7 @@ void Control::triggeredOpen(unsigned int device, unsigned int partition, QString
 	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
 }
 
-void Control::triggeredOpen(unsigned int stateful_device, QString device_name)
+void Control::triggeredOpen(size_t stateful_device, QString device_name)
 {
 	if ((stateful_device >= m_stateful_devices.size())
 		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
@@ -187,7 +187,7 @@ void Control::triggeredOpen(unsigned int stateful_device, QString device_name)
 	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
 }
 
-void Control::triggeredMount(unsigned int device, unsigned int partition, QString partition_name)
+void Control::triggeredMount(size_t device, size_t partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
 		|| (partition >= m_devices.at(device).partitions.size())
@@ -209,7 +209,7 @@ void Control::triggeredMount(unsigned int device, unsigned int partition, QStrin
 	}
 }
 
-void Control::triggeredMount(unsigned int stateful_device, QString device_name)
+void Control::triggeredMount(size_t stateful_device, QString device_name)
 {
 	if ((stateful_device >= m_stateful_devices.size())
 		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
@@ -230,7 +230,7 @@ void Control::triggeredMount(unsigned int stateful_device, QString device_name)
 	}
 }
 
-void Control::triggeredUnmount(unsigned int device, unsigned int partition, QString partition_name)
+void Control::triggeredUnmount(size_t device, size_t partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
 		|| (partition >= m_devices.at(device).partitions.size())
@@ -252,7 +252,7 @@ void Control::triggeredUnmount(unsigned int device, unsigned int partition, QStr
 	}
 }
 
-void Control::triggeredUnmount(unsigned int stateful_device, QString device_name)
+void Control::triggeredUnmount(size_t stateful_device, QString device_name)
 {
 	if ((stateful_device >= m_stateful_devices.size())
 		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
@@ -296,8 +296,8 @@ void Control::BuildMenu()
 						dev - m_stateful_devices.begin(),
 						QString::fromLocal8Bit(dev->path.c_str())));
 
-					QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
-						this, SLOT(triggeredOpen(uint,QString)), Qt::DirectConnection);
+					QObject::connect(action.data(), SIGNAL(triggered(size_t,QString)),
+						this, SLOT(triggeredOpen(size_t,QString)), Qt::DirectConnection);
 
 					menu->addAction(action.take());
 
@@ -308,8 +308,8 @@ void Control::BuildMenu()
 							dev - m_stateful_devices.begin(),
 							QString::fromLocal8Bit(dev->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
-							this, SLOT(triggeredUnmount(uint,QString)), Qt::DirectConnection);
+						QObject::connect(action.data(), SIGNAL(triggered(size_t,QString)),
+							this, SLOT(triggeredUnmount(size_t,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
 					}
@@ -320,8 +320,8 @@ void Control::BuildMenu()
 							dev - m_stateful_devices.begin(),
 							QString::fromLocal8Bit(dev->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
-							this, SLOT(triggeredMount(uint,QString)), Qt::DirectConnection);
+						QObject::connect(action.data(), SIGNAL(triggered(size_t,QString)),
+							this, SLOT(triggeredMount(size_t,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
 					}
@@ -350,8 +350,8 @@ void Control::BuildMenu()
 							it - dev->partitions.begin(),
 							QString::fromLocal8Bit(it->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-							this, SLOT(triggeredOpen(uint,uint,QString)), Qt::DirectConnection);
+						QObject::connect(action.data(), SIGNAL(triggered(size_t,size_t,QString)),
+							this, SLOT(triggeredOpen(size_t,size_t,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
 
@@ -363,8 +363,8 @@ void Control::BuildMenu()
 								it - dev->partitions.begin(),
 								QString::fromLocal8Bit(it->path.c_str())));
 
-							QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-								this, SLOT(triggeredUnmount(uint,uint,QString)), Qt::DirectConnection);
+							QObject::connect(action.data(), SIGNAL(triggered(size_t,size_t,QString)),
+								this, SLOT(triggeredUnmount(size_t,size_t,QString)), Qt::DirectConnection);
 
 							menu->addAction(action.take());
 						}
@@ -376,8 +376,8 @@ void Control::BuildMenu()
 								it - dev->partitions.begin(),
 								QString::fromLocal8Bit(it->path.c_str())));
 
-							QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-								this, SLOT(triggeredMount(uint,uint,QString)), Qt::DirectConnection);
+							QObject::connect(action.data(), SIGNAL(triggered(size_t,size_t,QString)),
+								this, SLOT(triggeredMount(size_t,size_t,QString)), Qt::DirectConnection);
 
 							menu->addAction(action.take());
 						}

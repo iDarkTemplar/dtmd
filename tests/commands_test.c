@@ -25,7 +25,7 @@
 
 void print_command(dtmd_command_t *cmd)
 {
-	unsigned int i;
+	size_t i;
 
 	printf("command: %s\n", cmd->cmd);
 
@@ -33,11 +33,11 @@ void print_command(dtmd_command_t *cmd)
 	{
 		if (cmd->args[i] != NULL)
 		{
-			printf("arg %d: \"%s\"\n", i+1, cmd->args[i]);
+			printf("arg %zu: \"%s\"\n", i+1, cmd->args[i]);
 		}
 		else
 		{
-			printf("arg %d: nil\n", i+1);
+			printf("arg %zu: nil\n", i+1);
 		}
 	}
 }

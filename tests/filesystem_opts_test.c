@@ -31,13 +31,13 @@ int use_syslog = 0;
 int daemonize = 1;
 
 struct removable_media **media = NULL;
-unsigned int media_count = 0;
+size_t media_count = 0;
 
 struct removable_stateful_media **stateful_media = NULL;
-unsigned int stateful_media_count = 0;
+size_t stateful_media_count = 0;
 
 struct client **clients = NULL;
-unsigned int clients_count = 0;
+size_t clients_count = 0;
 
 #define get_fsopts(fstype) \
 	fsopts_##fstype = get_fsopts_for_fs(#fstype); \
@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 
 	char *invalid_opts_vfat = "utf8";
 
-	unsigned int len, len_full;
+	size_t len, len_full;
 	unsigned long flags;
 
 	const struct dtmd_filesystem_options *fsopts_vfat;

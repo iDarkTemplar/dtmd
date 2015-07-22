@@ -85,8 +85,8 @@ struct dtmd_string_to_mount_flag
 struct dtmd_fsopts_list_item
 {
 	struct dtmd_string_to_mount_flag option;
-	unsigned int option_full_len;
-	unsigned int option_len;
+	size_t option_full_len;
+	size_t option_len;
 
 #if (defined OS_FreeBSD)
 	const char *transformation_string;
@@ -96,10 +96,10 @@ struct dtmd_fsopts_list_item
 struct dtmd_fsopts_list_id
 {
 	const char * id_option;
-	unsigned int id_option_len;
+	size_t id_option_len;
 
 	char *id_option_value;
-	unsigned int id_option_value_len;
+	size_t id_option_value_len;
 
 #if (defined OS_FreeBSD)
 	unsigned char transformed;
@@ -109,7 +109,7 @@ struct dtmd_fsopts_list_id
 typedef struct dtmd_fsopts_list
 {
 	struct dtmd_fsopts_list_item **options;
-	unsigned int options_count;
+	size_t options_count;
 
 	struct dtmd_fsopts_list_id option_uid;
 	struct dtmd_fsopts_list_id option_gid;
@@ -122,14 +122,14 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 void free_options_list(dtmd_fsopts_list_t *fsopts_list);
 
 int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
-	unsigned int *options_full_string_length,
+	size_t *options_full_string_length,
 	char *options_full_string_buffer,
-	unsigned int options_full_string_buffer_size
+	size_t options_full_string_buffer_size
 #if (defined OS_Linux)
 	,
-	unsigned int *options_string_length,
+	size_t *options_string_length,
 	char *options_string_buffer,
-	unsigned int options_string_buffer_size,
+	size_t options_string_buffer_size,
 	unsigned long *mount_flags
 #endif /* (defined OS_Linux) */
 	);

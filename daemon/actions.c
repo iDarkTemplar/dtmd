@@ -35,18 +35,18 @@
 
 static int print_devices_count(int client_number);
 
-static int print_device(int client_number, unsigned int device);
+static int print_device(int client_number, size_t device);
 
-static int print_partition(int client_number, unsigned int device, unsigned int partition);
+static int print_partition(int client_number, size_t device, size_t partition);
 
 static int print_stateful_devices_count(int client_number);
 
-static int print_stateful_device(int client_number, unsigned int device);
+static int print_stateful_device(int client_number, size_t device);
 
 int invoke_command(int client_number, dtmd_command_t *cmd)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	int rc;
 	dtmd_error_code_t error_code;
 
@@ -304,7 +304,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 
 void notify_add_disk(const char *path, dtmd_removable_media_type_t type)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -314,7 +314,7 @@ void notify_add_disk(const char *path, dtmd_removable_media_type_t type)
 
 void notify_remove_disk(const char *path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -324,7 +324,7 @@ void notify_remove_disk(const char *path)
 
 void notify_disk_changed(const char *path, dtmd_removable_media_type_t type)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -334,7 +334,7 @@ void notify_disk_changed(const char *path, dtmd_removable_media_type_t type)
 
 void notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -352,7 +352,7 @@ void notify_add_partition(const char *path, const char *fstype, const char *labe
 
 void notify_remove_partition(const char *path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -362,7 +362,7 @@ void notify_remove_partition(const char *path)
 
 void notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -380,7 +380,7 @@ void notify_partition_changed(const char *path, const char *fstype, const char *
 
 void notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -399,7 +399,7 @@ void notify_add_stateful_device(const char *path, dtmd_removable_media_type_t ty
 
 void notify_remove_stateful_device(const char *path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -409,7 +409,7 @@ void notify_remove_stateful_device(const char *path)
 
 void notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -428,7 +428,7 @@ void notify_stateful_device_changed(const char *path, dtmd_removable_media_type_
 
 void notify_mount(const char *path, const char *mount_point, const char *mount_options)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -438,7 +438,7 @@ void notify_mount(const char *path, const char *mount_point, const char *mount_o
 
 void notify_unmount(const char *path, const char *mount_point)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -448,7 +448,7 @@ void notify_unmount(const char *path, const char *mount_point)
 
 static int print_devices_count(int client_number)
 {
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%zu\")\n",
 		media_count) < 0)
 	{
 		return result_client_error;
@@ -457,7 +457,7 @@ static int print_devices_count(int client_number)
 	return result_success;
 }
 
-static int print_device(int client_number, unsigned int device)
+static int print_device(int client_number, size_t device)
 {
 #ifndef NDEBUG
 	if (device > media_count)
@@ -466,7 +466,7 @@ static int print_device(int client_number, unsigned int device)
 	}
 #endif /* NDEBUG */
 
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_device "(\"%s\", \"%s\", \"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_device "(\"%s\", \"%s\", \"%zu\")\n",
 		media[device]->path,
 		dtmd_device_type_to_string(media[device]->type),
 		media[device]->partitions_count) < 0)
@@ -477,7 +477,7 @@ static int print_device(int client_number, unsigned int device)
 	return result_success;
 }
 
-static int print_partition(int client_number, unsigned int device, unsigned int partition)
+static int print_partition(int client_number, size_t device, size_t partition)
 {
 #ifndef NDEBUG
 	if ((device > media_count) || (partition > media[device]->partitions_count))
@@ -510,7 +510,7 @@ static int print_partition(int client_number, unsigned int device, unsigned int 
 
 static int print_stateful_devices_count(int client_number)
 {
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_devices "(\"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_devices "(\"%zu\")\n",
 		stateful_media_count) < 0)
 	{
 		return result_client_error;
@@ -519,7 +519,7 @@ static int print_stateful_devices_count(int client_number)
 	return result_success;
 }
 
-static int print_stateful_device(int client_number, unsigned int device)
+static int print_stateful_device(int client_number, size_t device)
 {
 #ifndef NDEBUG
 	if (device > stateful_media_count)

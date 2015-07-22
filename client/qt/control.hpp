@@ -43,12 +43,12 @@ public:
 
 public slots:
 	void change_state_icon();
-	void triggeredOpen(unsigned int device, unsigned int partition, QString partition_name);
-	void triggeredOpen(unsigned int stateful_device, QString device_name);
-	void triggeredMount(unsigned int device, unsigned int partition, QString partition_name);
-	void triggeredMount(unsigned int stateful_device, QString device_name);
-	void triggeredUnmount(unsigned int device, unsigned int partition, QString partition_name);
-	void triggeredUnmount(unsigned int stateful_device, QString device_name);
+	void triggeredOpen(size_t device, size_t partition, QString partition_name);
+	void triggeredOpen(size_t stateful_device, QString device_name);
+	void triggeredMount(size_t device, size_t partition, QString partition_name);
+	void triggeredMount(size_t stateful_device, QString device_name);
+	void triggeredUnmount(size_t device, size_t partition, QString partition_name);
+	void triggeredUnmount(size_t stateful_device, QString device_name);
 
 private:
 	Q_DISABLE_COPY(Control)

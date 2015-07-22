@@ -322,8 +322,8 @@ int main(int argc, char **argv)
 	pid_t child = -1;
 	char buffer[12];
 	const int backlog = 4;
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	struct stat st;
 	int daemonpipe[2] = { -1, -1 };
 	unsigned char daemondata;
@@ -340,7 +340,7 @@ int main(int argc, char **argv)
 	void *tmp;
 	char *tmp_str;
 #define pollfds_count_default 3
-	unsigned int pollfds_count = pollfds_count_default;
+	size_t pollfds_count = pollfds_count_default;
 	dtmd_command_t *cmd;
 
 	struct pollfd *pollfds = NULL;

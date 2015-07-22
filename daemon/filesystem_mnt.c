@@ -67,7 +67,7 @@ static const char * const unmount_ext_cmd = "umount";
 static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 {
 	struct ucred credentials;
-	unsigned int ucred_length = sizeof(struct ucred);
+	socklen_t ucred_length = sizeof(struct ucred);
 
 	if ((getsockopt(socket_fd, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length) != 0)
 		|| (ucred_length != sizeof(struct ucred)))
@@ -87,7 +87,7 @@ static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 static int get_credentials(int socket_fd, uid_t *uid, gid_t *gid)
 {
 	struct xucred credentials;
-	unsigned int xucred_length = sizeof(struct xucred);
+	socklen_t xucred_length = sizeof(struct xucred);
 
 	if (((getsockopt(socket_fd, 0, LOCAL_PEERCRED, &credentials, &xucred_length)) != 0)
 		 || (xucred_length != sizeof(struct xucred))
@@ -148,7 +148,7 @@ static int invoke_mount_external(int client_number,
 	int total_len;
 	int mount_flags_start;
 	char *mount_cmd;
-	unsigned int string_full_len;
+	size_t string_full_len;
 
 	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0, NULL, NULL, 0, NULL);
 	if (is_result_failure(result))
@@ -232,8 +232,8 @@ static int invoke_mount_internal(int client_number,
 	char *mount_opts;
 	char *mount_full_opts;
 	int result;
-	unsigned int string_full_len;
-	unsigned int string_len;
+	size_t string_full_len;
+	size_t string_len;
 
 	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0, &string_len, NULL, 0, NULL);
 	if (is_result_failure(result))
@@ -313,7 +313,7 @@ static int invoke_mount_external(int client_number,
 	int total_len;
 	int mount_flags_start;
 	char *mount_cmd;
-	unsigned int string_full_len;
+	size_t string_full_len;
 
 	result = fsopts_generate_string(fsopts_list, &string_full_len, NULL, 0);
 	if (is_result_failure(result))
@@ -465,7 +465,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 int invoke_mount(int client_number, const char *path, const char *mount_options, enum mount_by_value_enum mount_type, dtmd_error_code_t *error_code)
 {
 	int result;
-	unsigned int dev, part;
+	size_t dev, part;
 
 	char *mount_path;
 
@@ -935,7 +935,7 @@ invoke_unmount_common_error_1:
 
 int invoke_unmount(int client_number, const char *path, dtmd_error_code_t *error_code)
 {
-	unsigned int dev, part;
+	size_t dev, part;
 	const char *local_mnt_point;
 	const char *local_fstype;
 
@@ -999,7 +999,7 @@ invoke_unmount_exit_loop:
 
 int invoke_unmount_all(int client_number)
 {
-	unsigned int dev, part;
+	size_t dev, part;
 	int result;
 
 	for (dev = 0; dev < media_count; ++dev)

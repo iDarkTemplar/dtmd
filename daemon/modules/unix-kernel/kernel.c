@@ -1759,7 +1759,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 {
 	union ccb ccb;
 	int bufsize, fd;
-	unsigned int i;
+	uint32_t i;
 	int result;
 	int skip_device = 1;
 	struct device_match_result *dev_result;
