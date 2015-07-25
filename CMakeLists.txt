@@ -3,7 +3,7 @@ project(Dark-Templar-Mount-Daemon)
 cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 1)
-set(DTMD_VERSION_MINOR 9)
+set(DTMD_VERSION_MINOR 10)
 set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
