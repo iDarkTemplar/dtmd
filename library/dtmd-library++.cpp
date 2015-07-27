@@ -28,7 +28,7 @@ command::command()
 {
 }
 
-command::command(const dtmd_command_t *cmd)
+command::command(const dt_command_t *cmd)
 {
 	if (cmd != NULL)
 	{
@@ -40,7 +40,7 @@ command::~command()
 {
 }
 
-void command::fillFromCmd(const dtmd_command_t *cmd)
+void command::fillFromCmd(const dt_command_t *cmd)
 {
 	this->clear();
 
@@ -539,7 +539,7 @@ dtmd_error_code_t library::getCodeOfCommandFail() const
 	return dtmd_get_code_of_command_fail(this->m_handle);
 }
 
-void library::local_callback(void *arg, const dtmd_command_t *cmd)
+void library::local_callback(void *arg, const dt_command_t *cmd)
 {
 	library *lib = (library*) arg;
 

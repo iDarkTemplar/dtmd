@@ -36,10 +36,10 @@ class command
 {
 public:
 	command();
-	explicit command(const dtmd_command_t *cmd);
+	explicit command(const dt_command_t *cmd);
 	virtual ~command();
 
-	void fillFromCmd(const dtmd_command_t *cmd);
+	void fillFromCmd(const dt_command_t *cmd);
 	void clear();
 
 	bool isEmpty() const;
@@ -147,7 +147,7 @@ private:
 	library(const library &other);
 	library& operator=(const library &other);
 
-	static void local_callback(void *arg, const dtmd_command_t *cmd);
+	static void local_callback(void *arg, const dt_command_t *cmd);
 
 	dtmd_t *m_handle;
 	callback m_cb;

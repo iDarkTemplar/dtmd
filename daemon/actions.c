@@ -43,7 +43,7 @@ static int print_stateful_devices_count(int client_number);
 
 static int print_stateful_device(int client_number, size_t device);
 
-int invoke_command(int client_number, dtmd_command_t *cmd)
+int invoke_command(int client_number, dt_command_t *cmd)
 {
 	size_t i;
 	size_t j;

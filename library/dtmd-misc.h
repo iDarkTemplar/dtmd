@@ -23,22 +23,9 @@
 
 #include <dtmd.h>
 
-#include <stddef.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct dtmd_command
-{
-	char *cmd;
-	size_t args_count;
-	char **args;
-} dtmd_command_t;
-
-int dtmd_validate_command(const char *buffer);
-dtmd_command_t* dtmd_parse_command(const char *buffer);
-void dtmd_free_command(dtmd_command_t *cmd);
 
 const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
 dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);

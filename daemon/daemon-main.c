@@ -341,7 +341,7 @@ int main(int argc, char **argv)
 	char *tmp_str;
 #define pollfds_count_default 3
 	size_t pollfds_count = pollfds_count_default;
-	dtmd_command_t *cmd;
+	dt_command_t *cmd;
 
 	struct pollfd *pollfds = NULL;
 
@@ -1017,13 +1017,13 @@ int main(int argc, char **argv)
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
-					rc = dtmd_validate_command(clients[j]->buf);
+					rc = dt_validate_command(clients[j]->buf);
 					if (!rc)
 					{
 						goto exit_remove_client;
 					}
 
-					cmd = dtmd_parse_command(clients[j]->buf);
+					cmd = dt_parse_command(clients[j]->buf);
 					if (cmd == NULL)
 					{
 						WRITE_LOG(LOG_ERR, "Memory allocation failure");
@@ -1032,7 +1032,7 @@ int main(int argc, char **argv)
 					}
 
 					rc = invoke_command(j, cmd);
-					dtmd_free_command(cmd);
+					dt_free_command(cmd);
 
 					switch (rc)
 					{

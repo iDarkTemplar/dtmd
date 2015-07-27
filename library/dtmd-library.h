@@ -24,6 +24,8 @@
 #include <dtmd.h>
 #include <dtmd-misc.h>
 
+#include <dt-command.h>
+
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -31,13 +33,13 @@ extern "C" {
 #endif
 
 typedef struct dtmd_library dtmd_t;
-typedef void (*dtmd_callback_t)(void *arg, const dtmd_command_t *cmd);
+typedef void (*dtmd_callback_t)(void *arg, const dt_command_t *cmd);
 
 typedef enum dtmd_result
 {
 	dtmd_ok = 0,
 	// non-fatal errors
-	dtmd_command_failed = -1,
+	dt_command_failed = -1,
 	dtmd_timeout = -2,
 	// fatal errors
 	dtmd_invalid_state = -3,

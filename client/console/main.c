@@ -44,7 +44,7 @@ int first = 1;
 		fprintf(stdout, "\n"); \
 	}
 
-void client_callback(void *arg, const dtmd_command_t *cmd)
+void client_callback(void *arg, const dt_command_t *cmd)
 {
 	if (arg == (void*)1)
 	{

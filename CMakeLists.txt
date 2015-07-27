@@ -4,7 +4,7 @@ cmake_minimum_required( VERSION 2.8.8 )
 
 set(DTMD_VERSION_MAJOR 1)
 set(DTMD_VERSION_MINOR 10)
-set(DTMD_VERSION_PATCH 0)
+set(DTMD_VERSION_PATCH 1)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
@@ -126,6 +126,8 @@ if (UNIX)
 	set( CMAKE_THREAD_PREFER_PTHREAD 1 )
 endif (UNIX)
 find_package (Threads REQUIRED)
+find_package (DtCommand REQUIRED)
+include_directories( ${DT_CMD_INCLUDE_DIRS} )
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
@@ -164,7 +166,7 @@ set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
 
 set ( LIBRARY_SOURCES library/dtmd-library.c )
 set ( LIBRARY_HEADERS library/dtmd-library.h )
-set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} )
+set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} ${DT_CMD_LIBRARIES} )
 
 set ( LIBRARY_CXX_SOURCES library/dtmd-library++.cpp )
 set ( LIBRARY_CXX_HEADERS library/dtmd-library++.hpp )
@@ -176,7 +178,7 @@ endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
 set ( DAEMON_HEADERS                      daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
-set ( DAEMON_LIBS )
+set ( DAEMON_LIBS ${DT_CMD_LIBRARIES} )
 
 set ( DTMD_CONFIG_SOURCES tools/dtmd-config.c )
 set ( DTMD_CONFIG_HEADERS )
@@ -184,7 +186,7 @@ set ( DTMD_CONFIG_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS )
-set ( CONSOLE_CLIENT_LIBS )
+set ( CONSOLE_CLIENT_LIBS ${DT_CMD_LIBRARIES} )
 
 set ( QT_CLIENT_SOURCES client/qt/main.cpp client/qt/control.cpp client/qt/qcustomdeviceaction.cpp client/qt/qcustomstatefuldeviceaction.cpp )
 set ( QT_CLIENT_QT_HEADERS                 client/qt/control.hpp client/qt/qcustomdeviceaction.hpp client/qt/qcustomstatefuldeviceaction.hpp )
@@ -300,9 +302,6 @@ endif (BUILD_QT)
 
 ENABLE_TESTING()
 
-set (TEST_SOURCES_commands tests/commands_test.c tests/dt_tests.h)
-set (TEST_LIBS_commands dtmd-misc)
-
 set (TEST_SOURCES_decode_label daemon/label.c tests/decode_label_test.c tests/dt_tests.h)
 set (TEST_LIBS_decode_label )
 
@@ -311,7 +310,7 @@ if (OS_LINUX)
 	set (TEST_LIBS_filesystem_opts dtmd-misc)
 endif (OS_LINUX)
 
-set (ALL_TESTS commands decode_label)
+set (ALL_TESTS decode_label)
 
 if (OS_LINUX)
 	set (ALL_TESTS ${ALL_TESTS} filesystem_opts)

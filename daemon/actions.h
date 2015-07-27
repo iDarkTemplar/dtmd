@@ -25,11 +25,13 @@
 
 #include <dtmd-misc.h>
 
+#include <dt-command.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int invoke_command(int client_number, dtmd_command_t *cmd);
+int invoke_command(int client_number, dt_command_t *cmd);
 
 void notify_add_disk(const char *path, dtmd_removable_media_type_t type);
 void notify_remove_disk(const char *path);
