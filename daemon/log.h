@@ -25,11 +25,11 @@
 
 #include <stdio.h>
 
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 #include <syslog.h>
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 #define WRITE_LOG(priority, format) \
 if (use_syslog) \
 { \
@@ -39,15 +39,15 @@ else if (!daemonize) \
 { \
 	fprintf(stderr, format "\n"); \
 }
-#else /* DISABLE_SYSLOG */
+#else /* ENABLE_SYSLOG */
 #define WRITE_LOG(priority, format) \
 if (!daemonize) \
 { \
 	fprintf(stderr, format "\n"); \
 }
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 #define WRITE_LOG_ARGS(priority, format, ...) \
 if (use_syslog) \
 { \
@@ -57,12 +57,12 @@ else if (!daemonize) \
 { \
 	fprintf(stderr, format "\n", __VA_ARGS__); \
 }
-#else /* DISABLE_SYSLOG */
+#else /* ENABLE_SYSLOG */
 #define WRITE_LOG_ARGS(priority, format, ...) \
 if (!daemonize) \
 { \
 	fprintf(stderr, format "\n", __VA_ARGS__); \
 }
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
 #endif /* DTMD_LOGS_H */

@@ -609,12 +609,12 @@ int main(int argc, char **argv)
 		use_syslog = 0;
 	}
 
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 	if (use_syslog)
 	{
 		openlog("dtmd", LOG_PID, LOG_DAEMON);
 	}
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
 	if (listen(socketfd, backlog) == -1)
 	{
@@ -1111,12 +1111,12 @@ exit_5:
 	device_system_deinit(dtmd_dev_system);
 
 exit_4_log:
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 	if (use_syslog)
 	{
 		closelog();
 	}
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
 exit_4_pipe:
 	if (daemonpipe[1] != -1)
