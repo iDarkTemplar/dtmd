@@ -426,11 +426,10 @@ static void device_system_free_device(dtmd_info_t *device)
 #if (defined OS_Linux)
 static int open_netlink_socket(void)
 {
-	struct sockaddr_nl local;
 	int fd;
+	int on = 1;
 	pid_t pid;
-
-	pid = (pthread_self() << 16) | getpid();
+	struct sockaddr_nl local;
 
 	fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_KOBJECT_UEVENT);
 	if (fd == -1)
@@ -439,13 +438,14 @@ static int open_netlink_socket(void)
 		return -1;
 	}
 
-	int on = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) != 0)
 	{
 		WRITE_LOG(LOG_ERR, "Failed setting passcred option for netlink socket");
 		close(fd);
 		return -1;
 	}
+
+	pid = (pthread_self() << 16) | getpid();
 
 	memset(&local, 0, sizeof(local));	/* fill-in local address information */
 	local.nl_family = AF_NETLINK;
@@ -2034,7 +2034,6 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	char reply[IFLIST_REPLY_BUFFER];
 	ssize_t len;
 	struct msghdr rtnl_reply;
-	struct iovec io_reply;
 
 	ssize_t pos;
 	struct ucred *cred;
@@ -2053,11 +2052,9 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	int result;
 
 	memset(&kernel, 0, sizeof(kernel));
-	kernel.nl_family = AF_NETLINK;
-
-	memset(&io_reply, 0, sizeof(io_reply));
 	memset(&rtnl_reply, 0, sizeof(rtnl_reply));
 
+	kernel.nl_family = AF_NETLINK;
 	io.iov_base = reply;
 	io.iov_len = IFLIST_REPLY_BUFFER - 1;
 	rtnl_reply.msg_iov = &io;
