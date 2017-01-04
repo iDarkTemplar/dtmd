@@ -144,7 +144,7 @@ void Control::triggeredOpen(size_t device, size_t partition, QString partition_n
 		mount_point = QString::fromLocal8Bit(part.mnt_point.c_str());
 	}
 
-	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
+	QDesktopServices::openUrl(QUrl(QString("file://") + mount_point));
 }
 
 void Control::triggeredOpen(size_t stateful_device, QString device_name)
