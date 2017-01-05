@@ -1,6 +1,6 @@
 project(Dark-Templar-Mount-Daemon)
 
-cmake_minimum_required( VERSION 2.8.8 )
+cmake_minimum_required( VERSION 3.0.2 )
 
 set(DTMD_VERSION_MAJOR 1)
 set(DTMD_VERSION_MINOR 10)
@@ -307,7 +307,6 @@ endif (ENABLE_CXX)
 
 if (BUILD_QT)
 	if (${CLIENT_QT} EQUAL 4)
-		include_directories (${QT_INCLUDE_DIR} ${QT_QTCORE_INCLUDE_DIR} ${QT_QTGUI_INCLUDE_DIR})
 		QT4_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
 		QT4_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
 		QT4_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
@@ -315,7 +314,6 @@ if (BUILD_QT)
 	endif (${CLIENT_QT} EQUAL 4)
 
 	if (${CLIENT_QT} EQUAL 5)
-		include_directories (${Qt5Core_INCLUDE_DIR} ${Qt5Gui_INCLUDE_DIR} ${Qt5Widgets_INCLUDE_DIR})
 		QT5_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
 		QT5_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
 		QT5_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
@@ -325,6 +323,15 @@ if (BUILD_QT)
 	message(STATUS "Using Qt version ${CLIENT_QT}")
 
 	add_executable (dtmd-qt ${QT_CLIENT_SOURCES} ${QT_CLIENT_QT_HEADERS} ${QT_CLIENT_HEADERS} ${QT_CLIENT_MOC_SOURCES} ${QT_CLIENT_UI_SOURCES} ${QT_CLIENT_RESOURCES})
+
+	if (${CLIENT_QT} EQUAL 4)
+		target_include_directories(dtmd-qt PRIVATE ${QT_INCLUDE_DIR} ${QT_QTCORE_INCLUDE_DIR} ${QT_QTGUI_INCLUDE_DIR})
+	endif (${CLIENT_QT} EQUAL 4)
+
+	if (${CLIENT_QT} EQUAL 5)
+		target_include_directories(dtmd-qt PRIVATE ${Qt5Core_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS})
+	endif (${CLIENT_QT} EQUAL 5)
+
 	target_link_libraries (dtmd-qt dtmd-library++ ${QT_CLIENT_LIBS} ${DTMD_QT_LIBRARIES} )
 endif (BUILD_QT)
 
