@@ -1,4 +1,4 @@
-#!/sbin/runscript
+#!/sbin/openrc-run
 
 command=/usr/sbin/dtmd-daemon
 pidfile=$(/usr/bin/dtmd-config --pidfile)
