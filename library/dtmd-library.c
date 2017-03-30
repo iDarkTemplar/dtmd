@@ -283,6 +283,11 @@ static void* dtmd_worker_function(void *arg)
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_worker_function_error;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -428,6 +433,11 @@ dtmd_result_t dtmd_enum_devices(dtmd_t *handle, int timeout, size_t *device_coun
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_enum_all_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -936,6 +946,11 @@ dtmd_result_t dtmd_list_device(dtmd_t *handle, int timeout, const char *device_p
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_list_device_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -1223,6 +1238,11 @@ dtmd_result_t dtmd_list_partition(dtmd_t *handle, int timeout, const char *parti
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_list_partition_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -1438,6 +1458,11 @@ dtmd_result_t dtmd_list_stateful_device(dtmd_t *handle, int timeout, const char 
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_list_stateful_device_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -1678,6 +1703,11 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_mount_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -1805,6 +1835,11 @@ dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path)
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_unmount_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -1936,6 +1971,11 @@ dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, size_
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_dtmd_list_supported_filesystems_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -2132,6 +2172,11 @@ dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_dtmd_list_supported_filesystem_options_error_1;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
