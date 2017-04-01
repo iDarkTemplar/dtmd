@@ -331,6 +331,7 @@ static const struct dtmd_mount_option common_fs_allowed_list[] =
 #endif /* MNT_NOACLS */
 	{ NULL,         0, NULL, NULL }
 };
+
 static const struct dtmd_mount_option vfat_allow[] =
 {
 	{ "large",      0, NULL,  NULL },
