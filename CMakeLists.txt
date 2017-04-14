@@ -229,10 +229,10 @@ set (BUILD_BACKEND_UDEV FALSE)
 
 if (OS_LINUX)
 	if (DEFINED LINUX_UDEV)
-		if (${LINUX_UDEV} EQUAL 1)
+		if (${LINUX_UDEV})
 			pkg_check_modules(LIBUDEV libudev REQUIRED)
 			set (BUILD_BACKEND_UDEV TRUE)
-		endif (${LINUX_UDEV} EQUAL 1)
+		endif (${LINUX_UDEV})
 	else (DEFINED LINUX_UDEV)
 		pkg_check_modules(LIBUDEV libudev)
 
