@@ -25,6 +25,7 @@
 extern "C" {
 #endif
 
+int compare_labels(const char *decoded_label, const char *encoded_label);
 char* decode_label(const char *label);
 
 #ifdef __cplusplus

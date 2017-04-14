@@ -1092,7 +1092,7 @@ exit_7:
 
 	if (unmount_on_exit)
 	{
-		invoke_unmount_all(-1);
+		invoke_unmount_all(NULL);
 	}
 
 	if (successfully_initialized && clear_mount_dir)

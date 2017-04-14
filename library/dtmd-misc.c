@@ -26,18 +26,18 @@ const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type)
 {
 	switch (type)
 	{
-	case dtmd_removable_media_cdrom:
-		return dtmd_string_device_cdrom;
+	case dtmd_removable_media_type_device_partition:
+		return dtmd_string_device_type_device_partition;
 
-	case dtmd_removable_media_removable_disk:
-		return dtmd_string_device_removable_disk;
+	case dtmd_removable_media_type_stateless_device:
+		return dtmd_string_device_type_stateless_device;
 
-	case dtmd_removable_media_sd_card:
-		return dtmd_string_device_sd_card;
+	case dtmd_removable_media_type_stateful_device:
+		return dtmd_string_device_type_stateful_device;
 
-	case dtmd_removable_media_unknown_or_persistent:
+	case dtmd_removable_media_type_unknown_or_persistent:
 	default:
-		return dtmd_string_device_unknown_or_persistent;
+		return dtmd_string_device_type_unknown_or_persistent;
 	}
 }
 
@@ -45,21 +45,61 @@ dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string)
 {
 	if (string != NULL)
 	{
-		if (strcmp(string, dtmd_string_device_cdrom) == 0)
+		if (strcmp(string, dtmd_string_device_type_device_partition) == 0)
 		{
-			return dtmd_removable_media_cdrom;
+			return dtmd_removable_media_type_device_partition;
 		}
-		else if (strcmp(string, dtmd_string_device_removable_disk) == 0)
+		else if (strcmp(string, dtmd_string_device_type_stateless_device) == 0)
 		{
-			return dtmd_removable_media_removable_disk;
+			return dtmd_removable_media_type_stateless_device;
 		}
-		else if (strcmp(string, dtmd_string_device_sd_card) == 0)
+		else if (strcmp(string, dtmd_string_device_type_stateful_device) == 0)
 		{
-			return dtmd_removable_media_sd_card;
+			return dtmd_removable_media_type_stateful_device;
 		}
 	}
 
-	return dtmd_removable_media_unknown_or_persistent;
+	return dtmd_removable_media_type_unknown_or_persistent;
+}
+
+const char* dtmd_device_subtype_to_string(dtmd_removable_media_subtype_t subtype)
+{
+	switch (subtype)
+	{
+	case dtmd_removable_media_subtype_cdrom:
+		return dtmd_string_device_subtype_cdrom;
+
+	case dtmd_removable_media_subtype_removable_disk:
+		return dtmd_string_device_subtype_removable_disk;
+
+	case dtmd_removable_media_subtype_sd_card:
+		return dtmd_string_device_subtype_sd_card;
+
+	case dtmd_removable_media_subtype_unknown_or_persistent:
+	default:
+		return dtmd_string_device_subtype_unknown_or_persistent;
+	}
+}
+
+dtmd_removable_media_subtype_t dtmd_string_to_device_subtype(const char *string)
+{
+	if (string != NULL)
+	{
+		if (strcmp(string, dtmd_string_device_subtype_cdrom) == 0)
+		{
+			return dtmd_removable_media_subtype_cdrom;
+		}
+		else if (strcmp(string, dtmd_string_device_subtype_removable_disk) == 0)
+		{
+			return dtmd_removable_media_subtype_removable_disk;
+		}
+		else if (strcmp(string, dtmd_string_device_subtype_sd_card) == 0)
+		{
+			return dtmd_removable_media_subtype_sd_card;
+		}
+	}
+
+	return dtmd_removable_media_subtype_unknown_or_persistent;
 }
 
 const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state)

@@ -137,7 +137,7 @@ static dir_state_t get_dir_state(const char *dirname)
 
 #if (defined OS_Linux)
 #if (!defined DISABLE_EXT_MOUNT)
-static int invoke_mount_external(int client_number,
+static int invoke_mount_external(struct client *client_ptr,
 	const char *path,
 	const char *mount_path,
 	const char *fstype,
@@ -222,7 +222,7 @@ invoke_mount_external_error_1:
 }
 #endif /* (!defined DISABLE_EXT_MOUNT) */
 
-static int invoke_mount_internal(int client_number,
+static int invoke_mount_internal(struct client *client_ptr,
 	const char *path,
 	const char *mount_path,
 	const char *fstype,
@@ -462,16 +462,12 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 	return mount_path;
 }
 
-int invoke_mount(int client_number, const char *path, const char *mount_options, enum mount_by_value_enum mount_type, dtmd_error_code_t *error_code)
+int invoke_mount(struct client *client_ptr, const char *path, const char *mount_options, enum mount_by_value_enum mount_type, dtmd_error_code_t *error_code)
 {
 	int result;
-	size_t dev, part;
+	struct removable_media *media_ptr;
 
 	char *mount_path;
-
-	const char *local_mnt_point;
-	const char *local_fstype;
-	const char *local_label;
 	const char *mandatory_mount_options;
 
 	const struct dtmd_filesystem_options *fsopts;
@@ -480,53 +476,21 @@ int invoke_mount(int client_number, const char *path, const char *mount_options,
 	uid_t uid;
 	gid_t gid;
 
-	for (dev = 0; dev < media_count; ++dev)
+	media_ptr = find_media(path);
+	if (media_ptr == NULL)
 	{
-		for (part = 0; part < media[dev]->partitions_count; ++part)
-		{
-			if (strcmp(media[dev]->partition[part]->path, path) == 0)
-			{
-				goto invoke_mount_exit_loop;
-			}
-		}
-	}
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device does not exist or is not ready", path);
+		result = result_fail;
 
-invoke_mount_exit_loop:
-	if (dev < media_count)
-	{
-		local_mnt_point = media[dev]->partition[part]->mnt_point;
-		local_fstype    = media[dev]->partition[part]->fstype;
-		local_label     = media[dev]->partition[part]->label;
-	}
-	else
-	{
-		for (dev = 0; dev < stateful_media_count; ++dev)
+		if (error_code != NULL)
 		{
-			if (strcmp(stateful_media[dev]->path, path) == 0)
-			{
-				break;
-			}
+			*error_code = dtmd_error_code_no_such_removable_device;
 		}
 
-		if ((dev >= stateful_media_count) || (stateful_media[dev]->state != dtmd_removable_media_state_ok))
-		{
-			WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device does not exist or is not ready", path);
-			result = result_fail;
-
-			if (error_code != NULL)
-			{
-				*error_code = dtmd_error_code_no_such_removable_device;
-			}
-
-			goto invoke_mount_error_1;
-		}
-
-		local_mnt_point = stateful_media[dev]->mnt_point;
-		local_fstype    = stateful_media[dev]->fstype;
-		local_label     = stateful_media[dev]->label;
+		goto invoke_mount_error_1;
 	}
 
-	if (local_fstype == NULL)
+	if (media_ptr->fstype == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device doesn't have recognized filesystem", path);
 		result = result_fail;
@@ -539,7 +503,7 @@ invoke_mount_exit_loop:
 		goto invoke_mount_error_1;
 	}
 
-	if (local_mnt_point != NULL)
+	if (media_ptr->mnt_point != NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device is already mounted", path);
 		result = result_fail;
@@ -552,7 +516,7 @@ invoke_mount_exit_loop:
 		goto invoke_mount_error_1;
 	}
 
-	result = get_credentials(clients[client_number]->clientfd, &uid, &gid);
+	result = get_credentials(client_ptr->clientfd, &uid, &gid);
 	if (is_result_failure(result))
 	{
 		if (error_code != NULL)
@@ -563,7 +527,7 @@ invoke_mount_exit_loop:
 		goto invoke_mount_error_1;
 	}
 
-	fsopts = get_fsopts_for_fs(local_fstype);
+	fsopts = get_fsopts_for_fs(media_ptr->fstype);
 	if (fsopts == NULL)
 	{
 		result = result_fail;
@@ -641,7 +605,7 @@ invoke_mount_exit_loop:
 
 	for (;;)
 	{
-		mount_path = calculate_path(path, local_label, &mount_type);
+		mount_path = calculate_path(path, media_ptr->label, &mount_type);
 		if (mount_path == NULL)
 		{
 			result = result_fatal_error;
@@ -720,18 +684,18 @@ invoke_mount_exit_loop:
 #if (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external_fstype != NULL)
 	{
-		result = invoke_mount_external(client_number, path, mount_path, fsopts->external_fstype, &fsopts_list);
+		result = invoke_mount_external(client_ptr, path, mount_path, fsopts->external_fstype, &fsopts_list);
 	}
 	else
 	{
 #endif /* (!defined DISABLE_EXT_MOUNT) */
-		result = invoke_mount_internal(client_number, path, mount_path, fsopts->fstype, &fsopts_list);
+		result = invoke_mount_internal(client_ptr, path, mount_path, fsopts->fstype, &fsopts_list);
 #if (!defined DISABLE_EXT_MOUNT)
 	}
 #endif /* (!defined DISABLE_EXT_MOUNT) */
 #else /* (defined OS_Linux) */
 #if (defined OS_FreeBSD)
-	result = invoke_mount_external(client_number, path, mount_path, fsopts->mount_cmd, &fsopts_list);
+	result = invoke_mount_external(client_ptr, path, mount_path, fsopts->mount_cmd, &fsopts_list);
 #else /* (defined OS_FreeBSD) */
 #error Unsupported OS
 #endif /* (defined OS_FreeBSD) */
@@ -758,7 +722,7 @@ invoke_mount_error_1:
 }
 
 #if ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD)
-static int invoke_unmount_external(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
+static int invoke_unmount_external(struct client *client_ptr, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
 	int unmount_cmd_len;
@@ -810,7 +774,7 @@ static int invoke_unmount_external(int client_number, const char *path, const ch
 #endif /* ((defined OS_Linux) && (!defined DISABLE_EXT_MOUNT)) || (defined OS_FreeBSD) */
 
 #if (defined OS_Linux)
-static int invoke_unmount_internal(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
+static int invoke_unmount_internal(struct client *client_ptr, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
 	int saved_errno;
@@ -881,7 +845,7 @@ static int invoke_unmount_internal(int client_number, const char *path, const ch
 }
 #endif /* (defined OS_Linux) */
 
-static int invoke_unmount_common(int client_number, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
+static int invoke_unmount_common(struct client *client_ptr, const char *path, const char *mnt_point, const char *fstype, dtmd_error_code_t *error_code)
 {
 	int result;
 
@@ -904,18 +868,18 @@ static int invoke_unmount_common(int client_number, const char *path, const char
 #if (!defined DISABLE_EXT_MOUNT)
 	if (fsopts->external_fstype != NULL)
 	{
-		result = invoke_unmount_external(client_number, path, mnt_point, fsopts->external_fstype, error_code);
+		result = invoke_unmount_external(client_ptr, path, mnt_point, fsopts->external_fstype, error_code);
 	}
 	else
 	{
 #endif /* (!defined DISABLE_EXT_MOUNT) */
-		result = invoke_unmount_internal(client_number, path, mnt_point, fsopts->fstype, error_code);
+		result = invoke_unmount_internal(client_ptr, path, mnt_point, fsopts->fstype, error_code);
 #if (!defined DISABLE_EXT_MOUNT)
 	}
 #endif /* (!defined DISABLE_EXT_MOUNT) */
 #else /* (defined OS_Linux) */
 #if (defined OS_FreeBSD)
-	result = invoke_unmount_external(client_number, path, mnt_point, fsopts->external_fstype, error_code);
+	result = invoke_unmount_external(client_ptr, path, mnt_point, fsopts->external_fstype, error_code);
 #else /* (defined OS_FreeBSD) */
 #error Unsupported OS
 #endif /* (defined OS_FreeBSD) */
@@ -933,56 +897,24 @@ invoke_unmount_common_error_1:
 	return result;
 }
 
-int invoke_unmount(int client_number, const char *path, dtmd_error_code_t *error_code)
+int invoke_unmount(struct client *client_ptr, const char *path, dtmd_error_code_t *error_code)
 {
-	size_t dev, part;
-	const char *local_mnt_point;
-	const char *local_fstype;
+	struct removable_media *media_ptr;
 
-	for (dev = 0; dev < media_count; ++dev)
+	media_ptr = find_media(path);
+	if (media_ptr == NULL)
 	{
-		for (part = 0; part < media[dev]->partitions_count; ++part)
-		{
-			if (strcmp(media[dev]->partition[part]->path, path) == 0)
-			{
-				goto invoke_unmount_exit_loop;
-			}
-		}
-	}
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device does not exist", path);
 
-invoke_unmount_exit_loop:
-	if (dev < media_count)
-	{
-		local_mnt_point = media[dev]->partition[part]->mnt_point;
-		local_fstype    = media[dev]->partition[part]->fstype;
-	}
-	else
-	{
-		for (dev = 0; dev < stateful_media_count; ++dev)
+		if (error_code != NULL)
 		{
-			if (strcmp(stateful_media[dev]->path, path) == 0)
-			{
-				break;
-			}
+			*error_code = dtmd_error_code_no_such_removable_device;
 		}
 
-		if (dev >= stateful_media_count)
-		{
-			WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device does not exist", path);
-
-			if (error_code != NULL)
-			{
-				*error_code = dtmd_error_code_no_such_removable_device;
-			}
-
-			return result_fail;
-		}
-
-		local_mnt_point = stateful_media[dev]->mnt_point;
-		local_fstype    = stateful_media[dev]->fstype;
+		return result_fail;
 	}
 
-	if (local_mnt_point == NULL)
+	if (media_ptr->mnt_point == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device is not mounted", path);
 
@@ -994,38 +926,46 @@ invoke_unmount_exit_loop:
 		return result_fail;
 	}
 
-	return invoke_unmount_common(client_number, path, local_mnt_point, local_fstype, error_code);
+	return invoke_unmount_common(client_ptr, path, media_ptr->mnt_point, media_ptr->fstype, error_code);
 }
 
-int invoke_unmount_all(int client_number)
+static int invoke_unmount_recursive(struct client *client_ptr, struct removable_media *media_ptr)
 {
-	size_t dev, part;
 	int result;
+	struct removable_media *iter_media_ptr;
 
-	for (dev = 0; dev < media_count; ++dev)
+	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		for (part = 0; part < media[dev]->partitions_count; ++part)
+		result = invoke_unmount_recursive(client_ptr, iter_media_ptr);
+		if (is_result_fatal_error(result))
 		{
-			if (media[dev]->partition[part]->mnt_point != NULL)
-			{
-				result = invoke_unmount_common(client_number, media[dev]->partition[part]->path, media[dev]->partition[part]->mnt_point, media[dev]->partition[part]->fstype, NULL);
-				if (is_result_fatal_error(result))
-				{
-					return result;
-				}
-			}
+			return result;
 		}
 	}
 
-	for (dev = 0; dev < stateful_media_count; ++dev)
+	if (media_ptr->mnt_point != NULL)
 	{
-		if (stateful_media[dev]->mnt_point != NULL)
+		result = invoke_unmount_common(client_ptr, media_ptr->path, media_ptr->mnt_point, media_ptr->fstype, NULL);
+		if (is_result_fatal_error(result))
 		{
-			result = invoke_unmount_common(client_number, stateful_media[dev]->path, stateful_media[dev]->mnt_point, stateful_media[dev]->fstype, NULL);
-			if (is_result_fatal_error(result))
-			{
-				return result;
-			}
+			return result;
+		}
+	}
+
+	return result_success;
+}
+
+int invoke_unmount_all(struct client *client_ptr)
+{
+	int result;
+	struct removable_media *iter_media_ptr;
+
+	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	{
+		result = invoke_unmount_recursive(client_ptr, iter_media_ptr);
+		if (is_result_fatal_error(result))
+		{
+			return result;
 		}
 	}
 

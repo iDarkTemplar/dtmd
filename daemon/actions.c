@@ -33,109 +33,65 @@
 #include <stdio.h>
 #include <string.h>
 
-static int print_devices_count(int client_number);
+static int print_removable_device_common(const char *action,
+	struct client *client_ptr,
+	const char *parent_path,
+	const char *path,
+	dtmd_removable_media_type_t media_type,
+	dtmd_removable_media_subtype_t media_subtype,
+	dtmd_removable_media_state_t state,
+	const char *fstype,
+	const char *label,
+	const char *mnt_point,
+	const char *mnt_opts);
 
-static int print_device(int client_number, size_t device);
+static int print_all_removable_devices_recursive(struct client *client_ptr, struct removable_media *media_ptr);
 
-static int print_partition(int client_number, size_t device, size_t partition);
+static int print_all_removable_devices(struct client *client_ptr);
 
-static int print_stateful_devices_count(int client_number);
-
-static int print_stateful_device(int client_number, size_t device);
-
-int invoke_command(int client_number, dt_command_t *cmd)
+int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 {
-	size_t i;
-	size_t j;
 	int rc;
 	dtmd_error_code_t error_code;
+	struct removable_media *media_ptr = NULL;
 
-	if ((strcmp(cmd->cmd, dtmd_command_enum_all) == 0) && (cmd->args_count == 0))
+	if ((strcmp(cmd->cmd, dtmd_command_list_all_removable_devices) == 0) && (cmd->args_count == 0))
 	{
-		if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_enum_all "\")\n") < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_all_removable_devices "\")\n") < 0)
 		{
 			return result_client_error;
 		}
 
-		rc = print_devices_count(client_number);
+		rc = print_all_removable_devices(client_ptr);
 		if (is_result_failure(rc))
 		{
 			return rc;
 		}
 
-		for (i = 0; i < media_count; ++i)
-		{
-			rc = print_device(client_number, i);
-			if (is_result_failure(rc))
-			{
-				return rc;
-			}
-
-			for (j = 0; j < media[i]->partitions_count; ++j)
-			{
-				rc = print_partition(client_number, i, j);
-				if (is_result_failure(rc))
-				{
-					return rc;
-				}
-			}
-		}
-
-		rc = print_stateful_devices_count(client_number);
-		if (is_result_failure(rc))
-		{
-			return rc;
-		}
-
-		for (i = 0; i < stateful_media_count; ++i)
-		{
-			rc = print_stateful_device(client_number, i);
-			if (is_result_failure(rc))
-			{
-				return rc;
-			}
-		}
-
-		if (dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_enum_all "\")\n") < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_finished "(\"" dtmd_command_list_all_removable_devices "\")\n") < 0)
 		{
 			return result_client_error;
 		}
 
 		return result_success;
 	}
-	else if ((strcmp(cmd->cmd, dtmd_command_list_device) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	else if ((strcmp(cmd->cmd, dtmd_command_list_removable_device) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		for (i = 0; i < media_count; ++i)
+		media_ptr = find_media(cmd->args[0]);
+		if (media_ptr != NULL)
 		{
-			if (strcmp(media[i]->path, cmd->args[0]) == 0)
-			{
-				break;
-			}
-		}
-
-		if (i < media_count)
-		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
 			{
 				return result_client_error;
 			}
 
-			rc = print_device(client_number, i);
+			rc = print_all_removable_devices_recursive(client_ptr, media_ptr);
 			if (is_result_failure(rc))
 			{
 				return rc;
 			}
 
-			for (j = 0; j < media[i]->partitions_count; ++j)
-			{
-				rc = print_partition(client_number, i, j);
-				if (is_result_failure(rc))
-				{
-					return rc;
-				}
-			}
-
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_finished "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
 			{
 				return result_client_error;
 			}
@@ -144,92 +100,7 @@ int invoke_command(int client_number, dt_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
-			{
-				return result_client_error;
-			}
-
-			return result_fail;
-		}
-	}
-	else if ((strcmp(cmd->cmd, dtmd_command_list_partition) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
-	{
-		for (i = 0; i < media_count; ++i)
-		{
-			for (j = 0; j < media[i]->partitions_count; ++j)
-			{
-				if (strcmp(media[i]->partition[j]->path, cmd->args[0]) == 0)
-				{
-					goto invoke_command_print_partition_exit_loop;
-				}
-			}
-		}
-
-		invoke_command_print_partition_exit_loop:
-
-		if (i < media_count)
-		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]) < 0)
-			{
-				return result_client_error;
-			}
-
-			rc = print_partition(client_number, i, j);
-			if (is_result_failure(rc))
-			{
-				return rc;
-			}
-
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]) < 0)
-			{
-				return result_client_error;
-			}
-
-			return result_success;
-		}
-		else
-		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_partition "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
-			{
-				return result_client_error;
-			}
-
-			return result_fail;
-		}
-	}
-	else if ((strcmp(cmd->cmd, dtmd_command_list_stateful_device) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
-	{
-		for (i = 0; i < stateful_media_count; ++i)
-		{
-			if (strcmp(stateful_media[i]->path, cmd->args[0]) == 0)
-			{
-				break;
-			}
-		}
-
-		if (i < stateful_media_count)
-		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_stateful_device "\", \"%s\")\n", cmd->args[0]) < 0)
-			{
-				return result_client_error;
-			}
-
-			rc = print_stateful_device(client_number, i);
-			if (is_result_failure(rc))
-			{
-				return rc;
-			}
-
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_finished "(\"" dtmd_command_list_stateful_device "\", \"%s\")\n", cmd->args[0]) < 0)
-			{
-				return result_client_error;
-			}
-
-			return result_success;
-		}
-		else
-		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_stateful_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_removable_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -239,11 +110,11 @@ int invoke_command(int client_number, dt_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_mount) == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1], mount_by_value, &error_code);
+		rc = invoke_mount(client_ptr, cmd->args[0], cmd->args[1], mount_by_value, &error_code);
 
 		if (is_result_successful(rc))
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_succeeded "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
+			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
 				cmd->args[0],
 				((cmd->args[1] != NULL) ? ("\"") : ("")),
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
@@ -254,7 +125,7 @@ int invoke_command(int client_number, dt_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s, \"%s\")\n",
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s, \"%s\")\n",
 				cmd->args[0],
 				((cmd->args[1] != NULL) ? ("\"") : ("")),
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
@@ -269,18 +140,18 @@ int invoke_command(int client_number, dt_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_unmount) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_unmount(client_number, cmd->args[0], &error_code);
+		rc = invoke_unmount(client_ptr, cmd->args[0], &error_code);
 
 		if (is_result_successful(rc))
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_succeeded "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]) < 0)
 			{
 				return result_client_error;
 			}
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
 			{
 				return result_client_error;
 			}
@@ -290,11 +161,11 @@ int invoke_command(int client_number, dt_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_list_supported_filesystems) == 0) && (cmd->args_count == 0))
 	{
-		return invoke_list_supported_filesystems(client_number);
+		return invoke_list_supported_filesystems(client_ptr);
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_list_supported_filesystem_options) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		return invoke_list_supported_filesystem_options(client_number, cmd->args[0]);
+		return invoke_list_supported_filesystem_options(client_ptr, cmd->args[0]);
 	}
 	else
 	{
@@ -302,250 +173,203 @@ int invoke_command(int client_number, dt_command_t *cmd)
 	}
 }
 
-void notify_add_disk(const char *path, dtmd_removable_media_type_t type)
+void notify_removable_device_added(const char *parent_path,
+	const char *path,
+	dtmd_removable_media_type_t media_type,
+	dtmd_removable_media_subtype_t media_subtype,
+	dtmd_removable_media_state_t state,
+	const char *fstype,
+	const char *label,
+	const char *mnt_point,
+	const char *mnt_opts)
 {
-	size_t i;
+	struct client *cur_client;
 
-	for (i = 0; i < clients_count; ++i)
+	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_add_disk "(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
-	}
-}
-
-void notify_remove_disk(const char *path)
-{
-	size_t i;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		dprintf(clients[i]->clientfd, dtmd_notification_remove_disk "(\"%s\")\n", path);
-	}
-}
-
-void notify_disk_changed(const char *path, dtmd_removable_media_type_t type)
-{
-	size_t i;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		dprintf(clients[i]->clientfd, dtmd_notification_disk_changed "(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
-	}
-}
-
-void notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path)
-{
-	size_t i;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		dprintf(clients[i]->clientfd, dtmd_notification_add_partition "(\"%s\", %s%s%s, %s%s%s, \"%s\")\n",
+		print_removable_device_common(dtmd_notification_removable_device_added,
+			cur_client,
+			parent_path,
 			path,
-			(fstype != NULL) ? ("\"") : (""),
-			(fstype != NULL) ? (fstype) : ("nil"),
-			(fstype != NULL) ? ("\"") : (""),
-			(label != NULL) ? ("\"") : (""),
-			(label != NULL) ? (label) : ("nil"),
-			(label != NULL) ? ("\"") : (""),
-			parent_path);
+			media_type,
+			media_subtype,
+			state,
+			fstype,
+			label,
+			mnt_point,
+			mnt_opts);
 	}
 }
 
-void notify_remove_partition(const char *path)
+void notify_removable_device_removed(const char *path)
 {
-	size_t i;
+	struct client *cur_client;
 
-	for (i = 0; i < clients_count; ++i)
+	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_remove_partition "(\"%s\")\n", path);
+		dprintf(cur_client->clientfd, dtmd_notification_removable_device_removed "(\"%s\")\n", path);
 	}
 }
 
-void notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path)
+void notify_removable_device_changed(const char *parent_path,
+	const char *path,
+	dtmd_removable_media_type_t media_type,
+	dtmd_removable_media_subtype_t media_subtype,
+	dtmd_removable_media_state_t state,
+	const char *fstype,
+	const char *label,
+	const char *mnt_point,
+	const char *mnt_opts)
 {
-	size_t i;
+	struct client *cur_client;
 
-	for (i = 0; i < clients_count; ++i)
+	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_partition_changed "(\"%s\", %s%s%s, %s%s%s, \"%s\")\n",
+		print_removable_device_common(dtmd_notification_removable_device_changed,
+			cur_client,
+			parent_path,
 			path,
-			(fstype != NULL) ? ("\"") : (""),
-			(fstype != NULL) ? (fstype) : ("nil"),
-			(fstype != NULL) ? ("\"") : (""),
-			(label != NULL) ? ("\"") : (""),
-			(label != NULL) ? (label) : ("nil"),
-			(label != NULL) ? ("\"") : (""),
-			parent_path);
+			media_type,
+			media_subtype,
+			state,
+			fstype,
+			label,
+			mnt_point,
+			mnt_opts);
 	}
 }
 
-void notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
+static int print_removable_device_common(const char *action,
+	struct client *client_ptr,
+	const char *parent_path,
+	const char *path,
+	dtmd_removable_media_type_t media_type,
+	dtmd_removable_media_subtype_t media_subtype,
+	dtmd_removable_media_state_t state,
+	const char *fstype,
+	const char *label,
+	const char *mnt_point,
+	const char *mnt_opts)
 {
-	size_t i;
+	int rc = result_success;
 
-	for (i = 0; i < clients_count; ++i)
+	switch (media_type)
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_add_stateful_device "(\"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s)\n",
+	case dtmd_removable_media_type_device_partition:
+		if (dprintf(client_ptr->clientfd, "%s(\"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s, %s%s%s, %s%s%s)\n",
+			action,
+			parent_path,
 			path,
-			dtmd_device_type_to_string(type),
+			dtmd_device_type_to_string(media_type),
+			((fstype != NULL) ? ("\"") : ("")),
+			((fstype != NULL) ? (fstype) : ("nil")),
+			((fstype != NULL) ? ("\"") : ("")),
+			((label != NULL) ? ("\"") : ("")),
+			((label != NULL) ? (label) : ("nil")),
+			((label != NULL) ? ("\"") : ("")),
+			((mnt_point != NULL) ? ("\"") : ("")),
+			((mnt_point != NULL) ? (mnt_point) : ("nil")),
+			((mnt_point != NULL) ? ("\"") : ("")),
+			((mnt_opts != NULL) ? ("\"") : ("")),
+			((mnt_opts != NULL) ? (mnt_opts) : ("nil")),
+			((mnt_opts != NULL) ? ("\"") : (""))) < 0)
+		{
+			rc = result_client_error;
+		}
+		break;
+
+	case dtmd_removable_media_type_stateless_device:
+		if (dprintf(client_ptr->clientfd, "%s(\"%s\", \"%s\", \"%s\", \"%s\")\n",
+			action,
+			parent_path,
+			path,
+			dtmd_device_type_to_string(media_type),
+			dtmd_device_subtype_to_string(media_subtype)) < 0)
+		{
+			rc = result_client_error;
+		}
+		break;
+
+	case dtmd_removable_media_type_stateful_device:
+		if (dprintf(client_ptr->clientfd, "%s(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s, %s%s%s, %s%s%s)\n",
+			action,
+			parent_path,
+			path,
+			dtmd_device_type_to_string(media_type),
+			dtmd_device_subtype_to_string(media_subtype),
 			dtmd_device_state_to_string(state),
-			(fstype != NULL) ? ("\"") : (""),
-			(fstype != NULL) ? (fstype) : ("nil"),
-			(fstype != NULL) ? ("\"") : (""),
-			(label != NULL) ? ("\"") : (""),
-			(label != NULL) ? (label) : ("nil"),
-			(label != NULL) ? ("\"") : (""));
+			((fstype != NULL) ? ("\"") : ("")),
+			((fstype != NULL) ? (fstype) : ("nil")),
+			((fstype != NULL) ? ("\"") : ("")),
+			((label != NULL) ? ("\"") : ("")),
+			((label != NULL) ? (label) : ("nil")),
+			((label != NULL) ? ("\"") : ("")),
+			((mnt_point != NULL) ? ("\"") : ("")),
+			((mnt_point != NULL) ? (mnt_point) : ("nil")),
+			((mnt_point != NULL) ? ("\"") : ("")),
+			((mnt_opts != NULL) ? ("\"") : ("")),
+			((mnt_opts != NULL) ? (mnt_opts) : ("nil")),
+			((mnt_opts != NULL) ? ("\"") : (""))) < 0)
+		{
+			rc = result_client_error;
+		}
+		break;
+
+	case dtmd_removable_media_type_unknown_or_persistent:
+	default:
+		rc = result_fail;
+		break;
 	}
+
+	return rc;
 }
 
-void notify_remove_stateful_device(const char *path)
+static int print_all_removable_devices_recursive(struct client *client_ptr, struct removable_media *media_ptr)
 {
-	size_t i;
+	int rc;
+	struct removable_media *iter_media_ptr;
 
-	for (i = 0; i < clients_count; ++i)
+	rc = print_removable_device_common(dtmd_response_argument_removable_device,
+		client_ptr,
+		((media_ptr->parent != NULL) ? media_ptr->parent->path : dtmd_root_device_path),
+		media_ptr->path,
+		media_ptr->type,
+		media_ptr->subtype,
+		media_ptr->state,
+		media_ptr->fstype,
+		media_ptr->label,
+		media_ptr->mnt_point,
+		media_ptr->mnt_opts);
+
+	if (is_result_failure(rc))
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_remove_stateful_device "(\"%s\")\n", path);
+		return rc;
 	}
-}
 
-void notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
-{
-	size_t i;
-
-	for (i = 0; i < clients_count; ++i)
+	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		dprintf(clients[i]->clientfd, dtmd_notification_stateful_device_changed "(\"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s)\n",
-			path,
-			dtmd_device_type_to_string(type),
-			dtmd_device_state_to_string(state),
-			(fstype != NULL) ? ("\"") : (""),
-			(fstype != NULL) ? (fstype) : ("nil"),
-			(fstype != NULL) ? ("\"") : (""),
-			(label != NULL) ? ("\"") : (""),
-			(label != NULL) ? (label) : ("nil"),
-			(label != NULL) ? ("\"") : (""));
-	}
-}
-
-void notify_mount(const char *path, const char *mount_point, const char *mount_options)
-{
-	size_t i;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		dprintf(clients[i]->clientfd, dtmd_notification_mount "(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
-	}
-}
-
-void notify_unmount(const char *path, const char *mount_point)
-{
-	size_t i;
-
-	for (i = 0; i < clients_count; ++i)
-	{
-		dprintf(clients[i]->clientfd, dtmd_notification_unmount "(\"%s\", \"%s\")\n", path, mount_point);
-	}
-}
-
-static int print_devices_count(int client_number)
-{
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%zu\")\n",
-		media_count) < 0)
-	{
-		return result_client_error;
+		rc = print_all_removable_devices_recursive(client_ptr, iter_media_ptr);
+		if (is_result_failure(rc))
+		{
+			return rc;
+		}
 	}
 
 	return result_success;
 }
 
-static int print_device(int client_number, size_t device)
+static int print_all_removable_devices(struct client *client_ptr)
 {
-#ifndef NDEBUG
-	if (device > media_count)
+	int rc;
+	struct removable_media *iter_media_ptr;
+
+	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		return result_bug;
-	}
-#endif /* NDEBUG */
-
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_device "(\"%s\", \"%s\", \"%zu\")\n",
-		media[device]->path,
-		dtmd_device_type_to_string(media[device]->type),
-		media[device]->partitions_count) < 0)
-	{
-		return result_client_error;
-	}
-
-	return result_success;
-}
-
-static int print_partition(int client_number, size_t device, size_t partition)
-{
-#ifndef NDEBUG
-	if ((device > media_count) || (partition > media[device]->partitions_count))
-	{
-		return result_bug;
-	}
-#endif /* NDEBUG */
-
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_partition "(\"%s\", %s%s%s, %s%s%s, \"%s\", %s%s%s, %s%s%s)\n",
-		media[device]->partition[partition]->path,
-		((media[device]->partition[partition]->fstype != NULL) ? ("\"") : ("")),
-		((media[device]->partition[partition]->fstype != NULL) ? (media[device]->partition[partition]->fstype) : ("nil")),
-		((media[device]->partition[partition]->fstype != NULL) ? ("\"") : ("")),
-		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
-		((media[device]->partition[partition]->label != NULL) ? (media[device]->partition[partition]->label) : ("nil")),
-		((media[device]->partition[partition]->label != NULL) ? ("\"") : ("")),
-		media[device]->path,
-		((media[device]->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
-		((media[device]->partition[partition]->mnt_point != NULL) ? (media[device]->partition[partition]->mnt_point) : ("nil")),
-		((media[device]->partition[partition]->mnt_point != NULL) ? ("\"") : ("")),
-		((media[device]->partition[partition]->mnt_opts != NULL) ? ("\"") : ("")),
-		((media[device]->partition[partition]->mnt_opts != NULL) ? (media[device]->partition[partition]->mnt_opts) : ("nil")),
-		((media[device]->partition[partition]->mnt_opts != NULL) ? ("\"") : (""))) < 0)
-	{
-		return result_client_error;
-	}
-
-	return result_success;
-}
-
-static int print_stateful_devices_count(int client_number)
-{
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_devices "(\"%zu\")\n",
-		stateful_media_count) < 0)
-	{
-		return result_client_error;
-	}
-
-	return result_success;
-}
-
-static int print_stateful_device(int client_number, size_t device)
-{
-#ifndef NDEBUG
-	if (device > stateful_media_count)
-	{
-		return result_bug;
-	}
-#endif /* NDEBUG */
-
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_device "(\"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s, %s%s%s, %s%s%s)\n",
-		stateful_media[device]->path,
-		dtmd_device_type_to_string(stateful_media[device]->type),
-		dtmd_device_state_to_string(stateful_media[device]->state),
-		((stateful_media[device]->fstype != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->fstype != NULL) ? (stateful_media[device]->fstype) : ("nil")),
-		((stateful_media[device]->fstype != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->label != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->label != NULL) ? (stateful_media[device]->label) : ("nil")),
-		((stateful_media[device]->label != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->mnt_point != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->mnt_point != NULL) ? (stateful_media[device]->mnt_point) : ("nil")),
-		((stateful_media[device]->mnt_point != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->mnt_opts != NULL) ? ("\"") : ("")),
-		((stateful_media[device]->mnt_opts != NULL) ? (stateful_media[device]->mnt_opts) : ("nil")),
-		((stateful_media[device]->mnt_opts != NULL) ? ("\"") : (""))) < 0)
-	{
-		return result_client_error;
+		rc = print_all_removable_devices_recursive(client_ptr, iter_media_ptr);
+		if (is_result_failure(rc))
+		{
+			return rc;
+		}
 	}
 
 	return result_success;

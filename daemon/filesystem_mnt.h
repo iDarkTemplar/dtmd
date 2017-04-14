@@ -23,6 +23,7 @@
 
 #include <dtmd.h>
 #include "daemon/config_file.h"
+#include "daemon/lists.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,10 +31,10 @@ extern "C" {
 
 /* NOTE: invoke_unmount and invoke_unmount_all can take -1 as client number meaning the client is daemon itself */
 
-int invoke_mount(int client_number, const char *path, const char *mount_options, enum mount_by_value_enum mount_type, dtmd_error_code_t *error_code);
-int invoke_unmount(int client_number, const char *path, dtmd_error_code_t *error_code);
+int invoke_mount(struct client *client_ptr, const char *path, const char *mount_options, enum mount_by_value_enum mount_type, dtmd_error_code_t *error_code);
+int invoke_unmount(struct client *client_ptr, const char *path, dtmd_error_code_t *error_code);
 
-int invoke_unmount_all(int client_number);
+int invoke_unmount_all(struct client *client_ptr);
 
 #ifdef __cplusplus
 }

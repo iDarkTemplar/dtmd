@@ -19,6 +19,7 @@
  */
 
 #include "daemon/label.h"
+#include "daemon/return_codes.h"
 
 #include <ctype.h>
 #include <string.h>
@@ -37,6 +38,270 @@
 	\ooo – Octal representation
 	\xdd – Hexadecimal representation
 */
+
+int compare_labels(const char *decoded_label, const char *encoded_label)
+{
+	int i;
+	int k;
+
+	while (*encoded_label)
+	{
+		if ((*encoded_label) == '\\')
+		{
+			++encoded_label;
+
+			if ((*encoded_label) == 0)
+			{
+				return result_fail;
+			}
+
+			switch (*encoded_label)
+			{
+			case 'a':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\a' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\a' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\a' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case 'b':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\b' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\b' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\b' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case 'f':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\f' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\f' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\f' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case 'n':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\n' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\n' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\n' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case 'r':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\r' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\r' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\r' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case 't':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\t' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\t' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\t' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case '\\':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\\' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\\' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\\' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case '\'':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\'' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\'' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\'' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case '\"':
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (('\"' & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (('\"' &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( '\"' &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+				break;
+
+			case 'x':
+				k = 0;
+
+				for (i = 1; i < 3; ++i)
+				{
+					if (!isxdigit(encoded_label[i]))
+					{
+						result_fail;
+					}
+
+					k *= 16;
+
+					if ((encoded_label[i] >= '0') && (encoded_label[i] <= '9'))
+					{
+						k += encoded_label[i] - '0';
+					}
+					else
+					{
+						k += tolower(encoded_label[i]) - 'a' + 10;
+					}
+				}
+
+				if ((!iscntrl(k)) && (!ispunct(k)))
+				{
+					if ((*decoded_label) != k)
+					{
+						return result_fail;
+					}
+				}
+				else
+				{
+					if ((decoded_label[0] != '\\')
+						|| (decoded_label[1] != '0' + ((k & 0700) >> 6))
+						|| (decoded_label[2] != '0' + ((k &  070) >> 3))
+						|| (decoded_label[3] != '0' + ( k &   07)))
+					{
+						return result_fail;
+					}
+
+					decoded_label += 3;
+				}
+
+				encoded_label += 2;
+				break;
+
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+				k = 0;
+
+				for (i = 0; i < 3; ++i)
+				{
+					if ((encoded_label[i] < '0') || (encoded_label[i] > '7'))
+					{
+						return result_fail;
+					}
+
+					k *= 8;
+					k += encoded_label[i] - '0';
+				}
+
+				if ((!iscntrl(k)) && (!ispunct(k)))
+				{
+					if ((*decoded_label) != k)
+					{
+						return result_fail;
+					}
+				}
+				else
+				{
+					if ((decoded_label[0] != '\\')
+						|| (decoded_label[1] != '0' + ((k & 0700) >> 6))
+						|| (decoded_label[2] != '0' + ((k &  070) >> 3))
+						|| (decoded_label[3] != '0' + ( k &   07)))
+					{
+						return result_fail;
+					}
+
+					decoded_label += 3;
+				}
+
+				encoded_label += 2;
+				break;
+
+			default:
+				if ((*decoded_label) != '\\')
+				{
+					return result_fail;
+				}
+
+				++decoded_label;
+
+				if ((*decoded_label) != (*encoded_label))
+				{
+					return result_fail;
+				}
+			}
+		}
+		else
+		{
+			if ((!iscntrl(*encoded_label)) && (!ispunct(*encoded_label)))
+			{
+				if ((*decoded_label) != (*encoded_label))
+				{
+					return result_fail;
+				}
+			}
+			else
+			{
+				if ((decoded_label[0] != '\\')
+					|| (decoded_label[1] != '0' + (((*encoded_label) & 0700) >> 6))
+					|| (decoded_label[2] != '0' + (((*encoded_label) &  070) >> 3))
+					|| (decoded_label[3] != '0' + ( (*encoded_label) &   07)))
+				{
+					return result_fail;
+				}
+
+				decoded_label += 3;
+			}
+		}
+
+		++decoded_label;
+		++encoded_label;
+	}
+
+	if ((*decoded_label) != (*encoded_label))
+	{
+		return result_fail;
+	}
+
+	return result_success;
+}
 
 char* decode_label(const char *label)
 {

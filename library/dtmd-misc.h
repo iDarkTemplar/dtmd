@@ -30,6 +30,9 @@ extern "C" {
 const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
 dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);
 
+const char* dtmd_device_subtype_to_string(dtmd_removable_media_subtype_t type);
+dtmd_removable_media_subtype_t dtmd_string_to_device_subtype(const char *string);
+
 const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state);
 dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string);
 

@@ -1356,12 +1356,12 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	return result_success;
 }
 
-int invoke_list_supported_filesystems(int client_number)
+int invoke_list_supported_filesystems(struct client *client_ptr)
 {
 	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
 	int first = 1;
 
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n" dtmd_response_argument_supported_filesystems_lists "(") < 0)
+	if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n" dtmd_response_argument_supported_filesystems_lists "(") < 0)
 	{
 		return result_client_error;
 	}
@@ -1386,13 +1386,13 @@ int invoke_list_supported_filesystems(int client_number)
 			}
 			else
 			{
-				if (dprintf(clients[client_number]->clientfd, ", ") < 0)
+				if (dprintf(client_ptr->clientfd, ", ") < 0)
 				{
 					return result_client_error;
 				}
 			}
 
-			if (dprintf(clients[client_number]->clientfd, "\"%s\"", fsopts->fstype) < 0)
+			if (dprintf(client_ptr->clientfd, "\"%s\"", fsopts->fstype) < 0)
 			{
 				return result_client_error;
 			}
@@ -1406,7 +1406,7 @@ int invoke_list_supported_filesystems(int client_number)
 		++fsopts;
 	}
 
-	if (dprintf(clients[client_number]->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n") < 0)
+	if (dprintf(client_ptr->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n") < 0)
 	{
 		return result_client_error;
 	}
@@ -1414,7 +1414,7 @@ int invoke_list_supported_filesystems(int client_number)
 	return result_success;
 }
 
-int invoke_list_supported_filesystem_options(int client_number, const char *filesystem)
+int invoke_list_supported_filesystem_options(struct client *client_ptr, const char *filesystem)
 {
 	const struct dtmd_filesystem_options *fsopts;
 	const struct dtmd_mount_option *option_list;
@@ -1428,7 +1428,7 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 	if (fsopts == NULL)
 #endif /* (defined OS_Linux) && (defined DISABLE_EXT_MOUNT) */
 	{
-		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\", \"%s\")\n", filesystem, dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype)) < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\", \"%s\")\n", filesystem, dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype)) < 0)
 		{
 			return result_client_error;
 		}
@@ -1436,7 +1436,7 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 		return result_fail;
 	}
 
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n" dtmd_response_argument_supported_filesystem_options_lists "(", filesystem) < 0)
+	if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n" dtmd_response_argument_supported_filesystem_options_lists "(", filesystem) < 0)
 	{
 		return result_client_error;
 	}
@@ -1451,20 +1451,20 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 			}
 			else
 			{
-				if (dprintf(clients[client_number]->clientfd, ", ") < 0)
+				if (dprintf(client_ptr->clientfd, ", ") < 0)
 				{
 					return result_client_error;
 				}
 			}
 
-			if (dprintf(clients[client_number]->clientfd, "\"%s\"", option_list->option) < 0)
+			if (dprintf(client_ptr->clientfd, "\"%s\"", option_list->option) < 0)
 			{
 				return result_client_error;
 			}
 		}
 	}
 
-	if (dprintf(clients[client_number]->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
+	if (dprintf(client_ptr->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
 	{
 		return result_client_error;
 	}

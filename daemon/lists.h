@@ -29,35 +29,24 @@
 extern "C" {
 #endif
 
-struct removable_partition
-{
-	char *path;
-	char *fstype; // optional
-	char *label; // optional
-	unsigned char is_mounted;
-	char *mnt_point; // optional
-	char *mnt_opts; // optional
-};
-
 struct removable_media
 {
 	char *path;
 	dtmd_removable_media_type_t type;
-
-	size_t partitions_count;
-	struct removable_partition **partition;
-};
-
-struct removable_stateful_media
-{
-	char *path;
-	dtmd_removable_media_type_t type;
+	dtmd_removable_media_subtype_t subtype;
 	dtmd_removable_media_state_t state;
 	char *fstype; // optional
 	char *label; // optional
-	unsigned char is_mounted;
 	char *mnt_point; // optional
 	char *mnt_opts; // optional
+
+	struct removable_media *parent;
+
+	struct removable_media *first_child;
+	struct removable_media *last_child;
+
+	struct removable_media *next_node;
+	struct removable_media *prev_node;
 };
 
 struct client
@@ -65,35 +54,44 @@ struct client
 	int clientfd;
 	size_t buf_used;
 	char buf[dtmd_command_max_length + 1];
+
+	struct client *next_node;
+	struct client *prev_node;
 };
 
-extern struct removable_media **media;
-extern size_t media_count;
+extern struct removable_media *removable_media_root;
 
-extern struct removable_stateful_media **stateful_media;
-extern size_t stateful_media_count;
-
-extern struct client **clients;
+extern struct client *client_root;
 extern size_t clients_count;
 
-int add_media_block(const char *path, dtmd_removable_media_type_t media_type);
-int remove_media_block(const char *path);
-int change_media_block(const char *path, dtmd_removable_media_type_t media_type);
+struct removable_media* find_media(const char *path);
 
-int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label);
-int remove_media_partition(const char *block, const char *partition);
-int change_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label);
+int add_media(const char *parent_path,
+	const char *path,
+	dtmd_removable_media_type_t media_type,
+	dtmd_removable_media_subtype_t media_subtype,
+	dtmd_removable_media_state_t state,
+	const char *fstype,
+	const char *label,
+	const char *mnt_point,
+	const char *mnt_opts);
+
+int remove_media(const char *path);
+
+int change_media(const char *parent_path,
+	const char *path,
+	dtmd_removable_media_type_t media_type,
+	dtmd_removable_media_subtype_t media_subtype,
+	dtmd_removable_media_state_t state,
+	const char *fstype,
+	const char *label,
+	const char *mnt_point,
+	const char *mnt_opts);
 
 void remove_all_media(void);
 
-int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
-int remove_stateful_media(const char *path);
-int change_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
-
-void remove_all_stateful_media(void);
-
-int add_client(int client);
-int remove_client(int client);
+int add_client(int client_fd);
+int remove_client(int client_fd);
 
 void remove_all_clients(void);
 

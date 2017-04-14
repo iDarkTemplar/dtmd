@@ -31,11 +31,19 @@ extern "C" {
 
 typedef enum dtmd_removable_media_type
 {
-	dtmd_removable_media_unknown_or_persistent = 0,
-	dtmd_removable_media_cdrom                 = 1,
-	dtmd_removable_media_removable_disk        = 2,
-	dtmd_removable_media_sd_card               = 3
+	dtmd_removable_media_type_unknown_or_persistent = 0,
+	dtmd_removable_media_type_device_partition      = 1,
+	dtmd_removable_media_type_stateless_device      = 2,
+	dtmd_removable_media_type_stateful_device       = 3
 } dtmd_removable_media_type_t;
+
+typedef enum dtmd_removable_media_subtype
+{
+	dtmd_removable_media_subtype_unknown_or_persistent = 0,
+	dtmd_removable_media_subtype_removable_disk        = 1,
+	dtmd_removable_media_subtype_sd_card               = 2,
+	dtmd_removable_media_subtype_cdrom                 = 3
+} dtmd_removable_media_subtype_t;
 
 typedef enum dtmd_removable_media_state
 {
@@ -62,10 +70,15 @@ typedef enum dtmd_error_code
 }
 #endif
 
-#define dtmd_string_device_unknown_or_persistent "unknown"
-#define dtmd_string_device_cdrom                 "cdrom"
-#define dtmd_string_device_removable_disk        "removable disk"
-#define dtmd_string_device_sd_card               "sdcard"
+#define dtmd_string_device_type_unknown_or_persistent "unknown"
+#define dtmd_string_device_type_device_partition      "device_partition"
+#define dtmd_string_device_type_stateless_device      "stateless_device"
+#define dtmd_string_device_type_stateful_device       "stateful_device"
+
+#define dtmd_string_device_subtype_unknown_or_persistent "unknown"
+#define dtmd_string_device_subtype_removable_disk        "removable disk"
+#define dtmd_string_device_subtype_sd_card               "sdcard"
+#define dtmd_string_device_subtype_cdrom                 "cdrom"
 
 #define dtmd_string_state_unknown "unknown"
 #define dtmd_string_state_empty   "empty"
@@ -84,85 +97,42 @@ typedef enum dtmd_error_code
 
 /* Notification types */
 
-#define dtmd_notification_add_disk "add_disk"
-/* parameters: path, type */
+#define dtmd_notification_removable_device_added "removable_device_added"
+/* parameters: parent_path, path, type */
+/* additional parameters for type 'removable_device' and 'stateful_device': subtype
+/* additional parameters for type 'stateful_device': state */
+/* additional parameters for type 'device_partition' and 'stateful_device': fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL) */
 
-#define dtmd_notification_remove_disk "remove_disk"
+#define dtmd_notification_removable_device_removed "removable_device_removed"
 /* parameters: path */
 
-#define dtmd_notification_disk_changed "disk_changed"
-/* parameters: path, type */
-
-#define dtmd_notification_add_partition "add_partition"
-/* parameters: path, fstype (or NULL), label (or NULL), parent_path */
-
-#define dtmd_notification_remove_partition "remove_partition"
-/* parameters: path */
-
-#define dtmd_notification_partition_changed "partition_changed"
-/* parameters: path, fstype (or NULL), label (or NULL), parent_path */
-
-#define dtmd_notification_add_stateful_device "add_stateful_device"
-/* parameters: path, type, state, fstype (or NULL), label (or NULL) */
-
-#define dtmd_notification_remove_stateful_device "remove_stateful_device"
-/* parameters: path */
-
-#define dtmd_notification_stateful_device_changed "stateful_device_changed"
-/* parameters: path, type, state, fstype (or NULL), label (or NULL) */
-
-#define dtmd_notification_mount "mount"
-/* parameters: path, mount_point, mount_options */
-
-#define dtmd_notification_unmount "unmount"
-/* parameters: path, mount_point */
+#define dtmd_notification_removable_device_changed "removable_device_changed"
+/* same parameters as for 'add_removable_device' */
+/* any parameter may change, including type, except for parent_path and path */
 
 /* Commands and responses */
 
-#define dtmd_command_enum_all "enum_all"
+#define dtmd_command_list_all_removable_devices "list_all_removable_devices"
 /*
  *	input: none
  *
+ *	returns full tree of devices, similar to list_removable_device("/")
+ *
  *	returns:
- *		devices: count
- *		device: "path, type, partitions_count"
- *		partition: "path, fstype (or NULL), label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
- *		stateful_devices: count
- *		stateful_device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
+ *		device: format same as for 'add_removable_device' parameters format
  *
  *		or "failed" on fail
  */
 
-#define dtmd_command_list_device "list_device"
+#define dtmd_command_list_removable_device "list_removable_device"
 /*
  *	input:
- *		"device path"
+ *		"removable device path"
+ *
+ *	returns subtree of removable devices
  *
  *	returns:
- *		device: "path, type, partitions_count"
- *		partition: "path, fstype (or NULL), label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
- *
- *		or "failed" on fail
- */
-
-#define dtmd_command_list_partition "list_partition"
-/*
- *	input:
- *		"partition path"
- *
- *	returns:
- *		partition: "path, fstype (or NULL), label (or NULL), parent_path, mount_point (or NULL), mount_options (or NULL)"
- *
- *		or "failed" on fail
- */
-
-#define dtmd_command_list_stateful_device "list_stateful_device"
-/*
- *	input:
- *		"device path"
- *
- *	returns:
- *		stateful device: "path, type, state, fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL)"
+ *		device: format same as for 'add_removable_device' parameters format
  *
  *		or "failed" on fail
  */
@@ -211,11 +181,8 @@ typedef enum dtmd_error_code
 #define dtmd_response_succeeded "succeeded"
 #define dtmd_response_failed "failed"
 
-#define dtmd_response_argument_devices "devices"
-#define dtmd_response_argument_device "device"
-#define dtmd_response_argument_partition "partition"
-#define dtmd_response_argument_stateful_devices "stateful_devices"
-#define dtmd_response_argument_stateful_device "stateful_device"
+#define dtmd_root_device_path "/"
+#define dtmd_response_argument_removable_device "removable_device"
 #define dtmd_response_argument_supported_filesystems_lists "supported_filesystems_list"
 #define dtmd_response_argument_supported_filesystem_options_lists "supported_filesystem_options_list"
 
