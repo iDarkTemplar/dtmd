@@ -335,6 +335,8 @@ int main(int argc, char **argv)
 	dtmd_info_t *dtmd_dev_device;
 	dtmd_device_action_type_t dtmd_dev_action;
 
+	struct client *client_ptr;
+
 	int monfd;
 	int mountfd;
 	void *tmp;
@@ -661,59 +663,27 @@ int main(int argc, char **argv)
 
 	while (is_result_successful(rc = device_system_next_enumerated_device(dtmd_dev_enum, &dtmd_dev_device)))
 	{
-		switch (dtmd_dev_device->type)
+		if ((dtmd_dev_device->media_type != dtmd_removable_media_type_unknown_or_persistent)
+			&& (dtmd_dev_device->media_subtype != dtmd_removable_media_subtype_unknown_or_persistent)
+			&& (dtmd_dev_device->path != NULL)
+			&& (dtmd_dev_device->path_parent != NULL))
 		{
-		case dtmd_info_device:
-			if ((dtmd_dev_device->path != NULL)
-				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
+			if (is_result_fatal_error(add_media(
+				dtmd_dev_device->path_parent,
+				dtmd_dev_device->path,
+				dtmd_dev_device->media_type,
+				dtmd_dev_device->media_subtype,
+				dtmd_dev_device->state,
+				dtmd_dev_device->fstype,
+				dtmd_dev_device->label,
+				NULL,
+				NULL)))
 			{
-				if (is_result_fatal_error(add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type)))
-				{
-					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
-					device_system_finish_enumerate_devices(dtmd_dev_enum);
-					result = -1;
-					goto exit_7;
-				}
+				device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
+				device_system_finish_enumerate_devices(dtmd_dev_enum);
+				result = -1;
+				goto exit_7;
 			}
-			break;
-
-		case dtmd_info_partition:
-			if ((dtmd_dev_device->path != NULL)
-				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-				&& (dtmd_dev_device->path_parent != NULL))
-			{
-				if (is_result_fatal_error(add_media_partition(dtmd_dev_device->path_parent,
-					dtmd_dev_device->media_type,
-					dtmd_dev_device->path,
-					dtmd_dev_device->fstype,
-					dtmd_dev_device->label)))
-				{
-					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
-					device_system_finish_enumerate_devices(dtmd_dev_enum);
-					result = -1;
-					goto exit_7;
-				}
-			}
-			break;
-
-		case dtmd_info_stateful_device:
-			if ((dtmd_dev_device->path != NULL)
-				&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-				&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
-			{
-				if (is_result_fatal_error(add_stateful_media(dtmd_dev_device->path,
-					dtmd_dev_device->media_type,
-					dtmd_dev_device->state,
-					dtmd_dev_device->fstype,
-					dtmd_dev_device->label)))
-				{
-					device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
-					device_system_finish_enumerate_devices(dtmd_dev_enum);
-					result = -1;
-					goto exit_7;
-				}
-			}
-			break;
 		}
 
 		device_system_free_enumerated_device(dtmd_dev_enum, dtmd_dev_device);
@@ -776,9 +746,9 @@ int main(int argc, char **argv)
 #endif /* (defined OS_FreeBSD) */
 		pollfds[2].revents = 0;
 
-		for (i = 0; i < clients_count; ++i)
+		for (client_ptr = client_root; client_ptr != NULL; client_ptr = client_ptr->next_node)
 		{
-			pollfds[i + pollfds_count_default].fd      = clients[i]->clientfd;
+			pollfds[i + pollfds_count_default].fd      = client_ptr->clientfd;
 			pollfds[i + pollfds_count_default].events  = POLLIN;
 			pollfds[i + pollfds_count_default].revents = 0;
 		}
@@ -837,107 +807,48 @@ int main(int argc, char **argv)
 				{
 				case dtmd_device_action_add:
 				case dtmd_device_action_online:
-					switch (dtmd_dev_device->type)
+					if ((dtmd_dev_device->media_type != dtmd_removable_media_type_unknown_or_persistent)
+						&& (dtmd_dev_device->media_subtype != dtmd_removable_media_subtype_unknown_or_persistent)
+						&& (dtmd_dev_device->path != NULL)
+						&& (dtmd_dev_device->path_parent != NULL))
 					{
-					case dtmd_info_device:
-						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
-						{
-							rc = add_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type);
-						}
-						break;
-
-					case dtmd_info_partition:
-						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-							&& (dtmd_dev_device->path_parent != NULL))
-						{
-							rc = add_media_partition(dtmd_dev_device->path_parent,
-								dtmd_dev_device->media_type,
-								dtmd_dev_device->path,
-								dtmd_dev_device->fstype,
-								dtmd_dev_device->label);
-						}
-						break;
-
-					case dtmd_info_stateful_device:
-						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-							&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
-						{
-							rc = add_stateful_media(dtmd_dev_device->path,
-								dtmd_dev_device->media_type,
-								dtmd_dev_device->state,
-								dtmd_dev_device->fstype,
-								dtmd_dev_device->label);
-						}
-						break;
+						rc = add_media(
+							dtmd_dev_device->path_parent,
+							dtmd_dev_device->path,
+							dtmd_dev_device->media_type,
+							dtmd_dev_device->media_subtype,
+							dtmd_dev_device->state,
+							dtmd_dev_device->fstype,
+							dtmd_dev_device->label,
+							NULL,
+							NULL);
 					}
 					break;
 
 				case dtmd_device_action_remove:
 				case dtmd_device_action_offline:
-					switch (dtmd_dev_device->type)
+					if (dtmd_dev_device->path != NULL)
 					{
-					case dtmd_info_device:
-						if (dtmd_dev_device->path != NULL)
-						{
-							rc = remove_media_block(dtmd_dev_device->path);
-						}
-						break;
-
-					case dtmd_info_partition:
-						if (dtmd_dev_device->path != NULL)
-						{
-							rc = remove_media_partition(NULL, dtmd_dev_device->path);
-						}
-						break;
-
-					case dtmd_info_stateful_device:
-						if (dtmd_dev_device->path != NULL)
-						{
-							rc = remove_stateful_media(dtmd_dev_device->path);
-						}
-						break;
+						rc = remove_media(dtmd_dev_device->path);
 					}
 					break;
 
 				case dtmd_device_action_change:
-					switch (dtmd_dev_device->type)
+					if ((dtmd_dev_device->media_type != dtmd_removable_media_type_unknown_or_persistent)
+						&& (dtmd_dev_device->media_subtype != dtmd_removable_media_subtype_unknown_or_persistent)
+						&& (dtmd_dev_device->path != NULL)
+						&& (dtmd_dev_device->path_parent != NULL))
 					{
-					case dtmd_info_device:
-						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent))
-						{
-							rc = change_media_block(dtmd_dev_device->path, dtmd_dev_device->media_type);
-						}
-						break;
-
-					case dtmd_info_partition:
-						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-							&& (dtmd_dev_device->path_parent != NULL))
-						{
-							rc = change_media_partition(dtmd_dev_device->path_parent,
-								dtmd_dev_device->media_type,
-								dtmd_dev_device->path,
-								dtmd_dev_device->fstype,
-								dtmd_dev_device->label);
-						}
-						break;
-
-					case dtmd_info_stateful_device:
-						if ((dtmd_dev_device->path != NULL)
-							&& (dtmd_dev_device->media_type != dtmd_removable_media_unknown_or_persistent)
-							&& (dtmd_dev_device->state != dtmd_removable_media_state_unknown))
-						{
-							rc = change_stateful_media(dtmd_dev_device->path,
-								dtmd_dev_device->media_type,
-								dtmd_dev_device->state,
-								dtmd_dev_device->fstype,
-								dtmd_dev_device->label);
-						}
-						break;
+						rc = change_media(
+							dtmd_dev_device->path_parent,
+							dtmd_dev_device->path,
+							dtmd_dev_device->media_type,
+							dtmd_dev_device->media_subtype,
+							dtmd_dev_device->state,
+							dtmd_dev_device->fstype,
+							dtmd_dev_device->label,
+							NULL,
+							NULL);
 					}
 					break;
 				}
@@ -990,40 +901,40 @@ int main(int argc, char **argv)
 			}
 			else if (pollfds[i].revents & POLLIN)
 			{
-				for (j = 0; j < clients_count; ++j)
+				for (client_ptr = client_root; client_ptr != NULL; client_ptr = client_ptr->next_node)
 				{
-					if (clients[j]->clientfd == pollfds[i].fd)
+					if (client_ptr->clientfd == pollfds[i].fd)
 					{
 						break;
 					}
 				}
 
-				if (j == clients_count)
+				if (client_ptr == NULL)
 				{
 					WRITE_LOG(LOG_ERR, "BUG: could not find non-existent client");
 					result = -1;
 					goto exit_8;
 				}
 
-				rc = read(clients[j]->clientfd, &(clients[j]->buf[clients[j]->buf_used]), dtmd_command_max_length - clients[j]->buf_used);
+				rc = read(client_ptr->clientfd, &(client_ptr->buf[client_ptr->buf_used]), dtmd_command_max_length - client_ptr->buf_used);
 				if ((rc <= 0) && (errno != EINTR))
 				{
 					remove_client(pollfds[i].fd);
 					continue;
 				}
 
-				clients[j]->buf_used += rc;
-				clients[j]->buf[clients[j]->buf_used] = 0;
+				client_ptr->buf_used += rc;
+				client_ptr->buf[client_ptr->buf_used] = 0;
 
-				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
+				while ((tmp_str = strchr(client_ptr->buf, '\n')) != NULL)
 				{
-					rc = dt_validate_command(clients[j]->buf);
+					rc = dt_validate_command(client_ptr->buf);
 					if (!rc)
 					{
 						goto exit_remove_client;
 					}
 
-					cmd = dt_parse_command(clients[j]->buf);
+					cmd = dt_parse_command(client_ptr->buf);
 					if (cmd == NULL)
 					{
 						WRITE_LOG(LOG_ERR, "Memory allocation failure");
@@ -1031,7 +942,7 @@ int main(int argc, char **argv)
 						goto exit_8;
 					}
 
-					rc = invoke_command(j, cmd);
+					rc = invoke_command(client_ptr, cmd);
 					dt_free_command(cmd);
 
 					switch (rc)
@@ -1050,11 +961,11 @@ int main(int argc, char **argv)
 						break;
 					}
 
-					clients[j]->buf_used -= (tmp_str + 1 - clients[j]->buf);
-					memmove(clients[j]->buf, tmp_str+1, clients[j]->buf_used + 1);
+					client_ptr->buf_used -= (tmp_str + 1 - client_ptr->buf);
+					memmove(client_ptr->buf, tmp_str+1, client_ptr->buf_used + 1);
 				}
 
-				if (clients[j]->buf_used == dtmd_command_max_length)
+				if (client_ptr->buf_used == dtmd_command_max_length)
 				{
 exit_remove_client:
 					remove_client(pollfds[i].fd);
@@ -1101,7 +1012,6 @@ exit_7:
 	}
 
 	remove_all_media();
-	remove_all_stateful_media();
 	close_mount_monitoring(mountfd);
 
 exit_6:

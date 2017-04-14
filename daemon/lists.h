@@ -40,6 +40,8 @@ struct removable_media
 	char *mnt_point; // optional
 	char *mnt_opts; // optional
 
+	int is_mounted; // helper data
+
 	struct removable_media *parent;
 
 	struct removable_media *first_child;

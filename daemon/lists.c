@@ -200,6 +200,8 @@ int add_media(const char *parent_path,
 
 	if (mnt_point != NULL)
 	{
+		constructed_media->is_mounted = 1;
+
 		constructed_media->mnt_point = strdup(mnt_point);
 		if (constructed_media->mnt_point == NULL)
 		{
@@ -209,6 +211,7 @@ int add_media(const char *parent_path,
 	}
 	else
 	{
+		constructed_media->is_mounted = 0;
 		constructed_media->mnt_point = NULL;
 	}
 
@@ -440,6 +443,7 @@ int change_media(const char *parent_path,
 	{
 		free(media_ptr->mnt_point);
 		media_ptr->mnt_point = NULL;
+		media_ptr->is_mounted = 0;
 	}
 
 	if ((media_ptr->mnt_point == NULL) && (mnt_point != NULL))
@@ -450,6 +454,8 @@ int change_media(const char *parent_path,
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			return result_fatal_error;
 		}
+
+		media_ptr->is_mounted = 1;
 	}
 
 	if ((media_ptr->mnt_opts != NULL)

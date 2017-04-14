@@ -27,28 +27,17 @@
 extern "C" {
 #endif
 
-typedef enum dtmd_info_type
-{
-	dtmd_info_unknown = 0,
-	dtmd_info_device,
-	dtmd_info_partition,
-	dtmd_info_stateful_device
-} dtmd_info_type_t;
-
 typedef struct dtmd_info
 {
-	dtmd_info_type_t type;
-
 	/* common for all media */
+	const char *path_parent;
 	const char *path;
 	dtmd_removable_media_type_t media_type;
+	dtmd_removable_media_subtype_t media_subtype;
 
 	/* common for partition and non-empty cdroms */
 	const char *fstype;
 	const char *label;
-
-	/* for partition only */
-	const char *path_parent;
 
 	/* for cdroms only */
 	dtmd_removable_media_state_t state;

@@ -292,23 +292,23 @@ read_string_from_file_error_1:
 	return result_fatal_error;
 }
 
-static dtmd_removable_media_type_t device_type_from_string(const char *string)
+static dtmd_removable_media_type_t device_subtype_from_string(const char *string)
 {
 	if (strcmp(string, scsi_type_direct_access) == 0)
 	{
-		return dtmd_removable_media_removable_disk;
+		return dtmd_removable_media_subtype_removable_disk;
 	}
 	else if (strcmp(string, scsi_type_sd_card) == 0)
 	{
-		return dtmd_removable_media_sd_card;
+		return dtmd_removable_media_subtype_sd_card;
 	}
 	else if (strcmp(string, scsi_type_cd_dvd) == 0)
 	{
-		return dtmd_removable_media_cdrom;
+		return dtmd_removable_media_subtype_cdrom;
 	}
 	else
 	{
-		return dtmd_removable_media_unknown_or_persistent;
+		return dtmd_removable_media_subtype_unknown_or_persistent;
 	}
 }
 
@@ -470,7 +470,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 	int result;
 
 	dtmd_info_t *device_info;
-	dtmd_removable_media_type_t media_type;
+	dtmd_removable_media_subtype_t media_subtype;
 
 	start_string = (char *) name + strlen(name);
 
@@ -501,10 +501,10 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 		goto helper_read_device_error_1;
 	}
 
-	media_type = device_type_from_string(device_type);
+	media_subtype = device_subtype_from_string(device_type);
 	free(device_type);
 
-	if (media_type == dtmd_removable_media_unknown_or_persistent)
+	if (media_subtype == dtmd_removable_media_subtype_unknown_or_persistent)
 	{
 		result = result_fail;
 		goto helper_read_device_error_1;
@@ -540,22 +540,28 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 	strcpy((char*) device_info->path, devices_dir "/");
 	strcat((char*) device_info->path, device_name);
 
-	device_info->media_type   = media_type;
-	device_info->path_parent  = NULL;
-
-	switch (media_type)
+	device_info->media_subtype = media_subtype;
+	device_info->path_parent   = strdup(dtmd_root_device_path);
+	if (device_info->path_parent == NULL)
 	{
-	case dtmd_removable_media_removable_disk:
-	case dtmd_removable_media_sd_card:
-		device_info->type   = dtmd_info_device;
-		device_info->fstype = NULL;
-		device_info->label  = NULL;
-		device_info->state  = dtmd_removable_media_state_unknown;
-		*device             = device_info;
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
+		result = result_fatal_error;
+		goto helper_read_device_error_4;
+	}
+
+	switch (media_subtype)
+	{
+	case dtmd_removable_media_subtype_removable_disk:
+	case dtmd_removable_media_subtype_sd_card:
+		device_info->media_type = dtmd_removable_media_type_stateless_device;
+		device_info->fstype     = NULL;
+		device_info->label      = NULL;
+		device_info->state      = dtmd_removable_media_state_unknown;
+		*device                 = device_info;
 		return 1;
 
-	case dtmd_removable_media_cdrom:
-		device_info->type = dtmd_info_stateful_device;
+	case dtmd_removable_media_subtype_cdrom:
+		device_info->media_type = dtmd_removable_media_type_stateful_device;
 
 		result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
 		switch (result)
@@ -576,7 +582,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 			break;
 
 		default:
-			goto helper_read_device_error_4;
+			goto helper_read_device_error_5;
 		}
 
 		*device = device_info;
@@ -586,6 +592,9 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 		result = result_fail;
 		break;
 	}
+
+helper_read_device_error_5:
+	free((char*) device_info->path_parent);
 
 helper_read_device_error_4:
 	free((char*) device_info->path);
@@ -789,9 +798,9 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 			goto device_system_read_device_partitions_error_6;
 		}
 
-		device_info->type       = dtmd_info_partition;
-		device_info->media_type = device->device->media_type;
-		device_info->state      = dtmd_removable_media_state_unknown;
+		device_info->media_type    = dtmd_removable_media_type_device_partition;
+		device_info->media_subtype = device->device->media_subtype;
+		device_info->state         = dtmd_removable_media_state_unknown;
 
 		result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
 		if (is_result_fatal_error(result))
@@ -1398,19 +1407,19 @@ device_system_init_fill_devices_error_usb_1:
 #endif /* (defined OS_Linux) */
 
 #if (defined OS_FreeBSD)
-static dtmd_removable_media_type_t helper_get_device_type_from_data(const struct ata_params *ident_data)
+static dtmd_removable_media_subtype_t helper_get_device_subtype_from_data(const struct ata_params *ident_data)
 {
 	switch (ident_data->config & ATA_ATAPI_TYPE_MASK)
 	{
 	case ATA_ATAPI_TYPE_CDROM:
-		return dtmd_removable_media_cdrom;
+		return dtmd_removable_media_subtype_cdrom;
 
 	case ATA_ATAPI_TYPE_DIRECT:
-		return dtmd_removable_media_removable_disk;
+		return dtmd_removable_media_subtype_removable_disk;
 
 	default:
 		// TODO: differ between different media type, removable disks and cards
-		return dtmd_removable_media_unknown_or_persistent;
+		return dtmd_removable_media_subtype_unknown_or_persistent;
 	}
 }
 
@@ -1449,22 +1458,28 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 	strcpy((char*) device_info->path, devices_dir "/");
 	strcat((char*) device_info->path, device_name);
 
-	device_info->media_type  = helper_get_device_type_from_data(&(dev_result->ident_data));
-	device_info->path_parent = NULL;
+	device_info->media_subtype  = helper_get_device_subtype_from_data(&(dev_result->ident_data));
+	device_info->path_parent = strdup(dtmd_root_device_path);
+	if (device_info->path_parent == NULL)
+	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
+		result = result_fatal_error;
+		goto helper_read_device_error_4;
+	}
 
-	switch (device_info->media_type)
+	switch (device_info->media_subtype)
 	{
 	case dtmd_removable_media_removable_disk:
 	case dtmd_removable_media_sd_card:
-		device_info->type   = dtmd_info_device;
-		device_info->fstype = NULL;
-		device_info->label  = NULL;
-		device_info->state  = dtmd_removable_media_state_unknown;
-		*device             = device_info;
+		device_info->media_type = dtmd_removable_media_type_stateless_device;
+		device_info->fstype     = NULL;
+		device_info->label      = NULL;
+		device_info->state      = dtmd_removable_media_state_unknown;
+		*device                 = device_info;
 		return 1;
 
 	case dtmd_removable_media_cdrom:
-		device_info->type = dtmd_info_stateful_device;
+		device_info->media_type = dtmd_removable_media_type_stateful_device;
 
 		/*
 		result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
@@ -1501,8 +1516,11 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 	}
 
 /*
-helper_read_device_error_4:
+helper_read_device_error_5:
 */
+	free((char*) device_info->path_parent);
+
+helper_read_device_error_4:
 	free((char*) device_info->path);
 
 helper_read_device_error_3:
@@ -1678,9 +1696,9 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 			goto helper_read_device_partitions_error_6;
 		}
 
-		device_info->type       = dtmd_info_partition;
-		device_info->media_type = device->device->media_type;
-		device_info->state      = dtmd_removable_media_state_unknown;
+		device_info->media_type    = dtmd_removable_media_type_device_partition;
+		device_info->media_subtype = device->device->media_subtype;
+		device_info->state         = dtmd_removable_media_state_unknown;
 
 		device_info->fstype = NULL;
 		device_info->label  = NULL;
@@ -2181,38 +2199,38 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 
 			if (is_result_successful(result))
 			{
-				device_info->media_type = device_type_from_string(device_type);
+				device_info->media_subtype = device_subtype_from_string(device_type);
 				free(device_type);
 
 				if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
 				{
-					switch (device_info->media_type)
+					switch (device_info->media_subtype)
 					{
-					case dtmd_removable_media_removable_disk:
-					case dtmd_removable_media_sd_card:
-						device_info->type = dtmd_info_device;
+					case dtmd_removable_media_subtype_removable_disk:
+					case dtmd_removable_media_subtype_sd_card:
+						device_info->media_type = dtmd_removable_media_type_stateless_device;
 						break;
 
-					case dtmd_removable_media_cdrom:
-						device_info->type = dtmd_info_stateful_device;
+					case dtmd_removable_media_subtype_cdrom:
+						device_info->media_type = dtmd_removable_media_type_stateful_device;
 						break;
 
 					default:
-						device_info->type = dtmd_info_unknown;
+						device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
 						break;
 					}
 				}
 				else
 				{
-					device_info->type = dtmd_info_partition;
+					device_info->media_type = dtmd_removable_media_type_device_partition;
 				}
 			}
 			else
 			{
 				if (action_type == dtmd_device_action_change)
 				{
-					device_info->media_type = dtmd_removable_media_unknown_or_persistent;
-					device_info->type = dtmd_info_unknown;
+					device_info->media_subtype = dtmd_removable_media_subtype_unknown_or_persistent;
+					device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
 				}
 				else
 				{
@@ -2227,14 +2245,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		case dtmd_device_action_offline:
 			if (strcmp(devtype, NETLINK_STRING_DEVTYPE_DISK) == 0)
 			{
-				device_info->type = dtmd_info_unknown;
+				device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
 			}
 			else
 			{
-				device_info->type = dtmd_info_partition;
+				device_info->media_type = dtmd_removable_media_type_device_partition;
 			}
 
-			device_info->media_type = dtmd_removable_media_unknown_or_persistent;
+			device_info->media_subtype = dtmd_removable_media_subtype_unknown_or_persistent;
 			break;
 		}
 
@@ -2254,9 +2272,9 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		case dtmd_device_action_add:
 		case dtmd_device_action_online:
 		case dtmd_device_action_change:
-			switch (device_info->type)
+			switch (device_info->media_type)
 			{
-			case dtmd_info_partition:
+			case dtmd_removable_media_type_device_partition:
 				device_info->state = dtmd_removable_media_state_unknown;
 
 				result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
@@ -2266,7 +2284,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				}
 				break;
 
-			case dtmd_info_stateful_device:
+			case dtmd_removable_media_type_stateful_device:
 				result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
 				switch (result)
 				{
@@ -2305,9 +2323,9 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			break;
 		}
 
-		switch (device_info->type)
+		switch (device_info->media_type)
 		{
-		case dtmd_info_partition:
+		case dtmd_removable_media_type_device_partition:
 			last_delim = strrchr(devpath, '/');
 			if (last_delim == NULL)
 			{
@@ -2338,7 +2356,13 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			break;
 
 		default:
-			device_info->path_parent = NULL;
+			device_info->path_parent = strdup(dtmd_root_device_path);
+			if (device_info->path_parent == NULL)
+			{
+				WRITE_LOG(LOG_ERR, "Memory allocation failure");
+				result = result_fatal_error;
+				goto device_system_monitor_receive_device_exit_3;
+			}
 			break;
 		}
 
@@ -2356,6 +2380,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	}
 
 	return result_fail;
+
+/*
+device_system_monitor_receive_device_exit_4:
+	if (device_info->path_parent != NULL)
+	{
+		free((char*) device_info->path_parent);
+	}
+*/
 
 device_system_monitor_receive_device_exit_3:
 	if (device_info->fstype != NULL)
@@ -2405,7 +2437,7 @@ static int open_devd_socket(void)
 	return fd;
 }
 
-static int helper_get_device_type(const char *device_name, dtmd_removable_media_type_t *media_type)
+static int helper_get_device_subtype(const char *device_name, dtmd_removable_media_subtype_t *media_subtype)
 {
 	int result;
 	struct cam_device *cgd_device;
@@ -2415,7 +2447,7 @@ static int helper_get_device_type(const char *device_name, dtmd_removable_media_
 	if (cgd_device == NULL)
 	{
 		result = result_fail;
-		goto helper_get_device_type_exit_1;
+		goto helper_get_device_subtype_exit_1;
 	}
 
 	ccbu = cam_getccb(cgd_device);
@@ -2423,7 +2455,7 @@ static int helper_get_device_type(const char *device_name, dtmd_removable_media_
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Error: can't get cam ccb for device %s", device_name);
 		result = result_fatal_error;
-		goto helper_get_device_type_error_1;
+		goto helper_get_device_subtype_error_1;
 	}
 
 	memset(ccbu + sizeof(struct ccb_hdr), 0, sizeof(struct ccb_pathinq) - sizeof(struct ccb_hdr));
@@ -2433,26 +2465,26 @@ static int helper_get_device_type(const char *device_name, dtmd_removable_media_
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Error: can't send cam ccb for device %s", device_name);
 		result = result_fatal_error;
-		goto helper_get_device_type_error_2;
+		goto helper_get_device_subtype_error_2;
 	}
 
 	if ((ccbu->ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Error: received invalid ccb status for device %s: %x", device_name, ccbu->ccb_h.status & CAM_STATUS_MASK);
 		result = result_fatal_error;
-		goto helper_get_device_type_error_2;
+		goto helper_get_device_subtype_error_2;
 	}
 
-	*media_type = helper_get_device_type_from_data(&(ccbu->cgd.ident_data));
+	*media_subtype = helper_get_device_subtype_from_data(&(ccbu->cgd.ident_data));
 	result = result_success;
 
-helper_get_device_type_error_2:
+helper_get_device_subtype_error_2:
 	cam_freeccb(ccbu);
 
-helper_get_device_type_error_1:
+helper_get_device_subtype_error_1:
 	cam_close_device(cgd_device);
 
-helper_get_device_type_exit_1:
+helper_get_device_subtype_exit_1:
 	return result;
 }
 
@@ -2552,7 +2584,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		case dtmd_device_action_add:
 		case dtmd_device_action_online:
 		case dtmd_device_action_change:
-			result = helper_get_device_type(devname, &media_type);
+			result = helper_get_device_subtype(devname, &media_type);
 
 			switch (result)
 			{
@@ -2565,15 +2597,15 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				{
 				case dtmd_removable_media_removable_disk:
 				case dtmd_removable_media_sd_card:
-					device_info->type = dtmd_info_device;
+					device_info->media_type = dtmd_removable_media_type_stateless_device;
 					break;
 
 				case dtmd_removable_media_cdrom:
-					device_info->type = dtmd_info_stateful_device;
+					device_info->media_type = dtmd_removable_media_type_stateful_device;
 					break;
 
 				default:
-					device_info->type = dtmd_info_unknown;
+					device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
 					break;
 				}
 
@@ -2625,14 +2657,14 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 							strcpy((char*) device_info->path_parent, devices_dir "/");
 							strcat((char*) device_info->path_parent, gp_part->lg_name);
 
-							result = helper_get_device_type(device_info->path_parent, &(device_info->media_type));
+							result = helper_get_device_subtype(device_info->path_parent, &(device_info->media_type));
 							if (result != result_success)
 							{
 								goto device_system_monitor_receive_device_exit_5;
 							}
 
-							device_info->type  = dtmd_info_partition;
-							device_info->state = dtmd_removable_media_state_unknown;
+							device_info->media_type = dtmd_removable_media_type_device_partition;
+							device_info->state      = dtmd_removable_media_state_unknown;
 
 							device_info->fstype = NULL;
 							device_info->label  = NULL;
@@ -2683,12 +2715,12 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 					goto device_system_monitor_receive_device_exit_4;
 				}
 
-				device_info->media_type  = dtmd_removable_media_unknown_or_persistent;
-				device_info->type        = dtmd_info_unknown;
-				device_info->path_parent = NULL;
-				device_info->fstype      = NULL;
-				device_info->label       = NULL;
-				device_info->state       = dtmd_removable_media_state_unknown;
+				device_info->media_subtype = dtmd_removable_media_unknown_or_persistent;
+				device_info->media_type    = dtmd_removable_media_type_unknown_or_persistent;
+				device_info->path_parent   = NULL;
+				device_info->fstype        = NULL;
+				device_info->label         = NULL;
+				device_info->state         = dtmd_removable_media_state_unknown;
 
 device_system_monitor_receive_device_found_partition:
 				geom_deletetree(&mesh);
@@ -2702,12 +2734,12 @@ device_system_monitor_receive_device_found_partition:
 
 		case dtmd_device_action_remove:
 		case dtmd_device_action_offline:
-			device_info->media_type  = dtmd_removable_media_unknown_or_persistent;
-			device_info->type        = dtmd_info_unknown;
-			device_info->path_parent = NULL;
-			device_info->fstype      = NULL;
-			device_info->label       = NULL;
-			device_info->state       = dtmd_removable_media_state_unknown;
+			device_info->media_subtype = dtmd_removable_media_unknown_or_persistent;
+			device_info->media_type    = dtmd_removable_media_type_unknown_or_persistent;
+			device_info->path_parent   = NULL;
+			device_info->fstype        = NULL;
+			device_info->label         = NULL;
+			device_info->state         = dtmd_removable_media_state_unknown;
 			break;
 		}
 
@@ -2836,7 +2868,7 @@ static void* device_system_worker_function(void *arg)
 	int rc;
 	dtmd_info_t *device;
 	dtmd_device_action_type_t action;
-	dtmd_info_type_t found_device_type;
+	dtmd_removable_media_type_t found_device_type;
 	uint32_t device_index, partition_index, parent_index, monitor_index;
 	int found_parent;
 	void *tmp;
@@ -2908,7 +2940,7 @@ static void* device_system_worker_function(void *arg)
 						goto device_system_worker_function_error_2;
 					}
 
-					found_device_type = dtmd_info_unknown;
+					found_device_type = dtmd_removable_media_type_unknown_or_persistent;
 					found_parent = 0;
 
 					for (device_index = 0; device_index < device_system->devices_count; ++device_index)
@@ -2920,12 +2952,12 @@ static void* device_system_worker_function(void *arg)
 						{
 							if (strcmp(device_system->devices[device_index]->device->path, device->path) == 0)
 							{
-								found_device_type = dtmd_info_device;
+								found_device_type = dtmd_removable_media_type_stateless_device;
 								goto device_system_worker_function_device_found;
 							}
 
-							if (((device->type == dtmd_info_partition)
-								|| ((device->type == dtmd_info_unknown)
+							if (((device->media_type == dtmd_removable_media_type_device_partition)
+								|| ((device->media_type == dtmd_removable_media_type_unknown_or_persistent)
 									&& (device->path_parent != NULL)))
 								&& (strcmp(device_system->devices[device_index]->device->path, device->path_parent) == 0))
 							{
@@ -2939,7 +2971,7 @@ static void* device_system_worker_function(void *arg)
 										if ((device_system->devices[device_index]->partitions[partition_index] != NULL)
 											&& (strcmp(device_system->devices[device_index]->partitions[partition_index]->path, device->path) == 0))
 										{
-											found_device_type = dtmd_info_partition;
+											found_device_type = dtmd_removable_media_type_device_partition;
 											goto device_system_worker_function_device_found;
 										}
 									}
@@ -2948,14 +2980,14 @@ static void* device_system_worker_function(void *arg)
 						}
 					}
 
-					if (device->type != dtmd_info_partition)
+					if (device->media_type != dtmd_removable_media_type_device_partition)
 					{
 						for (device_index = 0; device_index < device_system->stateful_devices_count; ++device_index)
 						{
 							if ((device_system->stateful_devices[device_index] != NULL)
 								&& (strcmp(device_system->stateful_devices[device_index]->path, device->path) == 0))
 							{
-								found_device_type = dtmd_info_stateful_device;
+								found_device_type = dtmd_removable_media_type_stateful_device;
 								goto device_system_worker_function_device_found;
 							}
 						}
@@ -2967,9 +2999,9 @@ device_system_worker_function_device_found:
 					{
 					case dtmd_device_action_add:
 					case dtmd_device_action_online:
-						if (found_device_type == dtmd_info_unknown)
+						if (found_device_type == dtmd_removable_media_type_unknown_or_persistent)
 						{
-							if ((device->type != dtmd_info_partition)
+							if ((device->media_type != dtmd_removable_media_type_device_partition)
 								|| (found_parent))
 							{
 								for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
@@ -2980,9 +3012,9 @@ device_system_worker_function_device_found:
 									}
 								}
 
-								switch (device->type)
+								switch (device->media_type)
 								{
-								case dtmd_info_device:
+								case dtmd_removable_media_type_stateless_device:
 									device_item = (dtmd_device_internal_t*) malloc(sizeof(dtmd_device_internal_t));
 									if (device_item == NULL)
 									{
@@ -3004,7 +3036,7 @@ device_system_worker_function_device_found:
 									++(device_system->devices_count);
 									break;
 
-								case dtmd_info_partition:
+								case dtmd_removable_media_type_device_partition:
 									tmp = realloc(device_system->devices[parent_index]->partitions, (device_system->devices[parent_index]->partitions_count + 1) * sizeof(dtmd_info_t*));
 									if (tmp == NULL)
 									{
@@ -3016,7 +3048,7 @@ device_system_worker_function_device_found:
 									++(device_system->devices[parent_index]->partitions_count);
 									break;
 
-								case dtmd_info_stateful_device:
+								case dtmd_removable_media_type_stateful_device:
 									tmp = realloc(device_system->stateful_devices, (device_system->stateful_devices_count + 1) * sizeof(dtmd_info_t*));
 									if (tmp == NULL)
 									{
@@ -3034,13 +3066,13 @@ device_system_worker_function_device_found:
 
 					case dtmd_device_action_remove:
 					case dtmd_device_action_offline:
-						if (found_device_type != dtmd_info_unknown)
+						if (found_device_type != dtmd_removable_media_type_unknown_or_persistent)
 						{
 							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
 							{
 								switch (found_device_type)
 								{
-								case dtmd_info_device:
+								case dtmd_removable_media_type_stateless_device:
 									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
 									{
 										if (device_system->devices[device_index]->partitions[parent_index] != NULL)
@@ -3058,14 +3090,14 @@ device_system_worker_function_device_found:
 									}
 									break;
 
-								case dtmd_info_partition:
+								case dtmd_removable_media_type_device_partition:
 									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[parent_index]->partitions[partition_index], action) < 0)
 									{
 										goto device_system_worker_function_error_3;
 									}
 									break;
 
-								case dtmd_info_stateful_device:
+								case dtmd_removable_media_type_stateful_device:
 									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->stateful_devices[device_index], action) < 0)
 									{
 										goto device_system_worker_function_error_3;
@@ -3076,7 +3108,7 @@ device_system_worker_function_device_found:
 
 							switch (found_device_type)
 							{
-							case dtmd_info_device:
+							case dtmd_removable_media_type_stateless_device:
 								if (device_system->devices[device_index]->partitions != NULL)
 								{
 									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
@@ -3116,7 +3148,7 @@ device_system_worker_function_device_found:
 								}
 								break;
 
-							case dtmd_info_partition:
+							case dtmd_removable_media_type_device_partition:
 								device_system_free_device(device_system->devices[parent_index]->partitions[partition_index]);
 
 								--(device_system->devices[parent_index]->partitions_count);
@@ -3142,7 +3174,7 @@ device_system_worker_function_device_found:
 								}
 								break;
 
-							case dtmd_info_stateful_device:
+							case dtmd_removable_media_type_stateful_device:
 								device_system_free_device(device_system->stateful_devices[device_index]);
 
 								--(device_system->stateful_devices_count);
@@ -3174,9 +3206,9 @@ device_system_worker_function_device_found:
 						break;
 
 					case dtmd_device_action_change:
-						if ((found_device_type != dtmd_info_unknown)
-							&& (device->type == found_device_type)
-							&& ((device->type != dtmd_info_partition)
+						if ((found_device_type != dtmd_removable_media_type_unknown_or_persistent)
+							&& (device->media_type == found_device_type)
+							&& ((device->media_type != dtmd_removable_media_type_device_partition)
 								|| (found_parent)))
 						{
 							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
@@ -3187,19 +3219,19 @@ device_system_worker_function_device_found:
 								}
 							}
 
-							switch (device->type)
+							switch (device->media_type)
 							{
-							case dtmd_info_device:
+							case dtmd_removable_media_type_stateless_device:
 								device_system_free_device(device_system->devices[device_index]->device);
 								device_system->devices[device_index]->device = device;
 								break;
 
-							case dtmd_info_partition:
+							case dtmd_removable_media_type_device_partition:
 								device_system_free_device(device_system->devices[parent_index]->partitions[partition_index]);
 								device_system->devices[parent_index]->partitions[partition_index] = device;
 								break;
 
-							case dtmd_info_stateful_device:
+							case dtmd_removable_media_type_stateful_device:
 								device_system_free_device(device_system->stateful_devices[device_index]);
 								device_system->stateful_devices[device_index] = device;
 								break;

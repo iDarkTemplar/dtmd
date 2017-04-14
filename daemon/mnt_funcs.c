@@ -49,8 +49,10 @@
 #include <sys/mount.h>
 #endif /* (defined OS_FreeBSD) */
 
-#define is_mounted_now 1
-#define is_mounted_last 2
+#define is_mounted_now   (1<<0)
+#define is_mounted_last  (1<<1)
+#define is_processed     (1<<2)
+#define is_state_changed (1<<3)
 
 #if (defined OS_Linux)
 int init_mount_monitoring(void)
@@ -99,13 +101,77 @@ int close_mount_monitoring(int monitorfd)
 	return close(monitorfd);
 }
 
+static void mark_each_device_recursive(struct removable_media *media_ptr)
+{
+	struct removable_media *iter_media_ptr;
+
+	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	{
+		mark_each_device_recursive(iter_media_ptr);
+	}
+
+	media_ptr->is_mounted <<= 1;
+}
+
+static void process_changes_recursive(struct removable_media *media_ptr)
+{
+	struct removable_media *iter_media_ptr;
+
+	if (media_ptr->is_mounted & is_mounted_now)
+	{
+		if (!(media_ptr->is_mounted & is_mounted_last))
+		{
+			media_ptr->is_mounted |= is_state_changed;
+		}
+	}
+	else
+	{
+		if (media_ptr->is_mounted & is_mounted_last)
+		{
+			media_ptr->is_mounted |= is_state_changed;
+
+			if (media_ptr->mnt_point != NULL)
+			{
+				free(media_ptr->mnt_point);
+				media_ptr->mnt_point = NULL;
+			}
+
+			if (media_ptr->mnt_opts != NULL)
+			{
+				free(media_ptr->mnt_opts);
+				media_ptr->mnt_opts = NULL;
+			}
+		}
+	}
+
+	if (media_ptr->is_mounted & is_state_changed)
+	{
+		notify_removable_device_changed(
+			((media_ptr->parent != NULL) ? media_ptr->parent->path : dtmd_root_device_path),
+			media_ptr->path,
+			media_ptr->type,
+			media_ptr->subtype,
+			media_ptr->state,
+			media_ptr->fstype,
+			media_ptr->label,
+			media_ptr->mnt_point,
+			media_ptr->mnt_opts);
+	}
+
+	media_ptr->is_mounted &= is_mounted_now;
+
+	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	{
+		process_changes_recursive(iter_media_ptr);
+	}
+}
+
 #if (defined OS_Linux)
 int check_mount_changes(void)
 {
-	size_t i;
-	size_t j;
 	FILE *mntfile;
 	struct mntent *ent;
+	struct removable_media *iter_media_ptr;
 
 	mntfile = setmntent(dtmd_internal_mounts_file, "r");
 	if (mntfile == NULL)
@@ -114,203 +180,72 @@ int check_mount_changes(void)
 		goto check_mount_changes_error_1;
 	}
 
-	// stateless devices
-	for (i = 0; i < media_count; ++i)
+	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		for (j = 0; j < media[i]->partitions_count; ++j)
-		{
-			media[i]->partition[j]->is_mounted <<= 1;
-		}
-	}
-
-	// stateful devices
-	for (i = 0; i < stateful_media_count; ++i)
-	{
-		stateful_media[i]->is_mounted <<= 1;
+		mark_each_device_recursive(iter_media_ptr);
 	}
 
 	while ((ent = getmntent(mntfile)) != NULL)
 	{
-		// stateless devices
-		for (i = 0; i < media_count; ++i)
+		iter_media_ptr = find_media(ent->mnt_fsname);
+		if (iter_media_ptr != NULL)
 		{
-			for (j = 0; j < media[i]->partitions_count; ++j)
+			// skip devices mounted multiple times
+			if (!(iter_media_ptr->is_mounted & is_processed))
 			{
-				if (strcmp(media[i]->partition[j]->path, ent->mnt_fsname) == 0)
+				iter_media_ptr->is_mounted |= is_processed;
+
+				if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
 				{
-					// skip devices mounted multiple times
-					if (!(media[i]->partition[j]->is_mounted & is_mounted_now))
+					iter_media_ptr->is_mounted |= is_mounted_now;
+
+					if ((iter_media_ptr->mnt_point == NULL) || (strcmp(iter_media_ptr->mnt_point, ent->mnt_dir) != 0))
 					{
-						if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
+						if (iter_media_ptr->mnt_point != NULL)
 						{
-							media[i]->partition[j]->is_mounted |= is_mounted_now;
-
-							if ((media[i]->partition[j]->mnt_point == NULL) || (strcmp(media[i]->partition[j]->mnt_point, ent->mnt_dir) != 0))
-							{
-								if (media[i]->partition[j]->mnt_point != NULL)
-								{
-									free(media[i]->partition[j]->mnt_point);
-								}
-
-								media[i]->partition[j]->mnt_point = strdup(ent->mnt_dir);
-								if (media[i]->partition[j]->mnt_point == NULL)
-								{
-									WRITE_LOG(LOG_ERR, "Memory allocation failure");
-									goto check_mount_changes_error_2;
-								}
-							}
-
-							if ((media[i]->partition[j]->mnt_opts == NULL) || (strcmp(media[i]->partition[j]->mnt_opts, ent->mnt_opts) != 0))
-							{
-								if (media[i]->partition[j]->mnt_opts != NULL)
-								{
-									free(media[i]->partition[j]->mnt_opts);
-								}
-
-								media[i]->partition[j]->mnt_opts = strdup(ent->mnt_opts);
-								if (media[i]->partition[j]->mnt_opts == NULL)
-								{
-									WRITE_LOG(LOG_ERR, "Memory allocation failure");
-									goto check_mount_changes_error_2;
-								}
-							}
+							free(iter_media_ptr->mnt_point);
 						}
-						else
+
+						iter_media_ptr->mnt_point = strdup(ent->mnt_dir);
+						if (iter_media_ptr->mnt_point == NULL)
 						{
-							media[i]->partition[j]->is_mounted &= ~is_mounted_now;
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							goto check_mount_changes_error_2;
 						}
+
+						iter_media_ptr->is_mounted |= is_state_changed;
 					}
 
-					goto check_mount_changes_break_cycles;
-				}
-			}
-		}
-
-		// stateful devices
-		for (i = 0; i < stateful_media_count; ++i)
-		{
-			if (strcmp(stateful_media[i]->path, ent->mnt_fsname) == 0)
-			{
-				// skip devices mounted multiple times
-				if (!(stateful_media[i]->is_mounted & is_mounted_now))
-				{
-					if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
+					if ((iter_media_ptr->mnt_opts == NULL) || (strcmp(iter_media_ptr->mnt_opts, ent->mnt_opts) != 0))
 					{
-						stateful_media[i]->is_mounted |= is_mounted_now;
-
-						if ((stateful_media[i]->mnt_point == NULL) || (strcmp(stateful_media[i]->mnt_point, ent->mnt_dir) != 0))
+						if (iter_media_ptr->mnt_opts != NULL)
 						{
-							if (stateful_media[i]->mnt_point != NULL)
-							{
-								free(stateful_media[i]->mnt_point);
-							}
-
-							stateful_media[i]->mnt_point = strdup(ent->mnt_dir);
-							if (stateful_media[i]->mnt_point == NULL)
-							{
-								WRITE_LOG(LOG_ERR, "Memory allocation failure");
-								goto check_mount_changes_error_2;
-							}
+							free(iter_media_ptr->mnt_opts);
 						}
 
-						if ((stateful_media[i]->mnt_opts == NULL) || (strcmp(stateful_media[i]->mnt_opts, ent->mnt_opts) != 0))
+						iter_media_ptr->mnt_opts = strdup(ent->mnt_opts);
+						if (iter_media_ptr->mnt_opts == NULL)
 						{
-							if (stateful_media[i]->mnt_opts != NULL)
-							{
-								free(stateful_media[i]->mnt_opts);
-							}
-
-							stateful_media[i]->mnt_opts = strdup(ent->mnt_opts);
-							if (stateful_media[i]->mnt_opts == NULL)
-							{
-								WRITE_LOG(LOG_ERR, "Memory allocation failure");
-								goto check_mount_changes_error_2;
-							}
+							WRITE_LOG(LOG_ERR, "Memory allocation failure");
+							goto check_mount_changes_error_2;
 						}
-					}
-					else
-					{
-						stateful_media[i]->is_mounted &= ~is_mounted_now;
+
+						iter_media_ptr->is_mounted |= is_state_changed;
 					}
 				}
-
-				goto check_mount_changes_break_cycles;
-			}
-		}
-
-	check_mount_changes_break_cycles:
-		;
-	}
-
-	endmntent(mntfile);
-
-	// stateless devices
-	for (i = 0; i < media_count; ++i)
-	{
-		for (j = 0; j < media[i]->partitions_count; ++j)
-		{
-			if (media[i]->partition[j]->is_mounted & is_mounted_now)
-			{
-				if (!(media[i]->partition[j]->is_mounted & is_mounted_last))
+				else
 				{
-					notify_mount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point, media[i]->partition[j]->mnt_opts);
-					media[i]->partition[j]->is_mounted = is_mounted_now;
-				}
-			}
-			else
-			{
-				if (media[i]->partition[j]->is_mounted & is_mounted_last)
-				{
-					notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
-					media[i]->partition[j]->is_mounted = 0;
-
-					if (media[i]->partition[j]->mnt_point != NULL)
-					{
-						free(media[i]->partition[j]->mnt_point);
-						media[i]->partition[j]->mnt_point = NULL;
-					}
-
-					if (media[i]->partition[j]->mnt_opts != NULL)
-					{
-						free(media[i]->partition[j]->mnt_opts);
-						media[i]->partition[j]->mnt_opts = NULL;
-					}
+					iter_media_ptr->is_mounted &= ~is_mounted_now;
 				}
 			}
 		}
 	}
 
-	// stateful devices
-	for (i = 0; i < stateful_media_count; ++i)
+	endmntent(mntfile);
+
+	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		if (stateful_media[i]->is_mounted & is_mounted_now)
-		{
-			if (!(stateful_media[i]->is_mounted & is_mounted_last))
-			{
-				notify_mount(stateful_media[i]->path, stateful_media[i]->mnt_point, stateful_media[i]->mnt_opts);
-				stateful_media[i]->is_mounted = is_mounted_now;
-			}
-		}
-		else
-		{
-			if (stateful_media[i]->is_mounted & is_mounted_last)
-			{
-				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);
-				stateful_media[i]->is_mounted = 0;
-
-				if (stateful_media[i]->mnt_point != NULL)
-				{
-					free(stateful_media[i]->mnt_point);
-					stateful_media[i]->mnt_point = NULL;
-				}
-
-				if (stateful_media[i]->mnt_opts != NULL)
-				{
-					free(stateful_media[i]->mnt_opts);
-					stateful_media[i]->mnt_opts = NULL;
-				}
-			}
-		}
+		process_changes_recursive(iter_media_ptr);
 	}
 
 	return result_success;
@@ -359,11 +294,10 @@ int check_mount_changes(int mountfd)
 	int rc;
 	struct kevent evt;
 	struct timespec timeout;
-	size_t i;
-	size_t j;
 	int count, current;
 	struct statfs *mounts;
 	char *options;
+	struct removable_media *iter_media_ptr;
 
 	// TODO: merge it with Linux version?
 
@@ -395,183 +329,65 @@ int check_mount_changes(int mountfd)
 		return result_fatal_error;
 	}
 
-	// stateless devices
-	for (i = 0; i < media_count; ++i)
+	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		for (j = 0; j < media[i]->partitions_count; ++j)
-		{
-			media[i]->partition[j]->is_mounted <<= 1;
-		}
-	}
-
-	// stateful devices
-	for (i = 0; i < stateful_media_count; ++i)
-	{
-		stateful_media[i]->is_mounted <<= 1;
+		mark_each_device_recursive(iter_media_ptr);
 	}
 
 	for (current = 0; current < count; ++current)
 	{
-		// stateless devices
-		for (i = 0; i < media_count; ++i)
+		iter_media_ptr = find_media(mounts[current].f_mntfromname);
+		if (iter_media_ptr != NULL)
 		{
-			for (j = 0; j < media[i]->partitions_count; ++j)
+			// skip devices mounted multiple times
+			if (!(iter_media_ptr->is_mounted & is_processed))
 			{
-				if (strcmp(media[i]->partition[j]->path, mounts[current].f_mntfromname) == 0)
+				iter_media_ptr->is_mounted |= (is_processed | is_mounted_now);
+
+				if ((iter_media_ptr->mnt_point == NULL) || (strcmp(iter_media_ptr->mnt_point, mounts[current].f_mntonname) != 0))
 				{
-					// skip devices mounted multiple times
-					if (!(media[i]->partition[j]->is_mounted & is_mounted_now))
+					if (iter_media_ptr->mnt_point != NULL)
 					{
-						media[i]->partition[j]->is_mounted |= is_mounted_now;
-
-						if ((media[i]->partition[j]->mnt_point == NULL) || (strcmp(media[i]->partition[j]->mnt_point, mounts[current].f_mntonname) != 0))
-						{
-							if (media[i]->partition[j]->mnt_point != NULL)
-							{
-								free(media[i]->partition[j]->mnt_point);
-							}
-
-							media[i]->partition[j]->mnt_point = strdup(mounts[current].f_mntonname);
-							if (media[i]->partition[j]->mnt_point == NULL)
-							{
-								WRITE_LOG(LOG_ERR, "Memory allocation failure");
-								goto check_mount_changes_error_1;
-							}
-						}
-
-						options = convert_option_flags_to_string(mounts[current].f_flags);
-						if (options == NULL)
-						{
-							goto check_mount_changes_error_1;
-						}
-
-						if (media[i]->partition[j]->mnt_opts != NULL)
-						{
-							free(media[i]->partition[j]->mnt_opts);
-						}
-
-						media[i]->partition[j]->mnt_opts = options;
+						free(iter_media_ptr->mnt_point);
 					}
 
-					goto check_mount_changes_break_cycles;
-				}
-			}
-		}
-
-		// stateful devices
-		for (i = 0; i < stateful_media_count; ++i)
-		{
-			if (strcmp(stateful_media[i]->path, mounts[current].f_mntfromname) == 0)
-			{
-				// skip devices mounted multiple times
-				if (!(stateful_media[i]->is_mounted & is_mounted_now))
-				{
-					stateful_media[i]->is_mounted |= is_mounted_now;
-
-					if ((stateful_media[i]->mnt_point == NULL) || (strcmp(stateful_media[i]->mnt_point, mounts[current].f_mntonname) != 0))
+					iter_media_ptr->mnt_point = strdup(mounts[current].f_mntonname);
+					if (iter_media_ptr->mnt_point == NULL)
 					{
-						if (stateful_media[i]->mnt_point != NULL)
-						{
-							free(stateful_media[i]->mnt_point);
-						}
-
-						stateful_media[i]->mnt_point = strdup(mounts[current].f_mntonname);
-						if (stateful_media[i]->mnt_point == NULL)
-						{
-							WRITE_LOG(LOG_ERR, "Memory allocation failure");
-							goto check_mount_changes_error_1;
-						}
-					}
-
-					options = convert_option_flags_to_string(mounts[current].f_flags);
-					if (options == NULL)
-					{
+						WRITE_LOG(LOG_ERR, "Memory allocation failure");
 						goto check_mount_changes_error_1;
 					}
 
-					if (stateful_media[i]->mnt_opts != NULL)
-					{
-						free(stateful_media[i]->mnt_opts);
-					}
-
-					stateful_media[i]->mnt_opts = options;
+					iter_media_ptr->is_mounted |= is_state_changed;
 				}
 
-				goto check_mount_changes_break_cycles;
-			}
-		}
-
-	check_mount_changes_break_cycles:
-		;
-	}
-
-	// stateless devices
-	for (i = 0; i < media_count; ++i)
-	{
-		for (j = 0; j < media[i]->partitions_count; ++j)
-		{
-			if (media[i]->partition[j]->is_mounted & is_mounted_now)
-			{
-				if (!(media[i]->partition[j]->is_mounted & is_mounted_last))
+				options = convert_option_flags_to_string(mounts[current].f_flags);
+				if (options == NULL)
 				{
-					notify_mount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point, media[i]->partition[j]->mnt_opts);
-					media[i]->partition[j]->is_mounted = is_mounted_now;
+					goto check_mount_changes_error_1;
 				}
-			}
-			else
-			{
-				if (media[i]->partition[j]->is_mounted & is_mounted_last)
+
+				if ((iter_media_ptr->mnt_opts == NULL) || (strcmp(iter_media_ptr->mnt_opts, options) != 0))
 				{
-					notify_unmount(media[i]->partition[j]->path, media[i]->partition[j]->mnt_point);
-					media[i]->partition[j]->is_mounted = 0;
-
-					if (media[i]->partition[j]->mnt_point != NULL)
+					if (iter_media_ptr->mnt_opts != NULL)
 					{
-						free(media[i]->partition[j]->mnt_point);
-						media[i]->partition[j]->mnt_point = NULL;
+						free(iter_media_ptr->mnt_opts);
 					}
 
-					if (media[i]->partition[j]->mnt_opts != NULL)
-					{
-						free(media[i]->partition[j]->mnt_opts);
-						media[i]->partition[j]->mnt_opts = NULL;
-					}
+					iter_media_ptr->mnt_opts = options;
+					iter_media_ptr->is_mounted |= is_state_changed;
+				}
+				else
+				{
+					free(options);
 				}
 			}
 		}
 	}
 
-	// stateful devices
-	for (i = 0; i < stateful_media_count; ++i)
+	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
-		if (stateful_media[i]->is_mounted & is_mounted_now)
-		{
-			if (!(stateful_media[i]->is_mounted & is_mounted_last))
-			{
-				notify_mount(stateful_media[i]->path, stateful_media[i]->mnt_point, stateful_media[i]->mnt_opts);
-				stateful_media[i]->is_mounted = is_mounted_now;
-			}
-		}
-		else
-		{
-			if (stateful_media[i]->is_mounted & is_mounted_last)
-			{
-				notify_unmount(stateful_media[i]->path, stateful_media[i]->mnt_point);
-				stateful_media[i]->is_mounted = 0;
-
-				if (stateful_media[i]->mnt_point != NULL)
-				{
-					free(stateful_media[i]->mnt_point);
-					stateful_media[i]->mnt_point = NULL;
-				}
-
-				if (stateful_media[i]->mnt_opts != NULL)
-				{
-					free(stateful_media[i]->mnt_opts);
-					stateful_media[i]->mnt_opts = NULL;
-				}
-			}
-		}
+		process_changes_recursive(iter_media_ptr);
 	}
 
 	return result_success;
