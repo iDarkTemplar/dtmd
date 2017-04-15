@@ -101,34 +101,34 @@ int close_mount_monitoring(int monitorfd)
 	return close(monitorfd);
 }
 
-static void mark_each_device_recursive(struct removable_media *media_ptr)
+static void mark_each_device_recursive(dtmd_removable_media_t *media_ptr)
 {
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		mark_each_device_recursive(iter_media_ptr);
 	}
 
-	media_ptr->is_mounted <<= 1;
+	media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) << 1);
 }
 
-static void process_changes_recursive(struct removable_media *media_ptr)
+static void process_changes_recursive(dtmd_removable_media_t *media_ptr)
 {
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
-	if (media_ptr->is_mounted & is_mounted_now)
+	if (((size_t) media_ptr->private_data) & is_mounted_now)
 	{
-		if (!(media_ptr->is_mounted & is_mounted_last))
+		if (!(((size_t) media_ptr->private_data) & is_mounted_last))
 		{
-			media_ptr->is_mounted |= is_state_changed;
+			media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) | is_state_changed);
 		}
 	}
 	else
 	{
-		if (media_ptr->is_mounted & is_mounted_last)
+		if (((size_t) media_ptr->private_data) & is_mounted_last)
 		{
-			media_ptr->is_mounted |= is_state_changed;
+			media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) | is_state_changed);
 
 			if (media_ptr->mnt_point != NULL)
 			{
@@ -144,7 +144,7 @@ static void process_changes_recursive(struct removable_media *media_ptr)
 		}
 	}
 
-	if (media_ptr->is_mounted & is_state_changed)
+	if (((size_t) media_ptr->private_data) & is_state_changed)
 	{
 		notify_removable_device_changed(
 			((media_ptr->parent != NULL) ? media_ptr->parent->path : dtmd_root_device_path),
@@ -158,7 +158,7 @@ static void process_changes_recursive(struct removable_media *media_ptr)
 			media_ptr->mnt_opts);
 	}
 
-	media_ptr->is_mounted &= is_mounted_now;
+	media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) & is_mounted_now);
 
 	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
@@ -171,7 +171,7 @@ int check_mount_changes(void)
 {
 	FILE *mntfile;
 	struct mntent *ent;
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	mntfile = setmntent(dtmd_internal_mounts_file, "r");
 	if (mntfile == NULL)
@@ -191,13 +191,13 @@ int check_mount_changes(void)
 		if (iter_media_ptr != NULL)
 		{
 			// skip devices mounted multiple times
-			if (!(iter_media_ptr->is_mounted & is_processed))
+			if (!(((size_t) iter_media_ptr->private_data) & is_processed))
 			{
-				iter_media_ptr->is_mounted |= is_processed;
+				iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_processed);
 
 				if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
 				{
-					iter_media_ptr->is_mounted |= is_mounted_now;
+					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_mounted_now);
 
 					if ((iter_media_ptr->mnt_point == NULL) || (strcmp(iter_media_ptr->mnt_point, ent->mnt_dir) != 0))
 					{
@@ -213,7 +213,7 @@ int check_mount_changes(void)
 							goto check_mount_changes_error_2;
 						}
 
-						iter_media_ptr->is_mounted |= is_state_changed;
+						iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
 					}
 
 					if ((iter_media_ptr->mnt_opts == NULL) || (strcmp(iter_media_ptr->mnt_opts, ent->mnt_opts) != 0))
@@ -230,12 +230,12 @@ int check_mount_changes(void)
 							goto check_mount_changes_error_2;
 						}
 
-						iter_media_ptr->is_mounted |= is_state_changed;
+						iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
 					}
 				}
 				else
 				{
-					iter_media_ptr->is_mounted &= ~is_mounted_now;
+					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) & ~is_mounted_now);
 				}
 			}
 		}
@@ -297,7 +297,7 @@ int check_mount_changes(int mountfd)
 	int count, current;
 	struct statfs *mounts;
 	char *options;
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	// TODO: merge it with Linux version?
 
@@ -340,9 +340,9 @@ int check_mount_changes(int mountfd)
 		if (iter_media_ptr != NULL)
 		{
 			// skip devices mounted multiple times
-			if (!(iter_media_ptr->is_mounted & is_processed))
+			if (!(((size_t) iter_media_ptr->private_data) & is_processed))
 			{
-				iter_media_ptr->is_mounted |= (is_processed | is_mounted_now);
+				iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_processed | is_mounted_now);
 
 				if ((iter_media_ptr->mnt_point == NULL) || (strcmp(iter_media_ptr->mnt_point, mounts[current].f_mntonname) != 0))
 				{
@@ -358,7 +358,7 @@ int check_mount_changes(int mountfd)
 						goto check_mount_changes_error_1;
 					}
 
-					iter_media_ptr->is_mounted |= is_state_changed;
+					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
 				}
 
 				options = convert_option_flags_to_string(mounts[current].f_flags);
@@ -375,7 +375,7 @@ int check_mount_changes(int mountfd)
 					}
 
 					iter_media_ptr->mnt_opts = options;
-					iter_media_ptr->is_mounted |= is_state_changed;
+					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
 				}
 				else
 				{

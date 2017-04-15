@@ -465,7 +465,7 @@ static char* calculate_path(const char *path, const char *label, enum mount_by_v
 int invoke_mount(struct client *client_ptr, const char *path, const char *mount_options, enum mount_by_value_enum mount_type, dtmd_error_code_t *error_code)
 {
 	int result;
-	struct removable_media *media_ptr;
+	dtmd_removable_media_t *media_ptr;
 
 	char *mount_path;
 	const char *mandatory_mount_options;
@@ -899,7 +899,7 @@ invoke_unmount_common_error_1:
 
 int invoke_unmount(struct client *client_ptr, const char *path, dtmd_error_code_t *error_code)
 {
-	struct removable_media *media_ptr;
+	dtmd_removable_media_t *media_ptr;
 
 	media_ptr = find_media(path);
 	if (media_ptr == NULL)
@@ -929,10 +929,10 @@ int invoke_unmount(struct client *client_ptr, const char *path, dtmd_error_code_
 	return invoke_unmount_common(client_ptr, path, media_ptr->mnt_point, media_ptr->fstype, error_code);
 }
 
-static int invoke_unmount_recursive(struct client *client_ptr, struct removable_media *media_ptr)
+static int invoke_unmount_recursive(struct client *client_ptr, dtmd_removable_media_t *media_ptr)
 {
 	int result;
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
@@ -958,7 +958,7 @@ static int invoke_unmount_recursive(struct client *client_ptr, struct removable_
 int invoke_unmount_all(struct client *client_ptr)
 {
 	int result;
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{

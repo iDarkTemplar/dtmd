@@ -29,28 +29,6 @@
 extern "C" {
 #endif
 
-struct removable_media
-{
-	char *path;
-	dtmd_removable_media_type_t type;
-	dtmd_removable_media_subtype_t subtype;
-	dtmd_removable_media_state_t state;
-	char *fstype; // optional
-	char *label; // optional
-	char *mnt_point; // optional
-	char *mnt_opts; // optional
-
-	int is_mounted; // helper data
-
-	struct removable_media *parent;
-
-	struct removable_media *first_child;
-	struct removable_media *last_child;
-
-	struct removable_media *next_node;
-	struct removable_media *prev_node;
-};
-
 struct client
 {
 	int clientfd;
@@ -61,12 +39,12 @@ struct client
 	struct client *prev_node;
 };
 
-extern struct removable_media *removable_media_root;
+extern dtmd_removable_media_t *removable_media_root;
 
 extern struct client *client_root;
 extern size_t clients_count;
 
-struct removable_media* find_media(const char *path);
+dtmd_removable_media_t* find_media(const char *path);
 
 int add_media(const char *parent_path,
 	const char *path,

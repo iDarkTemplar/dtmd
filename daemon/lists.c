@@ -30,17 +30,17 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-struct removable_media *removable_media_root = NULL;
+dtmd_removable_media_t *removable_media_root = NULL;
 
 struct client *client_root = NULL;
 size_t clients_count = 0;
 
 static int find_media_private(const char *path,
-	struct removable_media *parent_media_ptr,
-	struct removable_media **media_ptr)
+	dtmd_removable_media_t *parent_media_ptr,
+	dtmd_removable_media_t **media_ptr)
 {
 	int rc;
-	struct removable_media *iter_media_ptr = NULL;
+	dtmd_removable_media_t *iter_media_ptr = NULL;
 
 	for (iter_media_ptr = parent_media_ptr; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
@@ -60,10 +60,10 @@ static int find_media_private(const char *path,
 	return result_fail;
 }
 
-struct removable_media* find_media(const char *path)
+dtmd_removable_media_t* find_media(const char *path)
 {
 	int rc;
-	struct removable_media *media_ptr = NULL;
+	dtmd_removable_media_t *media_ptr = NULL;
 
 	rc = find_media_private(path, removable_media_root, &media_ptr);
 	if (is_result_successful(rc))
@@ -76,7 +76,7 @@ struct removable_media* find_media(const char *path)
 	}
 }
 
-static void remove_media_helper(struct removable_media *media_ptr)
+static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 {
 	// first unlink node
 	if (media_ptr->prev_node != NULL)
@@ -135,8 +135,8 @@ int add_media(const char *parent_path,
 {
 	int rc;
 	int is_parent_path = 0;
-	struct removable_media *media_ptr = NULL;
-	struct removable_media *constructed_media = NULL;
+	dtmd_removable_media_t *media_ptr = NULL;
+	dtmd_removable_media_t *constructed_media = NULL;
 
 	if (strcmp(parent_path, dtmd_root_device_path) == 0)
 	{
@@ -152,7 +152,7 @@ int add_media(const char *parent_path,
 		}
 	}
 
-	constructed_media = (struct removable_media *) malloc(sizeof(struct removable_media));
+	constructed_media = (dtmd_removable_media_t*) malloc(sizeof(dtmd_removable_media_t));
 	if (constructed_media == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
@@ -200,7 +200,7 @@ int add_media(const char *parent_path,
 
 	if (mnt_point != NULL)
 	{
-		constructed_media->is_mounted = 1;
+		constructed_media->private_data = (void*) 1;
 
 		constructed_media->mnt_point = strdup(mnt_point);
 		if (constructed_media->mnt_point == NULL)
@@ -211,7 +211,7 @@ int add_media(const char *parent_path,
 	}
 	else
 	{
-		constructed_media->is_mounted = 0;
+		constructed_media->private_data = (void*) 0;
 		constructed_media->mnt_point = NULL;
 	}
 
@@ -322,7 +322,7 @@ add_media_error_1:
 int remove_media(const char *path)
 {
 	int rc;
-	struct removable_media *media_ptr = NULL;
+	dtmd_removable_media_t *media_ptr = NULL;
 
 	rc = find_media_private(path, removable_media_root, &media_ptr);
 	if (is_result_failure(rc))
@@ -352,7 +352,7 @@ int change_media(const char *parent_path,
 	const char *mnt_opts)
 {
 	int rc;
-	struct removable_media *media_ptr = NULL;
+	dtmd_removable_media_t *media_ptr = NULL;
 
 	rc = find_media_private(path, removable_media_root, &media_ptr);
 	if (is_result_failure(rc))
@@ -385,7 +385,7 @@ int change_media(const char *parent_path,
 				&& (label == NULL))
 			|| ((media_ptr->label != NULL)
 				&& (label != NULL)
-				&& (strcmp(media_ptr->label, label) == 0)))
+				&& (compare_labels(media_ptr->label, label))))
 		&& (((media_ptr->mnt_point == NULL)
 				&& (mnt_point == NULL))
 			|| ((media_ptr->mnt_point != NULL)
@@ -443,7 +443,7 @@ int change_media(const char *parent_path,
 	{
 		free(media_ptr->mnt_point);
 		media_ptr->mnt_point = NULL;
-		media_ptr->is_mounted = 0;
+		media_ptr->private_data = (void*) 0;
 	}
 
 	if ((media_ptr->mnt_point == NULL) && (mnt_point != NULL))
@@ -455,7 +455,7 @@ int change_media(const char *parent_path,
 			return result_fatal_error;
 		}
 
-		media_ptr->is_mounted = 1;
+		media_ptr->private_data = (void*) 1;
 	}
 
 	if ((media_ptr->mnt_opts != NULL)
@@ -481,8 +481,8 @@ int change_media(const char *parent_path,
 
 void remove_all_media(void)
 {
-	struct removable_media *next = NULL;
-	struct removable_media *cur = NULL;
+	dtmd_removable_media_t *next = NULL;
+	dtmd_removable_media_t *cur = NULL;
 
 	next = removable_media_root;
 

@@ -66,6 +66,28 @@ typedef enum dtmd_error_code
 	dtmd_error_code_mount_point_busy             = 8
 } dtmd_error_code_t;
 
+typedef struct dtmd_removable_media
+{
+	char *path;
+	dtmd_removable_media_type_t type;
+	dtmd_removable_media_subtype_t subtype;
+	dtmd_removable_media_state_t state;
+	char *fstype; // optional
+	char *label; // optional
+	char *mnt_point; // optional
+	char *mnt_opts; // optional
+
+	struct dtmd_removable_media *parent;
+
+	struct dtmd_removable_media *first_child;
+	struct dtmd_removable_media *last_child;
+
+	struct dtmd_removable_media *next_node;
+	struct dtmd_removable_media *prev_node;
+
+	void *private_data;
+} dtmd_removable_media_t;
+
 #ifdef __cplusplus
 }
 #endif

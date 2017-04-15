@@ -30,13 +30,9 @@
 int use_syslog = 0;
 int daemonize = 1;
 
-struct removable_media **media = NULL;
-size_t media_count = 0;
+dtmd_removable_media_t *removable_media_root = NULL;
 
-struct removable_stateful_media **stateful_media = NULL;
-size_t stateful_media_count = 0;
-
-struct client **clients = NULL;
+struct client *client_root = NULL;
 size_t clients_count = 0;
 
 #define get_fsopts(fstype) \

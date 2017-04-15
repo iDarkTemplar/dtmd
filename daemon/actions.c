@@ -45,15 +45,16 @@ static int print_removable_device_common(const char *action,
 	const char *mnt_point,
 	const char *mnt_opts);
 
-static int print_all_removable_devices_recursive(struct client *client_ptr, struct removable_media *media_ptr);
+static int print_all_removable_devices_recursive(struct client *client_ptr, dtmd_removable_media_t *media_ptr);
 
 static int print_all_removable_devices(struct client *client_ptr);
 
 int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 {
 	int rc;
+	int is_parent_path = 0;
 	dtmd_error_code_t error_code;
-	struct removable_media *media_ptr = NULL;
+	dtmd_removable_media_t *media_ptr = NULL;
 
 	if ((strcmp(cmd->cmd, dtmd_command_list_all_removable_devices) == 0) && (cmd->args_count == 0))
 	{
@@ -77,36 +78,49 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_list_removable_device) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		media_ptr = find_media(cmd->args[0]);
-		if (media_ptr != NULL)
+		if (strcmp(cmd->args[0], dtmd_root_device_path) == 0)
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
-			{
-				return result_client_error;
-			}
-
-			rc = print_all_removable_devices_recursive(client_ptr, media_ptr);
-			if (is_result_failure(rc))
-			{
-				return rc;
-			}
-
-			if (dprintf(client_ptr->clientfd, dtmd_response_finished "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
-			{
-				return result_client_error;
-			}
-
-			return result_success;
+			is_parent_path = 1;
 		}
 		else
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_removable_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
+			media_ptr = find_media(cmd->args[0]);
+			if (media_ptr != NULL)
 			{
-				return result_client_error;
-			}
+				if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_removable_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
+				{
+					return result_client_error;
+				}
 
-			return result_fail;
+				return result_fail;
+			}
 		}
+
+		if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
+		{
+			return result_client_error;
+		}
+
+		if (is_parent_path)
+		{
+			rc = print_all_removable_devices(client_ptr);
+		}
+		else
+		{
+			rc = print_all_removable_devices_recursive(client_ptr, media_ptr);
+		}
+
+		if (is_result_failure(rc))
+		{
+			return rc;
+		}
+
+		if (dprintf(client_ptr->clientfd, dtmd_response_finished "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
+		{
+			return result_client_error;
+		}
+
+		return result_success;
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_mount) == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
@@ -324,10 +338,10 @@ static int print_removable_device_common(const char *action,
 	return rc;
 }
 
-static int print_all_removable_devices_recursive(struct client *client_ptr, struct removable_media *media_ptr)
+static int print_all_removable_devices_recursive(struct client *client_ptr, dtmd_removable_media_t *media_ptr)
 {
 	int rc;
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	rc = print_removable_device_common(dtmd_response_argument_removable_device,
 		client_ptr,
@@ -361,7 +375,7 @@ static int print_all_removable_devices_recursive(struct client *client_ptr, stru
 static int print_all_removable_devices(struct client *client_ptr)
 {
 	int rc;
-	struct removable_media *iter_media_ptr;
+	dtmd_removable_media_t *iter_media_ptr;
 
 	for (iter_media_ptr = removable_media_root; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
