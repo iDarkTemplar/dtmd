@@ -411,6 +411,11 @@ static void* dtmd_worker_function(void *arg)
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_worker_function_error;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
@@ -1662,6 +1667,11 @@ dtmd_result_t dtmd_helper_generic_process(dtmd_t *handle, int timeout, void *par
 	{
 		while ((eol = strchr(handle->buffer, '\n')) != NULL)
 		{
+			if (!dt_validate_command(handle->buffer))
+			{
+				goto dtmd_helper_generic_process_error;
+			}
+
 			cmd = dt_parse_command(handle->buffer);
 
 			handle->cur_pos -= (eol + 1 - handle->buffer);
