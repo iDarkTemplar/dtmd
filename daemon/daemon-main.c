@@ -328,6 +328,7 @@ int main(int argc, char **argv)
 	int daemonpipe[2] = { -1, -1 };
 	unsigned char daemondata;
 	int successfully_initialized = 0;
+	int force_mounts_check = 0;
 
 	dtmd_device_system_t *dtmd_dev_system;
 	dtmd_device_enumeration_t *dtmd_dev_enum;
@@ -839,6 +840,8 @@ int main(int argc, char **argv)
 						&& (dtmd_dev_device->path != NULL)
 						&& (dtmd_dev_device->path_parent != NULL))
 					{
+						force_mounts_check = 1;
+
 						rc = change_media(
 							dtmd_dev_device->path_parent,
 							dtmd_dev_device->path,
@@ -875,12 +878,15 @@ int main(int argc, char **argv)
 			goto exit_8;
 		}
 #if (defined OS_Linux)
-		else if (pollfds[2].revents & POLLERR)
+		else if ((pollfds[2].revents & POLLERR)
 #endif /* (defined OS_Linux) */
 #if (defined OS_FreeBSD)
-		else if (pollfds[2].revents & POLLIN)
+		else if ((pollfds[2].revents & POLLIN)
 #endif /* (defined OS_FreeBSD) */
+			|| (force_mounts_check))
 		{
+			force_mounts_check = 0;
+
 #if (defined OS_Linux)
 			if (is_result_fatal_error(check_mount_changes()))
 #endif /* (defined OS_Linux) */

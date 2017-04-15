@@ -32,8 +32,10 @@
 extern "C" {
 #endif
 
+#define dtmd_library_timeout_infinite (-1)
+
 typedef struct dtmd_library dtmd_t;
-typedef void (*dtmd_callback_t)(void *arg, const dt_command_t *cmd);
+typedef void (*dtmd_callback_t)(dtmd_t *library, void *arg, const dt_command_t *cmd);
 
 typedef enum dtmd_result
 {
@@ -63,7 +65,9 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path);
 dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, size_t *supported_filesystems_count, const char ***supported_filesystems_list);
 dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, size_t *supported_filesystem_options_count, const char ***supported_filesystem_options_list);
+
 int dtmd_is_state_invalid(dtmd_t *handle);
+int dtmd_is_notification_valid_removable_device(dtmd_t *handle, const dt_command_t *cmd);
 
 // if error is command_failed, detailed error code can be with following function
 dtmd_error_code_t dtmd_get_code_of_command_fail(dtmd_t *handle);

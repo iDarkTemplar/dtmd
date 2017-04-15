@@ -78,155 +78,23 @@ bool command::isEmpty() const
 	return (this->cmd.empty() && this->args.empty());
 }
 
-partition::partition()
-{
-}
-
-partition::partition(const dtmd_partition_t *part)
-{
-	this->fillFromPartition(part);
-}
-
-partition::partition(const std::string &l_path,
-	const std::string &l_fstype,
-	const std::string &l_label,
-	const std::string &l_mnt_point,
-	const std::string &l_mnt_opts)
-	: path(l_path),
-	fstype(l_fstype),
-	label(l_label),
-	mnt_point(l_mnt_point),
-	mnt_opts(l_mnt_opts)
-{
-}
-
-partition::~partition()
-{
-}
-
-void partition::fillFromPartition(const dtmd_partition_t *part)
-{
-	this->clear();
-
-	if (part != NULL)
-	{
-		if (part->path != NULL)
-		{
-			this->path = part->path;
-		}
-
-		if (part->fstype != NULL)
-		{
-			this->fstype = part->fstype;
-		}
-
-		if (part->label != NULL)
-		{
-			this->label = part->label;
-		}
-
-		if (part->mnt_point != NULL)
-		{
-			this->mnt_point = part->mnt_point;
-		}
-
-		if (part->mnt_opts != NULL)
-		{
-			this->mnt_opts = part->mnt_opts;
-		}
-	}
-}
-
-void partition::clear()
-{
-	this->path.clear();
-	this->fstype.clear();
-	this->label.clear();
-	this->mnt_point.clear();
-	this->mnt_opts.clear();
-}
-
-bool partition::isEmpty() const
-{
-	return (this->path.empty()
-		&& this->fstype.empty()
-		&& this->label.empty()
-		&& this->mnt_point.empty()
-		&& this->mnt_opts.empty());
-}
-
-device::device()
-	: type(dtmd_removable_media_unknown_or_persistent)
-{
-}
-
-device::device(const dtmd_device_t *dev)
-{
-	fillFromDevice(dev);
-}
-
-device::device(const std::string &l_path, dtmd_removable_media_type_t l_type)
-	: path(l_path),
-	type(l_type)
-{
-}
-
-device::~device()
-{
-}
-
-void device::fillFromDevice(const dtmd_device_t *dev)
-{
-	this->clear();
-
-	if (dev != NULL)
-	{
-		if (dev->path != NULL)
-		{
-			this->path = dev->path;
-		}
-
-		this->type = dev->type;
-
-		if (dev->partition != NULL)
-		{
-			this->partitions.reserve(dev->partitions_count);
-
-			for (size_t i = 0; i < dev->partitions_count; ++i)
-			{
-				this->partitions.push_back(partition(dev->partition[i]));
-			}
-		}
-	}
-}
-
-void device::clear()
-{
-	this->path.clear();
-	this->type = dtmd_removable_media_unknown_or_persistent;
-	this->partitions.clear();
-}
-
-bool device::isEmpty() const
-{
-	return (this->path.empty()
-		&& (this->type == dtmd_removable_media_unknown_or_persistent)
-		&& this->partitions.empty());
-}
-
-stateful_device::stateful_device()
-	: type(dtmd_removable_media_unknown_or_persistent),
+removable_media::removable_media(const removable_media_private &)
+	: type(dtmd_removable_media_type_unknown_or_persistent),
+	subtype(dtmd_removable_media_subtype_unknown_or_persistent),
 	state(dtmd_removable_media_state_unknown)
 {
 }
 
-stateful_device::stateful_device(const dtmd_stateful_device_t *dev)
+removable_media::removable_media(const removable_media_private &, const dtmd_removable_media_t *removable_media)
 {
-	fillFromStatefulDevice(dev);
+	this->fillFromRemovableMedia(removable_media);
 }
 
-stateful_device::stateful_device(const std::string &l_path,
+removable_media::removable_media(const removable_media_private &,
+	const std::shared_ptr<removable_media> &l_parent,
+	const std::string &l_path,
 	dtmd_removable_media_type_t l_type,
+	dtmd_removable_media_subtype_t l_subtype,
 	dtmd_removable_media_state_t l_state,
 	const std::string &l_fstype,
 	const std::string &l_label,
@@ -234,74 +102,148 @@ stateful_device::stateful_device(const std::string &l_path,
 	const std::string &l_mnt_opts)
 	: path(l_path),
 	type(l_type),
+	subtype(l_subtype),
 	state(l_state),
 	fstype(l_fstype),
 	label(l_label),
 	mnt_point(l_mnt_point),
-	mnt_opts(l_mnt_opts)
+	mnt_opts(l_mnt_opts),
+	parent(l_parent)
 {
 }
 
-stateful_device::~stateful_device()
+removable_media::~removable_media()
 {
 }
 
-void stateful_device::fillFromStatefulDevice(const dtmd_stateful_device_t *dev)
+void removable_media::fillFromRemovableMedia(const dtmd_removable_media_t *removable_media)
 {
-	clear();
+	this->clear();
 
-	if (dev != NULL)
+	if (removable_media != NULL)
 	{
-		if (dev->path != NULL)
+		if (removable_media->path != NULL)
 		{
-			this->path = dev->path;
+			this->path = removable_media->path;
 		}
 
-		this->type  = dev->type;
-		this->state = dev->state;
+		this->type = removable_media->type;
+		this->subtype = removable_media->subtype;
+		this->state = removable_media->state;
 
-		if (dev->fstype != NULL)
+		if (removable_media->fstype != NULL)
 		{
-			this->fstype = dev->fstype;
+			this->fstype = removable_media->fstype;
 		}
 
-		if (dev->label != NULL)
+		if (removable_media->label != NULL)
 		{
-			this->label = dev->label;
+			this->label = removable_media->label;
 		}
 
-		if (dev->mnt_point != NULL)
+		if (removable_media->mnt_point != NULL)
 		{
-			this->mnt_point = dev->mnt_point;
+			this->mnt_point = removable_media->mnt_point;
 		}
 
-		if (dev->mnt_opts != NULL)
+		if (removable_media->mnt_opts != NULL)
 		{
-			this->mnt_opts = dev->mnt_opts;
+			this->mnt_opts = removable_media->mnt_opts;
+		}
+
+		for (dtmd_removable_media_t *iter = removable_media->first_child; iter != NULL; iter = iter->next_node)
+		{
+			auto child = removable_media::create(iter);
+			child->parent = this->shared_from_this();
+			children.push_back(child);
 		}
 	}
 }
 
-void stateful_device::clear()
+void removable_media::clear()
 {
 	this->path.clear();
-	this->type  = dtmd_removable_media_unknown_or_persistent;
+	this->type = dtmd_removable_media_type_unknown_or_persistent;
+	this->subtype = dtmd_removable_media_subtype_unknown_or_persistent;
 	this->state = dtmd_removable_media_state_unknown;
 	this->fstype.clear();
 	this->label.clear();
 	this->mnt_point.clear();
 	this->mnt_opts.clear();
+	this->parent.reset();
+	this->children.clear();
 }
 
-bool stateful_device::isEmpty() const
+std::string removable_media::getParentPath() const
+{
+	auto parent_object = this->parent.lock();
+	if (parent_object)
+	{
+		return parent_object->path;
+	}
+	else
+	{
+		return dtmd_root_device_path;
+	}
+}
+
+bool removable_media::isEmpty() const
 {
 	return (this->path.empty()
-		&& (this->type  == dtmd_removable_media_unknown_or_persistent)
+		&& (this->type  == dtmd_removable_media_type_unknown_or_persistent)
+		&& (this->subtype == dtmd_removable_media_subtype_unknown_or_persistent)
 		&& (this->state == dtmd_removable_media_state_unknown)
 		&& this->fstype.empty()
 		&& this->label.empty()
 		&& this->mnt_point.empty()
-		&& this->mnt_opts.empty());
+		&& this->mnt_opts.empty()
+		&& this->parent.expired()
+		&& this->children.empty());
+}
+
+dtmd_removable_media_type_t removable_media::getValidType() const
+{
+	if (this->path.empty())
+	{
+		return dtmd_removable_media_type_unknown_or_persistent;
+	}
+
+	switch (this->type)
+	{
+	case dtmd_removable_media_type_device_partition:
+		if ((this->subtype == dtmd_removable_media_subtype_unknown_or_persistent)
+			&& (this->state == dtmd_removable_media_state_unknown))
+		{
+			return dtmd_removable_media_type_device_partition;
+		}
+		break;
+
+	case dtmd_removable_media_type_stateless_device:
+		if ((this->subtype != dtmd_removable_media_subtype_unknown_or_persistent)
+			&& (this->state == dtmd_removable_media_state_unknown)
+			&& this->fstype.empty()
+			&& this->label.empty()
+			&& this->mnt_point.empty()
+			&& this->mnt_opts.empty())
+		{
+			return dtmd_removable_media_type_stateless_device;
+		}
+		break;
+
+	case dtmd_removable_media_type_stateful_device:
+		if ((this->subtype != dtmd_removable_media_subtype_unknown_or_persistent)
+			&& (this->state != dtmd_removable_media_state_unknown))
+		{
+			return dtmd_removable_media_type_stateful_device;
+		}
+		break;
+
+	case dtmd_removable_media_type_unknown_or_persistent:
+	default:
+		break;
+	}
+
+	return dtmd_removable_media_type_unknown_or_persistent;
 }
 
 library::library(callback cb, void *arg)
@@ -324,43 +266,30 @@ library::~library()
 	}
 }
 
-dtmd_result_t library::enum_devices(int timeout, std::vector<device> &devices, std::vector<stateful_device> &stateful_devices)
+dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::shared_ptr<removable_media> > &removable_devices_list)
 {
 	dtmd_result_t result;
-	size_t count;
-	dtmd_device_t **devices_array;
-	size_t stateful_count;
-	dtmd_stateful_device_t **stateful_devices_array;
+	dtmd_removable_media_t *returned_removable_device;
+	dtmd_removable_media_t *removable_devices_iter;
 
-	result = dtmd_enum_devices(this->m_handle, timeout, &count, &devices_array, &stateful_count, &stateful_devices_array);
-
+	result = dtmd_list_all_removable_devices(this->m_handle, timeout, &returned_removable_device);
 	if (result == dtmd_ok)
 	{
 		try
 		{
-			devices.clear();
-			stateful_devices.clear();
+			removable_devices_list.clear();
 
-			devices.reserve(count);
-			stateful_devices.reserve(stateful_count);
-
-			for (size_t i = 0; i < count; ++i)
+			for (removable_devices_iter = returned_removable_device; removable_devices_iter != NULL; removable_devices_iter = removable_devices_iter->next_node)
 			{
-				devices.push_back(device(devices_array[i]));
+				auto item = removable_media::create(removable_devices_iter);
+				removable_devices_list.push_back(item);
 			}
 
-			for (size_t i = 0; i < stateful_count; ++i)
-			{
-				stateful_devices.push_back(stateful_device(stateful_devices_array[i]));
-			}
-
-			dtmd_free_stateful_devices_array(this->m_handle, stateful_count, stateful_devices_array);
-			dtmd_free_devices_array(this->m_handle, count, devices_array);
+			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
 		}
 		catch (...)
 		{
-			dtmd_free_stateful_devices_array(this->m_handle, stateful_count, stateful_devices_array);
-			dtmd_free_devices_array(this->m_handle, count, devices_array);
+			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
 			throw;
 		}
 	}
@@ -368,71 +297,22 @@ dtmd_result_t library::enum_devices(int timeout, std::vector<device> &devices, s
 	return result;
 }
 
-dtmd_result_t library::list_device(int timeout, const std::string &device_path, device &result_device)
+dtmd_result_t library::list_removable_device(int timeout, const std::string &removable_device_path, std::shared_ptr<removable_media> &removable_device)
 {
 	dtmd_result_t result;
-	dtmd_device_t *device;
+	dtmd_removable_media_t *returned_removable_device;
 
-	result = dtmd_list_device(this->m_handle, timeout, device_path.c_str(), &device);
-
+	result = dtmd_list_removable_device(this->m_handle, timeout, removable_device_path.c_str(), &returned_removable_device);
 	if (result == dtmd_ok)
 	{
 		try
 		{
-			result_device.fillFromDevice(device);
-			dtmd_free_device(this->m_handle, device);
+			removable_device = removable_media::create(returned_removable_device);
+			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
 		}
 		catch (...)
 		{
-			dtmd_free_device(this->m_handle, device);
-			throw;
-		}
-	}
-
-	return result;
-}
-
-dtmd_result_t library::list_partition(int timeout, const std::string &partition_path, partition &result_partition)
-{
-	dtmd_result_t result;
-	dtmd_partition_t *partition;
-
-	result = dtmd_list_partition(this->m_handle, timeout, partition_path.c_str(), &partition);
-
-	if (result == dtmd_ok)
-	{
-		try
-		{
-			result_partition.fillFromPartition(partition);
-			dtmd_free_partition(this->m_handle, partition);
-		}
-		catch (...)
-		{
-			dtmd_free_partition(this->m_handle, partition);
-			throw;
-		}
-	}
-
-	return result;
-}
-
-dtmd_result_t library::list_stateful_device(int timeout, const std::string &device_path, stateful_device &result_stateful_device)
-{
-	dtmd_result_t result;
-	dtmd_stateful_device_t *stateful_device;
-
-	result = dtmd_list_stateful_device(this->m_handle, timeout, device_path.c_str(), &stateful_device);
-
-	if (result == dtmd_ok)
-	{
-		try
-		{
-			result_stateful_device.fillFromStatefulDevice(stateful_device);
-			dtmd_free_stateful_device(this->m_handle, stateful_device);
-		}
-		catch (...)
-		{
-			dtmd_free_stateful_device(this->m_handle, stateful_device);
+			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
 			throw;
 		}
 	}
@@ -462,7 +342,6 @@ dtmd_result_t library::list_supported_filesystems(int timeout, std::vector<std::
 	const char **supported_filesystems_array;
 
 	result = dtmd_list_supported_filesystems(this->m_handle, timeout, &supported_filesystems_count, &supported_filesystems_array);
-
 	if (result == dtmd_ok)
 	{
 		try
@@ -499,7 +378,6 @@ dtmd_result_t library::list_supported_filesystem_options(int timeout, const std:
 	const char **supported_filesystem_options_array;
 
 	result = dtmd_list_supported_filesystem_options(this->m_handle, timeout, filesystem.c_str(), &supported_filesystem_options_count, &supported_filesystem_options_array);
-
 	if (result == dtmd_ok)
 	{
 		try
@@ -534,12 +412,34 @@ bool library::isStateInvalid() const
 	return dtmd_is_state_invalid(this->m_handle);
 }
 
+bool library::isNotificationValidRemovableDevice(const command &cmd) const
+{
+	dt_command_t reconstructed_command;
+	std::vector<const char*> reconstructed_args_array;
+
+	reconstructed_args_array.reserve(cmd.args.size());
+
+	{
+		auto iter_end = cmd.args.end();
+		for (auto iter = cmd.args.begin(); iter != iter_end; ++iter)
+		{
+			reconstructed_args_array.push_back((!iter->empty()) ? iter->c_str() : NULL);
+		}
+	}
+
+	reconstructed_command.cmd        = const_cast<char*>((!cmd.cmd.empty()) ? cmd.cmd.c_str() : NULL);
+	reconstructed_command.args_count = reconstructed_args_array.size();
+	reconstructed_command.args       = const_cast<char**>((!reconstructed_args_array.empty()) ? reconstructed_args_array.data() : NULL);
+
+	return dtmd_is_notification_valid_removable_device(this->m_handle, &reconstructed_command);
+}
+
 dtmd_error_code_t library::getCodeOfCommandFail() const
 {
 	return dtmd_get_code_of_command_fail(this->m_handle);
 }
 
-void library::local_callback(void *arg, const dt_command_t *cmd)
+void library::local_callback(dtmd_t *library_ptr, void *arg, const dt_command_t *cmd)
 {
 	library *lib = (library*) arg;
 
@@ -547,12 +447,12 @@ void library::local_callback(void *arg, const dt_command_t *cmd)
 	{
 		command local_command(cmd);
 
-		lib->m_cb(lib->m_arg, local_command);
+		lib->m_cb(*lib, lib->m_arg, local_command);
 	}
 	catch (...)
 	{
 		// signal failure
-		lib->m_cb(lib->m_arg, command());
+		lib->m_cb(*lib, lib->m_arg, command());
 	}
 }
 

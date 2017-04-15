@@ -155,10 +155,10 @@ static int dtmd_helper_is_helper_list_supported_filesystem_options_generic(dt_co
 static int dtmd_helper_is_helper_list_supported_filesystem_options_failed(dt_command_t *cmd);
 static int dtmd_helper_is_helper_list_supported_filesystem_options_parameters_match(dt_command_t *cmd, const char *filesystem);
 
-static int dtmd_helper_cmd_check_removable_device_common(dt_command_t *cmd);
-static int dtmd_helper_cmd_check_removable_device(dt_command_t *cmd);
-static int dtmd_helper_cmd_check_supported_filesystems(dt_command_t *cmd);
-static int dtmd_helper_cmd_check_supported_filesystem_options(dt_command_t *cmd);
+static int dtmd_helper_cmd_check_removable_device_common(const dt_command_t *cmd);
+static int dtmd_helper_cmd_check_removable_device(const dt_command_t *cmd);
+static int dtmd_helper_cmd_check_supported_filesystems(const dt_command_t *cmd);
+static int dtmd_helper_cmd_check_supported_filesystem_options(const dt_command_t *cmd);
 
 static void dtmd_helper_free_removable_device_recursive(dtmd_removable_media_t *device);
 static void dtmd_helper_free_removable_device(dtmd_removable_media_t *device);
@@ -433,7 +433,7 @@ static void* dtmd_worker_function(void *arg)
 
 dtmd_worker_function_error:
 	// Signal about error
-	handle->callback(handle->callback_arg, NULL);
+	handle->callback(handle, handle->callback_arg, NULL);
 
 dtmd_worker_function_exit:
 	// Signal about exit
@@ -650,6 +650,19 @@ int dtmd_is_state_invalid(dtmd_t *handle)
 	return dtmd_helper_is_state_invalid(handle->result_state);
 }
 
+int dtmd_is_notification_valid_removable_device(dtmd_t *handle, const dt_command_t *cmd)
+{
+	if (handle == NULL)
+	{
+		return 0;
+	}
+
+	return ((cmd->cmd != NULL)
+		&& ((strcmp(cmd->cmd, dtmd_notification_removable_device_added) == 0)
+			|| (strcmp(cmd->cmd, dtmd_notification_removable_device_changed) == 0))
+		&& (dtmd_helper_cmd_check_removable_device_common(cmd)));
+}
+
 dtmd_error_code_t dtmd_get_code_of_command_fail(dtmd_t *handle)
 {
 	if (handle == NULL)
@@ -800,9 +813,11 @@ static dtmd_result_t dtmd_helper_handle_callback_cmd(dtmd_t *handle, dt_command_
 {
 	if (   ((strcmp(cmd->cmd, dtmd_notification_removable_device_added)   == 0) && (dtmd_helper_cmd_check_removable_device_common(cmd)))
 		|| ((strcmp(cmd->cmd, dtmd_notification_removable_device_removed) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
-		|| ((strcmp(cmd->cmd, dtmd_notification_removable_device_changed) == 0) && (dtmd_helper_cmd_check_removable_device_common(cmd))))
+		|| ((strcmp(cmd->cmd, dtmd_notification_removable_device_changed) == 0) && (dtmd_helper_cmd_check_removable_device_common(cmd)))
+		|| ((strcmp(cmd->cmd, dtmd_notification_removable_device_mounted) == 0) && (cmd->args_count == 3) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
+		|| ((strcmp(cmd->cmd, dtmd_notification_removable_device_unmounted) == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL) && (cmd->args[1] != NULL)))
 	{
-		handle->callback(handle->callback_arg, cmd);
+		handle->callback(handle, handle->callback_arg, cmd);
 		return dtmd_ok;
 	}
 	else
@@ -967,7 +982,7 @@ static int dtmd_helper_is_helper_list_supported_filesystem_options_parameters_ma
 	return (strcmp(cmd->args[1], filesystem) == 0);
 }
 
-static int dtmd_helper_cmd_check_removable_device_common(dt_command_t *cmd)
+static int dtmd_helper_cmd_check_removable_device_common(const dt_command_t *cmd)
 {
 	dtmd_removable_media_type_t type;
 	dtmd_removable_media_subtype_t subtype;
@@ -1033,17 +1048,17 @@ static int dtmd_helper_cmd_check_removable_device_common(dt_command_t *cmd)
 	return 0;
 }
 
-static int dtmd_helper_cmd_check_removable_device(dt_command_t *cmd)
+static int dtmd_helper_cmd_check_removable_device(const dt_command_t *cmd)
 {
 	return ((strcmp(cmd->cmd, dtmd_response_argument_removable_device) == 0) && (dtmd_helper_cmd_check_removable_device_common(cmd)));
 }
 
-static int dtmd_helper_cmd_check_supported_filesystems(dt_command_t *cmd)
+static int dtmd_helper_cmd_check_supported_filesystems(const dt_command_t *cmd)
 {
 	return ((strcmp(cmd->cmd, dtmd_response_argument_supported_filesystems_lists) == 0) && (dtmd_helper_validate_string_array(cmd->args_count, (const char **) cmd->args)));
 }
 
-static int dtmd_helper_cmd_check_supported_filesystem_options(dt_command_t *cmd)
+static int dtmd_helper_cmd_check_supported_filesystem_options(const dt_command_t *cmd)
 {
 	return ((strcmp(cmd->cmd, dtmd_response_argument_supported_filesystem_options_lists) == 0) && (dtmd_helper_validate_string_array(cmd->args_count, (const char **) cmd->args)));
 }

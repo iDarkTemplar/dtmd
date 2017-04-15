@@ -52,7 +52,6 @@
 #define is_mounted_now   (1<<0)
 #define is_mounted_last  (1<<1)
 #define is_processed     (1<<2)
-#define is_state_changed (1<<3)
 
 #if (defined OS_Linux)
 int init_mount_monitoring(void)
@@ -117,18 +116,11 @@ static void process_changes_recursive(dtmd_removable_media_t *media_ptr)
 {
 	dtmd_removable_media_t *iter_media_ptr;
 
-	if (((size_t) media_ptr->private_data) & is_mounted_now)
-	{
-		if (!(((size_t) media_ptr->private_data) & is_mounted_last))
-		{
-			media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) | is_state_changed);
-		}
-	}
-	else
+	if (!(((size_t) media_ptr->private_data) & is_mounted_now))
 	{
 		if (((size_t) media_ptr->private_data) & is_mounted_last)
 		{
-			media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) | is_state_changed);
+			notify_removable_device_unmounted(media_ptr->path, media_ptr->mnt_point);
 
 			if (media_ptr->mnt_point != NULL)
 			{
@@ -142,20 +134,6 @@ static void process_changes_recursive(dtmd_removable_media_t *media_ptr)
 				media_ptr->mnt_opts = NULL;
 			}
 		}
-	}
-
-	if (((size_t) media_ptr->private_data) & is_state_changed)
-	{
-		notify_removable_device_changed(
-			((media_ptr->parent != NULL) ? media_ptr->parent->path : dtmd_root_device_path),
-			media_ptr->path,
-			media_ptr->type,
-			media_ptr->subtype,
-			media_ptr->state,
-			media_ptr->fstype,
-			media_ptr->label,
-			media_ptr->mnt_point,
-			media_ptr->mnt_opts);
 	}
 
 	media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) & is_mounted_now);
@@ -203,6 +181,7 @@ int check_mount_changes(void)
 					{
 						if (iter_media_ptr->mnt_point != NULL)
 						{
+							notify_removable_device_unmounted(iter_media_ptr->path, iter_media_ptr->mnt_point);
 							free(iter_media_ptr->mnt_point);
 						}
 
@@ -213,7 +192,7 @@ int check_mount_changes(void)
 							goto check_mount_changes_error_2;
 						}
 
-						iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
+						notify_removable_device_mounted(iter_media_ptr->path, iter_media_ptr->mnt_point, ent->mnt_opts);
 					}
 
 					if ((iter_media_ptr->mnt_opts == NULL) || (strcmp(iter_media_ptr->mnt_opts, ent->mnt_opts) != 0))
@@ -229,8 +208,6 @@ int check_mount_changes(void)
 							WRITE_LOG(LOG_ERR, "Memory allocation failure");
 							goto check_mount_changes_error_2;
 						}
-
-						iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
 					}
 				}
 				else
@@ -344,10 +321,17 @@ int check_mount_changes(int mountfd)
 			{
 				iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_processed | is_mounted_now);
 
+				options = convert_option_flags_to_string(mounts[current].f_flags);
+				if (options == NULL)
+				{
+					goto check_mount_changes_error_1;
+				}
+
 				if ((iter_media_ptr->mnt_point == NULL) || (strcmp(iter_media_ptr->mnt_point, mounts[current].f_mntonname) != 0))
 				{
 					if (iter_media_ptr->mnt_point != NULL)
 					{
+						notify_removable_device_unmounted(iter_media_ptr->path, iter_media_ptr->mnt_point);
 						free(iter_media_ptr->mnt_point);
 					}
 
@@ -355,16 +339,10 @@ int check_mount_changes(int mountfd)
 					if (iter_media_ptr->mnt_point == NULL)
 					{
 						WRITE_LOG(LOG_ERR, "Memory allocation failure");
-						goto check_mount_changes_error_1;
+						goto check_mount_changes_error_2;
 					}
 
-					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
-				}
-
-				options = convert_option_flags_to_string(mounts[current].f_flags);
-				if (options == NULL)
-				{
-					goto check_mount_changes_error_1;
+					notify_removable_device_mounted(iter_media_ptr->path, iter_media_ptr->mnt_point, options);
 				}
 
 				if ((iter_media_ptr->mnt_opts == NULL) || (strcmp(iter_media_ptr->mnt_opts, options) != 0))
@@ -375,7 +353,6 @@ int check_mount_changes(int mountfd)
 					}
 
 					iter_media_ptr->mnt_opts = options;
-					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_state_changed);
 				}
 				else
 				{
@@ -391,6 +368,9 @@ int check_mount_changes(int mountfd)
 	}
 
 	return result_success;
+
+check_mount_changes_error_2:
+	free(options);
 
 check_mount_changes_error_1:
 	return result_fatal_error;

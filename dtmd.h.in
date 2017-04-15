@@ -93,9 +93,9 @@ typedef struct dtmd_removable_media
 #endif
 
 #define dtmd_string_device_type_unknown_or_persistent "unknown"
-#define dtmd_string_device_type_device_partition      "device_partition"
-#define dtmd_string_device_type_stateless_device      "stateless_device"
-#define dtmd_string_device_type_stateful_device       "stateful_device"
+#define dtmd_string_device_type_device_partition      "device partition"
+#define dtmd_string_device_type_stateless_device      "stateless device"
+#define dtmd_string_device_type_stateful_device       "stateful device"
 
 #define dtmd_string_device_subtype_unknown_or_persistent "unknown"
 #define dtmd_string_device_subtype_removable_disk        "removable disk"
@@ -131,6 +131,12 @@ typedef struct dtmd_removable_media
 #define dtmd_notification_removable_device_changed "removable_device_changed"
 /* same parameters as for 'add_removable_device' */
 /* any parameter may change, including type, except for parent_path and path */
+
+#define dtmd_notification_removable_device_mounted "removable_device_mounted"
+/* parameters: path, mount_point, mount_options */
+
+#define dtmd_notification_removable_device_unmounted "removable_device_unmounted"
+/* parameters: path, mount_point */
 
 /* Commands and responses */
 

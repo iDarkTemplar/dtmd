@@ -55,6 +55,9 @@ void notify_removable_device_changed(const char *parent_path,
 	const char *mnt_point,
 	const char *mnt_opts);
 
+void notify_removable_device_mounted(const char *path, const char *mount_point, const char *mount_options);
+void notify_removable_device_unmounted(const char *path, const char *mount_point);
+
 #ifdef __cplusplus
 }
 #endif

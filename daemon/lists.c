@@ -54,6 +54,12 @@ static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 		remove_media_helper(media_ptr->first_child);
 	}
 
+	// do notifications
+	if (media_ptr->mnt_point != NULL)
+	{
+		notify_removable_device_unmounted(media_ptr->path, media_ptr->mnt_point);
+	}
+
 	notify_removable_device_removed(media_ptr->path);
 
 	// and free node itself
@@ -397,6 +403,8 @@ int change_media(const char *parent_path,
 		&& (((mnt_point != NULL) && (strcmp(media_ptr->mnt_point, mnt_point) != 0))
 			|| (mnt_point == NULL)))
 	{
+		notify_removable_device_unmounted(media_ptr->path, media_ptr->mnt_point);
+
 		free(media_ptr->mnt_point);
 		media_ptr->mnt_point = NULL;
 		media_ptr->private_data = (void*) 0;
@@ -412,6 +420,11 @@ int change_media(const char *parent_path,
 		}
 
 		media_ptr->private_data = (void*) 1;
+
+		if (mnt_opts != NULL)
+		{
+			notify_removable_device_mounted(media_ptr->path, media_ptr->mnt_point, mnt_opts);
+		}
 	}
 
 	if ((media_ptr->mnt_opts != NULL)

@@ -253,6 +253,26 @@ void notify_removable_device_changed(const char *parent_path,
 	}
 }
 
+void notify_removable_device_mounted(const char *path, const char *mount_point, const char *mount_options)
+{
+	struct client *cur_client;
+
+	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
+	{
+		dprintf(cur_client->clientfd, dtmd_notification_removable_device_mounted "(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
+	}
+}
+
+void notify_removable_device_unmounted(const char *path, const char *mount_point)
+{
+	struct client *cur_client;
+
+	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
+	{
+		dprintf(cur_client->clientfd, dtmd_notification_removable_device_unmounted "(\"%s\", \"%s\")\n", path, mount_point);
+	}
+}
+
 static int print_removable_device_common(const char *action,
 	struct client *client_ptr,
 	const char *parent_path,
