@@ -35,47 +35,6 @@ dtmd_removable_media_t *removable_media_root = NULL;
 struct client *client_root = NULL;
 size_t clients_count = 0;
 
-static int find_media_private(const char *path,
-	dtmd_removable_media_t *parent_media_ptr,
-	dtmd_removable_media_t **media_ptr)
-{
-	int rc;
-	dtmd_removable_media_t *iter_media_ptr = NULL;
-
-	for (iter_media_ptr = parent_media_ptr; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
-	{
-		if (strcmp(path, iter_media_ptr->path) == 0)
-		{
-			*media_ptr = iter_media_ptr;
-			return result_success;
-		}
-
-		rc = find_media_private(path, iter_media_ptr, media_ptr);
-		if (is_result_successful(rc))
-		{
-			return result_success;
-		}
-	}
-
-	return result_fail;
-}
-
-dtmd_removable_media_t* find_media(const char *path)
-{
-	int rc;
-	dtmd_removable_media_t *media_ptr = NULL;
-
-	rc = find_media_private(path, removable_media_root, &media_ptr);
-	if (is_result_successful(rc))
-	{
-		return media_ptr;
-	}
-	else
-	{
-		return NULL;
-	}
-}
-
 static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 {
 	// first unlink node
@@ -133,7 +92,6 @@ int add_media(const char *parent_path,
 	const char *mnt_point,
 	const char *mnt_opts)
 {
-	int rc;
 	int is_parent_path = 0;
 	dtmd_removable_media_t *media_ptr = NULL;
 	dtmd_removable_media_t *constructed_media = NULL;
@@ -145,10 +103,10 @@ int add_media(const char *parent_path,
 
 	if (!is_parent_path)
 	{
-		rc = find_media_private(parent_path, removable_media_root, &media_ptr);
-		if (is_result_failure(rc))
+		media_ptr = dtmd_find_media(parent_path, removable_media_root);
+		if (media_ptr == NULL)
 		{
-			return rc;
+			return result_fail;
 		}
 	}
 
@@ -321,13 +279,12 @@ add_media_error_1:
 
 int remove_media(const char *path)
 {
-	int rc;
 	dtmd_removable_media_t *media_ptr = NULL;
 
-	rc = find_media_private(path, removable_media_root, &media_ptr);
-	if (is_result_failure(rc))
+	media_ptr = dtmd_find_media(path, removable_media_root);
+	if (media_ptr == NULL)
 	{
-		return rc;
+		return result_fail;
 	}
 
 	// make sure removable_media_root stays valid
@@ -351,14 +308,13 @@ int change_media(const char *parent_path,
 	const char *mnt_point,
 	const char *mnt_opts)
 {
-	int rc;
 	dtmd_removable_media_t *media_ptr = NULL;
 
-	rc = find_media_private(path, removable_media_root, &media_ptr);
-	if (is_result_failure(rc))
+	media_ptr = dtmd_find_media(path, removable_media_root);
+	if (media_ptr == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Caught false event about stateful device change: device name %s", path);
-		return rc;
+		return result_fail;
 	}
 
 	/* Check parent path, it must not change */

@@ -84,8 +84,8 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 		}
 		else
 		{
-			media_ptr = find_media(cmd->args[0]);
-			if (media_ptr != NULL)
+			media_ptr = dtmd_find_media(cmd->args[0], removable_media_root);
+			if (media_ptr == NULL)
 			{
 				if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_removable_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
 				{

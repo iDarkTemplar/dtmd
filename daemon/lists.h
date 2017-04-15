@@ -44,8 +44,6 @@ extern dtmd_removable_media_t *removable_media_root;
 extern struct client *client_root;
 extern size_t clients_count;
 
-dtmd_removable_media_t* find_media(const char *path);
-
 int add_media(const char *parent_path,
 	const char *path,
 	dtmd_removable_media_type_t media_type,

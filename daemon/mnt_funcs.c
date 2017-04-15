@@ -187,7 +187,7 @@ int check_mount_changes(void)
 
 	while ((ent = getmntent(mntfile)) != NULL)
 	{
-		iter_media_ptr = find_media(ent->mnt_fsname);
+		iter_media_ptr = dtmd_find_media(ent->mnt_fsname, removable_media_root);
 		if (iter_media_ptr != NULL)
 		{
 			// skip devices mounted multiple times
@@ -336,7 +336,7 @@ int check_mount_changes(int mountfd)
 
 	for (current = 0; current < count; ++current)
 	{
-		iter_media_ptr = find_media(mounts[current].f_mntfromname);
+		iter_media_ptr = dtmd_find_media(mounts[current].f_mntfromname, removable_media_root);
 		if (iter_media_ptr != NULL)
 		{
 			// skip devices mounted multiple times

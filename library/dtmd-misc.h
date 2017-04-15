@@ -39,6 +39,8 @@ dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string);
 const char* dtmd_error_code_to_string(dtmd_error_code_t code);
 dtmd_error_code_t dtmd_string_to_error_code(const char *string);
 
+dtmd_removable_media_t* dtmd_find_media(const char *path, dtmd_removable_media_t *root_node);
+
 #ifdef __cplusplus
 }
 #endif

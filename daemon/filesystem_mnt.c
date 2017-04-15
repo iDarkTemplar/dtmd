@@ -27,6 +27,8 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
+#include <dtmd-misc.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -476,7 +478,7 @@ int invoke_mount(struct client *client_ptr, const char *path, const char *mount_
 	uid_t uid;
 	gid_t gid;
 
-	media_ptr = find_media(path);
+	media_ptr = dtmd_find_media(path, removable_media_root);
 	if (media_ptr == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed mounting device '%s': device does not exist or is not ready", path);
@@ -901,7 +903,7 @@ int invoke_unmount(struct client *client_ptr, const char *path, dtmd_error_code_
 {
 	dtmd_removable_media_t *media_ptr;
 
-	media_ptr = find_media(path);
+	media_ptr = dtmd_find_media(path, removable_media_root);
 	if (media_ptr == NULL)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed unmounting device '%s': device does not exist", path);

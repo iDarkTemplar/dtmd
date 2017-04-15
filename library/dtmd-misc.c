@@ -216,3 +216,25 @@ dtmd_error_code_t dtmd_string_to_error_code(const char *string)
 
 	return dtmd_error_code_unknown;
 }
+
+dtmd_removable_media_t* dtmd_find_media(const char *path, dtmd_removable_media_t *root_node)
+{
+	dtmd_removable_media_t *result = NULL;
+	dtmd_removable_media_t *iter_media_ptr = NULL;
+
+	for (iter_media_ptr = root_node; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	{
+		if (strcmp(path, iter_media_ptr->path) == 0)
+		{
+			return iter_media_ptr;
+		}
+
+		result = dtmd_find_media(path, iter_media_ptr->first_child);
+		if (result != NULL)
+		{
+			return result;
+		}
+	}
+
+	return NULL;
+}
