@@ -44,8 +44,6 @@
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
-#define dtmd_daemon_lock "/var/run/dtmd.pid"
-
 static volatile unsigned char continue_working  = 1;
 static unsigned char check_config_only = 0;
 
@@ -324,8 +322,8 @@ int main(int argc, char **argv)
 	pid_t child = -1;
 	char buffer[12];
 	const int backlog = 4;
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	struct stat st;
 	int daemonpipe[2] = { -1, -1 };
 	unsigned char daemondata;
@@ -342,8 +340,8 @@ int main(int argc, char **argv)
 	void *tmp;
 	char *tmp_str;
 #define pollfds_count_default 3
-	unsigned int pollfds_count = pollfds_count_default;
-	dtmd_command_t *cmd;
+	size_t pollfds_count = pollfds_count_default;
+	dt_command_t *cmd;
 
 	struct pollfd *pollfds = NULL;
 
@@ -581,7 +579,7 @@ int main(int argc, char **argv)
 		goto exit_4_pipe;
 	}
 
-#ifdef _POSIX_SYNCHRONIZED_IO
+#if (defined _POSIX_SYNCHRONIZED_IO) && (_POSIX_SYNCHRONIZED_IO > 0)
 	if (fdatasync(lockfd) != 0)
 #else
 	if (fsync(lockfd) != 0)
@@ -611,12 +609,12 @@ int main(int argc, char **argv)
 		use_syslog = 0;
 	}
 
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 	if (use_syslog)
 	{
 		openlog("dtmd", LOG_PID, LOG_DAEMON);
 	}
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
 	if (listen(socketfd, backlog) == -1)
 	{
@@ -646,10 +644,10 @@ int main(int argc, char **argv)
 		goto exit_6;
 	}
 
-	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
+	mountfd = init_mount_monitoring();
 	if (mountfd < 0)
 	{
-		WRITE_LOG(LOG_ERR, "Error opening mounts file descriptor");
+		WRITE_LOG(LOG_ERR, "Error opening mount monitor descriptor");
 		result = -1;
 		goto exit_6;
 	}
@@ -729,7 +727,12 @@ int main(int argc, char **argv)
 		goto exit_7;
 	}
 
+#if (defined OS_Linux)
 	if (is_result_fatal_error(check_mount_changes()))
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	if (is_result_fatal_error(check_mount_changes(-1)))
+#endif /* (defined OS_FreeBSD) */
 	{
 		result = -1;
 		goto exit_7;
@@ -765,7 +768,12 @@ int main(int argc, char **argv)
 		pollfds[1].revents = 0;
 
 		pollfds[2].fd = mountfd;
+#if (defined OS_Linux)
 		pollfds[2].events = POLLERR;
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		pollfds[2].events = POLLIN;
+#endif /* (defined OS_FreeBSD) */
 		pollfds[2].revents = 0;
 
 		for (i = 0; i < clients_count; ++i)
@@ -944,15 +952,30 @@ int main(int argc, char **argv)
 			}
 		}
 
+#if (defined OS_Linux)
 		if ((pollfds[2].revents & POLLHUP) || (pollfds[2].revents & POLLNVAL))
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		if ((pollfds[2].revents & POLLHUP) || (pollfds[2].revents & POLLERR) || (pollfds[2].revents & POLLNVAL))
+#endif /* (defined OS_FreeBSD) */
 		{
-			WRITE_LOG(LOG_ERR, "Invalid poll result on device monitoring socket");
+			WRITE_LOG(LOG_ERR, "Invalid poll result on mounts monitoring descriptor");
 			result = -1;
 			goto exit_8;
 		}
+#if (defined OS_Linux)
 		else if (pollfds[2].revents & POLLERR)
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		else if (pollfds[2].revents & POLLIN)
+#endif /* (defined OS_FreeBSD) */
 		{
+#if (defined OS_Linux)
 			if (is_result_fatal_error(check_mount_changes()))
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+			if (is_result_fatal_error(check_mount_changes(mountfd)))
+#endif /* (defined OS_FreeBSD) */
 			{
 				result = -1;
 				goto exit_8;
@@ -994,13 +1017,13 @@ int main(int argc, char **argv)
 
 				while ((tmp_str = strchr(clients[j]->buf, '\n')) != NULL)
 				{
-					rc = dtmd_validate_command(clients[j]->buf);
+					rc = dt_validate_command(clients[j]->buf);
 					if (!rc)
 					{
 						goto exit_remove_client;
 					}
 
-					cmd = dtmd_parse_command(clients[j]->buf);
+					cmd = dt_parse_command(clients[j]->buf);
 					if (cmd == NULL)
 					{
 						WRITE_LOG(LOG_ERR, "Memory allocation failure");
@@ -1009,7 +1032,7 @@ int main(int argc, char **argv)
 					}
 
 					rc = invoke_command(j, cmd);
-					dtmd_free_command(cmd);
+					dt_free_command(cmd);
 
 					switch (rc)
 					{
@@ -1055,7 +1078,11 @@ exit_remove_client:
 	}
 
 exit_8:
+#if (defined OS_Linux)
+#if (!defined MTAB_READONLY)
 	unlink(dtmd_internal_mtab_temporary);
+#endif /* (!defined MTAB_READONLY) */
+#endif /* (defined OS_Linux) */
 
 	free(pollfds);
 
@@ -1075,7 +1102,7 @@ exit_7:
 
 	remove_all_media();
 	remove_all_stateful_media();
-	close(mountfd);
+	close_mount_monitoring(mountfd);
 
 exit_6:
 	device_system_stop_monitoring(dtmd_dev_mon);
@@ -1084,12 +1111,12 @@ exit_5:
 	device_system_deinit(dtmd_dev_system);
 
 exit_4_log:
-#ifndef DISABLE_SYSLOG
+#ifdef ENABLE_SYSLOG
 	if (use_syslog)
 	{
 		closelog();
 	}
-#endif /* DISABLE_SYSLOG */
+#endif /* ENABLE_SYSLOG */
 
 exit_4_pipe:
 	if (daemonpipe[1] != -1)

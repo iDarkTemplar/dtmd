@@ -23,24 +23,56 @@
 
 #include <sys/types.h>
 
+#if (defined OS_FreeBSD)
+#include <stdint.h>
+#endif /* (defined OS_FreeBSD) */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef int (*mount_option_validation_function_t)(const char *option, int option_len);
+
 struct dtmd_mount_option
 {
-	const char * option;
+	const char * const option;
 	unsigned char has_param;
+#if (defined OS_FreeBSD)
+	const char * const transformation;
+#endif /* (defined OS_FreeBSD) */
+
+	mount_option_validation_function_t validation_function;
+};
+
+struct dtmd_mount_option_list
+{
+	const struct dtmd_mount_option * const item;
 };
 
 struct dtmd_filesystem_options
 {
 	const char * const external_fstype;
+
+#if (defined OS_FreeBSD)
+	const char * const mount_cmd;
+#endif /* (defined OS_FreeBSD) */
+
 	const char * const fstype;
-	const struct dtmd_mount_option * const options;
+	const struct dtmd_mount_option_list * const options;
 	const char * const option_uid;
+
+#if (defined OS_FreeBSD)
+	const char * const option_uid_transformation;
+#endif /* (defined OS_FreeBSD) */
+
 	const char * const option_gid;
+
+#if (defined OS_FreeBSD)
+	const char * const option_gid_transformation;
+#endif /* (defined OS_FreeBSD) */
+
 	const char * const defaults;
+	const char * const mandatory_options;
 };
 
 struct dtmd_string_to_mount_flag
@@ -53,23 +85,31 @@ struct dtmd_string_to_mount_flag
 struct dtmd_fsopts_list_item
 {
 	struct dtmd_string_to_mount_flag option;
-	unsigned int option_full_len;
-	unsigned int option_len;
+	size_t option_full_len;
+	size_t option_len;
+
+#if (defined OS_FreeBSD)
+	const char *transformation_string;
+#endif /* (defined OS_FreeBSD) */
 };
 
 struct dtmd_fsopts_list_id
 {
-	const char *id_option;
-	unsigned int id_option_len;
+	const char * id_option;
+	size_t id_option_len;
 
 	char *id_option_value;
-	unsigned int id_option_value_len;
+	size_t id_option_value_len;
+
+#if (defined OS_FreeBSD)
+	unsigned char transformed;
+#endif /* (defined OS_FreeBSD) */
 };
 
 typedef struct dtmd_fsopts_list
 {
 	struct dtmd_fsopts_list_item **options;
-	unsigned int options_count;
+	size_t options_count;
 
 	struct dtmd_fsopts_list_id option_uid;
 	struct dtmd_fsopts_list_id option_gid;
@@ -82,16 +122,24 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 void free_options_list(dtmd_fsopts_list_t *fsopts_list);
 
 int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
-	unsigned int *options_full_string_length,
+	size_t *options_full_string_length,
 	char *options_full_string_buffer,
-	unsigned int options_full_string_buffer_size,
-	unsigned int *options_string_length,
+	size_t options_full_string_buffer_size
+#if (defined OS_Linux)
+	,
+	size_t *options_string_length,
 	char *options_string_buffer,
-	unsigned int options_string_buffer_size,
-	unsigned long *mount_flags);
+	size_t options_string_buffer_size,
+	unsigned long *mount_flags
+#endif /* (defined OS_Linux) */
+	);
 
 int invoke_list_supported_filesystems(int client_number);
 int invoke_list_supported_filesystem_options(int client_number, const char *filesystem);
+
+#if (defined OS_FreeBSD)
+char* convert_option_flags_to_string(uint64_t flags);
+#endif /* (defined OS_FreeBSD) */
 
 #ifdef __cplusplus
 }

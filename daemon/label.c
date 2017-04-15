@@ -45,7 +45,7 @@ char* decode_label(const char *label)
 	int i;
 	int k;
 
-	result = malloc((strlen(label)*4)+1);
+	result = (char*) malloc((strlen(label)*4)+1);
 	if (result == NULL)
 	{
 		return NULL;

@@ -18,16 +18,23 @@
  *
  */
 
+#if (defined OS_FreeBSD)
+#define _WITH_DPRINTF
+#endif /* (defined OS_FreeBSD) */
+
 #include "daemon/filesystem_opts.h"
 
 #include "daemon/lists.h"
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
 
+#include <dtmd-misc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/mount.h>
+#include <ctype.h>
 
 /* option: flag and strings
 MS_BIND (Linux 2.4 onward)
@@ -61,6 +68,20 @@ MS_SYNCHRONOUS
 	sync
  */
 
+static int validate_is_single_int(const char *option, int option_len);
+static int validate_is_access_mode(const char *option, int option_len);
+static int validate_is_string(const char *option, int option_len);
+static int validate_is_decimal_number(const char *option, int option_len);
+static int validate_is_octal_number(const char *option, int option_len);
+
+#if (defined OS_Linux)
+static int validate_vfat_is_shortname(const char *option, int option_len);
+static int validate_vfat_is_check(const char *option, int option_len);
+static int validate_vfat_is_conv(const char *option, int option_len);
+static int validate_iso9660_is_block(const char *option, int option_len);
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_Linux)
 static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 {
 	{ "dirsync",     MS_DIRSYNC,     1 },
@@ -83,60 +104,112 @@ static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
 	{ "loud",        MS_SILENT,      0 },
 	{ "strictatime", MS_STRICTATIME, 1 },
 	{ "sync",        MS_SYNCHRONOUS, 1 },
+	{ "nosync",      MS_SYNCHRONOUS, 0 },
 	{ NULL,          0,              0 }
 };
 
+static const struct dtmd_mount_option any_fs_allowed_list[] =
+{
+	{ "nodev",      0, NULL },
+	{ "nosuid",     0, NULL },
+	{ "atime",      0, NULL },
+	{ "noatime",    0, NULL },
+	{ "nodiratime", 0, NULL },
+	{ "ro",         0, NULL },
+	{ "rw",         0, NULL },
+	{ NULL,         0, NULL }
+};
+
+static const struct dtmd_mount_option common_fs_allowed_list[] =
+{
+	{ "exec",    0, NULL },
+	{ "noexec",  0, NULL },
+	{ "sync",    0, NULL },
+	{ "nosync",  0, NULL },
+	{ "dirsync", 0, NULL },
+	{ NULL,      0, NULL }
+};
 static const struct dtmd_mount_option vfat_allow[] =
 {
-	{ "flush",        0 },
-	{ "utf8=",        1 },
-	{ "shortname=",   1 },
-	{ "umask=",       1 },
-	{ "dmask=",       1 },
-	{ "fmask=",       1 },
-	{ "codepage=",    1 },
-	{ "iocharset=",   1 },
-	{ "showexec",     0 },
-	{ "blocksize=",   1 },
-	{ "allow_utime=", 1 },
-	{ "check=",       1 },
-	{ "conv=",        1 },
-	{ NULL,           0 }
+	{ "flush",        0, NULL },
+	{ "utf8=",        1, &validate_is_single_int },
+	{ "shortname=",   1, &validate_vfat_is_shortname },
+	{ "umask=",       1, &validate_is_access_mode },
+	{ "dmask=",       1, &validate_is_access_mode },
+	{ "fmask=",       1, &validate_is_access_mode },
+	{ "codepage=",    1, &validate_is_string },
+	{ "iocharset=",   1, &validate_is_string },
+	{ "showexec",     0, NULL },
+	{ "blocksize=",   1, &validate_is_decimal_number },
+	{ "allow_utime=", 1, &validate_is_octal_number },
+	{ "check=",       1, &validate_vfat_is_check },
+	{ "conv=",        1, &validate_vfat_is_conv },
+	{ NULL,           0, NULL }
+};
+
+static const struct dtmd_mount_option_list vfat_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ vfat_allow             },
+	{ NULL                   }
 };
 
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
-	{ "umask=",        1 },
-	{ "dmask=",        1 },
-	{ "fmask=",        1 },
-	{ "iocharset=",    1 },
-	{ "utf8",          0 },
-	{ "windows_names", 0 },
-	{ "allow_other",   0 },
-	{ NULL,            0 }
+	{ "umask=",        1, &validate_is_access_mode },
+	{ "dmask=",        1, &validate_is_access_mode },
+	{ "fmask=",        1, &validate_is_access_mode },
+	{ "iocharset=",    1, &validate_is_string },
+	{ "utf8",          0, NULL },
+	{ "windows_names", 0, NULL },
+	{ "allow_other",   0, NULL },
+	{ "norecover",     0, NULL },
+	{ NULL,            0, NULL }
+};
+
+static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ ntfs3g_allow        },
+	{ NULL                }
 };
 
 static const struct dtmd_mount_option iso9660_allow[] =
 {
-	{ "norock",     0 },
-	{ "nojoliet",   0 },
-	{ "iocharset=", 1 },
-	{ "mode=",      1 },
-	{ "dmode=",     1 },
-	{ "utf8",       0 },
-	{ "block=",     1 },
-	{ "conv=",      1 },
-	{ NULL,         0 }
+	{ "norock",     0, NULL },
+	{ "nojoliet",   0, NULL },
+	{ "iocharset=", 1, &validate_is_string },
+	{ "mode=",      1, &validate_is_access_mode },
+	{ "utf8",       0, NULL },
+	{ "block=",     1, &validate_iso9660_is_block },
+	{ NULL,         0, NULL }
+};
+
+static const struct dtmd_mount_option_list iso9660_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ iso9660_allow          },
+	{ NULL                   }
 };
 
 static const struct dtmd_mount_option udf_allow[] =
 {
-	{ "iocharset=", 1 },
-	{ "umask=",     1 },
-	{ "mode=",      1 },
-	{ "dmode=",     1 },
-	{ "undelete",   0 },
-	{ NULL,         0 }
+	{ "iocharset", 0, NULL },
+	{ "umask=",    1, &validate_is_access_mode },
+	{ "undelete",  0, NULL },
+	{ "unhide",    0, NULL },
+	{ "nostrict",  0, NULL },
+	{ NULL,        0, NULL }
+};
+
+static const struct dtmd_mount_option_list udf_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ udf_allow              },
+	{ NULL                   }
 };
 
 static const struct dtmd_filesystem_options filesystem_mount_options[] =
@@ -144,44 +217,50 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
 		"vfat",
-		vfat_allow,
+		vfat_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush"
+		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush",
+		"nodev,nosuid"
 	},
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
 		"ntfs-3g",
-		ntfs3g_allow,
+		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,dmask=0077"
+		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077",
+		"nodev,nosuid,norecover"
 	},
 	{
 		"ntfs-3g", /* EXTERNAL MOUNT */
 		"ntfs",
-		ntfs3g_allow,
+		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,dmask=0077"
+		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077",
+		"nodev,nosuid,norecover"
 	},
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
 		"iso9660",
-		iso9660_allow,
+		iso9660_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,mode=0400,dmode=0500"
+		"ro,nodev,nosuid,iocharset=utf8,mode=0400",
+		"nodev,nosuid"
 	},
 	{
 		NULL, /* NOT EXTERNAL MOUNT */
 		"udf",
-		udf_allow,
+		udf_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset=utf8,umask=0077"
+		"ro,nodev,nosuid,iocharset,umask=0077",
+		"nodev,nosuid"
 	},
 	{
+		NULL,
 		NULL,
 		NULL,
 		NULL,
@@ -191,21 +270,244 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 	}
 };
 
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+static const struct dtmd_string_to_mount_flag string_to_mount_flag_list[] =
+{
+	{ "ro",         MNT_RDONLY,      1 },
+	{ "rw",         MNT_RDONLY,      0 },
+	{ "noexec",     MNT_NOEXEC,      1 },
+	{ "exec",       MNT_NOEXEC,      0 },
+	{ "nosuid",     MNT_NOSUID,      1 },
+	{ "suid",       MNT_NOSUID,      0 },
+	{ "noatime",    MNT_NOATIME,     1 },
+	{ "atime",      MNT_NOATIME,     0 },
+	{ "noclusterr", MNT_NOCLUSTERR,  1 },
+	{ "clusterr",   MNT_NOCLUSTERR,  0 },
+	{ "noclusterw", MNT_NOCLUSTERW,  1 },
+	{ "clusterw",   MNT_NOCLUSTERW,  0 },
+	{ "sync",       MNT_SYNCHRONOUS, 1 },
+	{ "nosync",     MNT_SYNCHRONOUS, 0 },
+	{ "async",      MNT_ASYNC,       1 },
+	{ "noasync",    MNT_ASYNC,       0 },
+#ifdef MNT_ACLS
+	{ "acls",       MNT_ACLS,        1 },
+	{ "noacls",     MNT_ACLS,        0 },
+#endif /* MNT_ACLS */
+#ifdef MNT_NODEV
+	{ "dev",        MNT_NODEV,       0 },
+	{ "nodev",      MNT_NODEV,       1 },
+#endif /* MNT_NODEV */
+	{ NULL,         0,               0 }
+};
+
 static const struct dtmd_mount_option any_fs_allowed_list[] =
 {
-	{ "exec",       0 },
-	{ "noexec",     0 },
-	{ "nodev",      0 },
-	{ "nosuid",     0 },
-	{ "atime",      0 },
-	{ "noatime",    0 },
-	{ "nodiratime", 0 },
-	{ "ro",         0 },
-	{ "rw",         0 },
-	{ "sync",       0 },
-	{ "dirsync",    0 },
-	{ NULL,         0 }
+	{ "noatime",    0, NULL, NULL },
+	{ "atime",      0, NULL, NULL },
+	{ "nosuid",     0, NULL, NULL },
+	{ "ro",         0, NULL, NULL },
+	{ "rw",         0, NULL, NULL },
+#ifdef MNT_NODEV
+	{ "nodev",      0, NULL, NULL },
+#endif /* MNT_NODEV */
+	{ NULL,         0, NULL, NULL }
 };
+
+static const struct dtmd_mount_option common_fs_allowed_list[] =
+{
+	{ "noexec",     0, NULL, NULL },
+	{ "noclusterr", 0, NULL, NULL },
+	{ "clusterr",   0, NULL, NULL },
+	{ "noclusterw", 0, NULL, NULL },
+	{ "clusterw",   0, NULL, NULL },
+	{ "sync",       0, NULL, NULL },
+	{ "nosync",     0, NULL, NULL },
+	{ "async",      0, NULL, NULL },
+	{ "noasync",    0, NULL, NULL },
+#ifdef MNT_ACLS
+	{ "acls",       0, NULL, NULL },
+	{ "noacls",     0, NULL, NULL },
+#endif /* MNT_NOACLS */
+	{ NULL,         0, NULL, NULL }
+};
+static const struct dtmd_mount_option vfat_allow[] =
+{
+	{ "large",      0, NULL,  NULL },
+	{ "longnames",  0, NULL,  NULL },
+	{ "shortnames", 0, NULL,  NULL },
+	{ "nowin95",    0, NULL,  NULL },
+	{ "dmask=",     1, "-M ", &validate_is_access_mode },
+	{ "fmask=",     1, "-m ", &validate_is_access_mode },
+	{ "codepage=",  1, "-D ", &validate_is_string },
+	{ "iocharset=", 1, "-L ", &validate_is_string },
+	{ NULL,         0, NULL,  NULL }
+};
+
+static const struct dtmd_mount_option_list vfat_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ vfat_allow             },
+	{ NULL                   }
+};
+
+static const struct dtmd_mount_option ntfs3g_allow[] =
+{
+	{ "relatime",      0, NULL, NULL },
+	{ "umask=",        1, NULL, &validate_is_access_mode },
+	{ "dmask=",        1, NULL, &validate_is_access_mode },
+	{ "fmask=",        1, NULL, &validate_is_access_mode },
+	{ "iocharset=",    1, NULL, &validate_is_string },
+	{ "utf8",          0, NULL, NULL },
+	{ "windows_names", 0, NULL, NULL },
+	{ "allow_other",   0, NULL, NULL },
+	{ "norecover",     0, NULL, NULL },
+	{ NULL,            0, NULL, NULL }
+};
+
+static const struct dtmd_mount_option_list ntfs3g_allow_list[] =
+{
+	{ any_fs_allowed_list },
+	{ ntfs3g_allow        },
+	{ NULL                }
+};
+
+// TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
+#if 0
+static const struct dtmd_mount_option iso9660_allow[] =
+{
+	{ "extatt",       0, NULL,  NULL },
+	{ "gens",         0, NULL,  NULL },
+	{ "nojoliet",     0, NULL,  NULL },
+	{ "norrip",       0, NULL,  NULL },
+	{ "brokenjoliet", 0, NULL,  NULL },
+	{ "iocharset=",   1, "-C ", &validate_is_string },
+	{ NULL,           0, NULL,  NULL }
+};
+
+static const struct dtmd_mount_option_list iso9660_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ iso9660_allow          },
+	{ NULL                   }
+};
+
+static const struct dtmd_mount_option udf_allow[] =
+{
+	{ "iocharset=",   1, "-C ", &validate_is_string },
+	{ NULL,           0, NULL,  NULL }
+};
+
+static const struct dtmd_mount_option_list udf_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ udf_allow              },
+	{ NULL                   }
+};
+#endif /* 0 */
+
+static const struct dtmd_filesystem_options filesystem_mount_options[] =
+{
+	{
+		"msdosfs",
+		"mount_msdosfs",
+		"fat32",
+		vfat_allow_list,
+		"uid=",
+		"-u ",
+		"gid=",
+		"-g ",
+		"rw,nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",dmask=755",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+	},
+	{
+		"ntfs",
+		"ntfs-3g",
+		"ntfs",
+		ntfs3g_allow_list,
+		"uid=",
+		NULL,
+		"gid=",
+		NULL,
+		"rw"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,allow_other,windows_names,dmask=0077",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",norecover"
+	},
+// TODO: enable iso9660 and udf filesystems when cd/dvd disks are supported
+#if 0
+	{
+		"cd9660",
+		"mount_cd9660",
+		"cd9660",
+		iso9660_allow_list,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		"ro"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,iocharset=utf8",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+	},
+	{
+		"udf",
+		"mount_udf",
+		"udf",
+		udf_allow_list,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		"ro"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+		",nosuid,iocharset=utf8",
+		"nosuid"
+#ifdef MNT_NODEV
+		",nodev"
+#endif /* MNT_NODEV */
+	},
+#endif /* 0 */
+	{
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL
+	}
+};
+
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 {
@@ -234,30 +536,15 @@ const struct dtmd_filesystem_options* get_fsopts_for_fs(const char *filesystem)
 	}
 }
 
-static const struct dtmd_mount_option* find_option_in_list(const char *option, unsigned int option_len, const struct dtmd_filesystem_options *filesystem_list)
+static const struct dtmd_mount_option* find_option_in_list(const char *option, size_t option_len, const struct dtmd_filesystem_options *filesystem_list)
 {
 	const struct dtmd_mount_option *option_list;
-	unsigned int minlen;
-	const struct dtmd_mount_option *options_lists_array[2];
-	unsigned int array_index;
-	unsigned int array_size;
+	size_t minlen;
+	const struct dtmd_mount_option_list *options_lists_array;
 
-	options_lists_array[0] = any_fs_allowed_list;
-
-	if (filesystem_list != NULL)
+	for (options_lists_array = filesystem_list->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
 	{
-		options_lists_array[1] = filesystem_list->options;
-		array_size = sizeof(options_lists_array)/sizeof(options_lists_array[0]);
-	}
-	else
-	{
-		options_lists_array[1] = NULL;
-		array_size = sizeof(options_lists_array)/sizeof(options_lists_array[0]) - 1;
-	}
-
-	for (array_index = 0; array_index < array_size; ++array_index)
-	{
-		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
+		for (option_list = options_lists_array->item; option_list->option != NULL; ++option_list)
 		{
 			if (option_list->has_param)
 			{
@@ -318,7 +605,7 @@ static void free_options_list_id(struct dtmd_fsopts_list_id *id)
 
 void free_options_list(dtmd_fsopts_list_t *fsopts_list)
 {
-	unsigned int index = 0;
+	size_t index = 0;
 
 	if (fsopts_list != NULL)
 	{
@@ -350,18 +637,19 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 
 	const char *opt_start;
 	const char *opt_end;
-	unsigned int opt_len;
+	size_t opt_len;
 	int result;
 
-	unsigned int option_index;
+	size_t option_index;
 
 	struct dtmd_fsopts_list_item *option_item;
 	void *tmp;
 
 	if ((options_list == NULL)
-		|| (fsopts_list == NULL))
+		|| (fsopts_list == NULL)
+		|| (fsopts == NULL))
 	{
-		WRITE_LOG(LOG_ERR, "Bug: parameter 'options list' or 'filesystem options list' of  is empty");
+		WRITE_LOG(LOG_ERR, "Bug: one of required parameters is empty");
 		return result_bug;
 	}
 
@@ -394,6 +682,17 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			if (option_params == NULL)
 			{
 				return result_fail;
+			}
+
+			if (option_params->validation_function != NULL)
+			{
+				result = strlen(option_params->option);
+				result = option_params->validation_function(opt_start + result, opt_len - result);
+				if (is_result_failure(result))
+				{
+					WRITE_LOG_ARGS(LOG_WARNING, "Failed to validate options parameters: %s", options_list);
+					return result;
+				}
 			}
 
 			mntflagslist = string_to_mount_flag_list;
@@ -472,8 +771,11 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			}
 
 			// fill item
-			option_item->option.option   = opt_start;
-			option_item->option_full_len = opt_len;
+			option_item->option.option         = opt_start;
+			option_item->option_full_len       = opt_len;
+#if (defined OS_FreeBSD)
+			option_item->transformation_string = option_params->transformation;
+#endif /* (defined OS_FreeBSD) */
 
 			if (mntflagslist->option == NULL)
 			{
@@ -504,6 +806,8 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				return result_fatal_error;
 			}
 
+			free_options_list_id(&(fsopts_list->option_uid));
+
 			fsopts_list->option_uid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_uid.id_option_value == NULL)
 			{
@@ -519,8 +823,22 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			}
 
 			fsopts_list->option_uid.id_option_value_len = result;
-			fsopts_list->option_uid.id_option     = fsopts->option_uid;
-			fsopts_list->option_uid.id_option_len = strlen(fsopts->option_uid);
+#if (defined OS_FreeBSD)
+			if (fsopts->option_uid_transformation == NULL)
+			{
+#endif /* (defined OS_FreeBSD) */
+				fsopts_list->option_uid.id_option     = fsopts->option_uid;
+				fsopts_list->option_uid.id_option_len = strlen(fsopts->option_uid);
+#if (defined OS_FreeBSD)
+				fsopts_list->option_uid.transformed   = 0;
+			}
+			else
+			{
+				fsopts_list->option_uid.id_option     = fsopts->option_uid_transformation;
+				fsopts_list->option_uid.id_option_len = strlen(fsopts->option_uid_transformation);
+				fsopts_list->option_uid.transformed   = 1;
+			}
+#endif /* (defined OS_FreeBSD) */
 		}
 
 		if ((gid != NULL) && (fsopts->option_gid != NULL))
@@ -531,6 +849,8 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 				WRITE_LOG(LOG_ERR, "Gid to string conversion failed");
 				return result_fatal_error;
 			}
+
+			free_options_list_id(&(fsopts_list->option_gid));
 
 			fsopts_list->option_gid.id_option_value = (char*) malloc(result + 1);
 			if (fsopts_list->option_gid.id_option_value == NULL)
@@ -547,8 +867,22 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 			}
 
 			fsopts_list->option_gid.id_option_value_len = result;
-			fsopts_list->option_gid.id_option     = fsopts->option_gid;
-			fsopts_list->option_gid.id_option_len = strlen(fsopts->option_gid);
+#if (defined OS_FreeBSD)
+			if (fsopts->option_gid_transformation == NULL)
+			{
+#endif /* (defined OS_FreeBSD) */
+				fsopts_list->option_gid.id_option     = fsopts->option_gid;
+				fsopts_list->option_gid.id_option_len = strlen(fsopts->option_gid);
+#if (defined OS_FreeBSD)
+				fsopts_list->option_gid.transformed   = 0;
+			}
+			else
+			{
+				fsopts_list->option_gid.id_option     = fsopts->option_gid_transformation;
+				fsopts_list->option_gid.id_option_len = strlen(fsopts->option_gid_transformation);
+				fsopts_list->option_gid.transformed   = 1;
+			}
+#endif /* (defined OS_FreeBSD) */
 		}
 	}
 
@@ -556,20 +890,31 @@ int convert_options_to_list(const char *options_list, const struct dtmd_filesyst
 }
 
 int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
-	unsigned int *options_full_string_length,
+	size_t *options_full_string_length,
 	char *options_full_string_buffer,
-	unsigned int options_full_string_buffer_size,
-	unsigned int *options_string_length,
+	size_t options_full_string_buffer_size
+#if (defined OS_Linux)
+	,
+	size_t *options_string_length,
 	char *options_string_buffer,
-	unsigned int options_string_buffer_size,
-	unsigned long *mount_flags)
+	size_t options_string_buffer_size,
+	unsigned long *mount_flags
+#endif /* (defined OS_Linux) */
+	)
 {
-	unsigned int string_len_full = 0;
-	unsigned int string_len = 0;
-	unsigned int index;
-	unsigned int current_item_full = 0;
-	unsigned int current_item = 0;
+	size_t string_len_full = 0;
+	size_t current_item_full = 0;
+	size_t index;
+
+#if (defined OS_Linux)
+	size_t string_len = 0;
+	size_t current_item = 0;
 	unsigned long flags = 0;
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+	unsigned int transformation;
+#endif /* (defined OS_FreeBSD) */
 
 	if (fsopts_list == NULL)
 	{
@@ -577,299 +922,425 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 		return result_bug;
 	}
 
-	if (fsopts_list->options != NULL)
+#if (defined OS_FreeBSD)
+	for (transformation = 0; transformation < 2; ++transformation)
 	{
-		for (index = 0; index < fsopts_list->options_count; ++index)
+#endif /* (defined OS_FreeBSD) */
+		if (fsopts_list->options != NULL)
 		{
-			// full string
-			if (current_item_full > 0)
+			for (index = 0; index < fsopts_list->options_count; ++index)
 			{
-				if ((options_full_string_buffer != NULL)
-					&& (string_len_full + 1 <= options_full_string_buffer_size))
+#if (defined OS_FreeBSD)
+				if ((transformation && (fsopts_list->options[index]->transformation_string != NULL))
+					|| ((!transformation) && (fsopts_list->options[index]->transformation_string == NULL)))
 				{
-					options_full_string_buffer[string_len_full] = ',';
-				}
-
-				++string_len_full;
-			}
-
-			if (options_full_string_buffer != NULL)
-			{
-				if (string_len_full + fsopts_list->options[index]->option_full_len <= options_full_string_buffer_size)
-				{
-					memcpy(&(options_full_string_buffer[string_len_full]),
-						fsopts_list->options[index]->option.option,
-						fsopts_list->options[index]->option_full_len);
-				}
-				else if (string_len_full < options_full_string_buffer_size)
-				{
-					memcpy(&(options_full_string_buffer[string_len_full]),
-						fsopts_list->options[index]->option.option,
-						options_full_string_buffer_size - string_len_full);
-				}
-			}
-
-			string_len_full += fsopts_list->options[index]->option_full_len;
-			++current_item_full;
-
-			// string
-			if (!fsopts_list->options[index]->option.flag)
-			{
-				if (current_item > 0)
-				{
-					if ((options_string_buffer != NULL)
-						&& (string_len + 1 <= options_string_buffer_size))
+#endif /* (defined OS_FreeBSD) */
+					// full string
+					if (current_item_full > 0)
 					{
-						options_string_buffer[string_len] = ',';
+						if ((options_full_string_buffer != NULL)
+							&& (string_len_full + 1 <= options_full_string_buffer_size))
+						{
+#if (defined OS_Linux)
+							options_full_string_buffer[string_len_full] = ',';
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+							options_full_string_buffer[string_len_full] = ((transformation == 0) ? ',' : ' ');
+#endif /* (defined OS_FreeBSD) */
+						}
+
+						++string_len_full;
+					}
+#if (defined OS_FreeBSD)
+					else
+					{
+						// TODO: use strncat for copying instead of manual checks and memcpy?
+						if (options_full_string_buffer != NULL)
+						{
+							if (string_len_full + strlen("-o ") <= options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									"-o ",
+									strlen("-o "));
+							}
+							else if (string_len_full < options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									"-o ",
+									options_full_string_buffer_size - string_len_full);
+							}
+						}
+
+						string_len_full += strlen("-o ");
+					}
+#endif /* (defined OS_FreeBSD) */
+
+					if (options_full_string_buffer != NULL)
+					{
+#if (defined OS_FreeBSD)
+						if (fsopts_list->options[index]->transformation_string == NULL)
+						{
+#endif /* (defined OS_FreeBSD) */
+							if (string_len_full + fsopts_list->options[index]->option_full_len <= options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									fsopts_list->options[index]->option.option,
+									fsopts_list->options[index]->option_full_len);
+							}
+							else if (string_len_full < options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									fsopts_list->options[index]->option.option,
+									options_full_string_buffer_size - string_len_full);
+							}
+#if (defined OS_FreeBSD)
+						}
+						else
+						{
+							if (string_len_full + strlen(fsopts_list->options[index]->transformation_string) <= options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									fsopts_list->options[index]->transformation_string,
+									strlen(fsopts_list->options[index]->transformation_string));
+
+								if (fsopts_list->options[index]->option_full_len != fsopts_list->options[index]->option_len)
+								{
+									if (string_len_full + strlen(fsopts_list->options[index]->transformation_string) + fsopts_list->options[index]->option_full_len -fsopts_list->options[index]->option_len <= options_full_string_buffer_size)
+									{
+										memcpy(&(options_full_string_buffer[string_len_full + strlen(fsopts_list->options[index]->transformation_string)]),
+											&(fsopts_list->options[index]->option.option[fsopts_list->options[index]->option_len]),
+											fsopts_list->options[index]->option_full_len - fsopts_list->options[index]->option_len);
+									}
+									else if (string_len_full + strlen(fsopts_list->options[index]->transformation_string) < options_full_string_buffer_size)
+									{
+										memcpy(&(options_full_string_buffer[string_len_full + strlen(fsopts_list->options[index]->transformation_string)]),
+											&(fsopts_list->options[index]->option.option[fsopts_list->options[index]->option_len]),
+											options_full_string_buffer_size - string_len_full - strlen(fsopts_list->options[index]->transformation_string));
+									}
+								}
+							}
+							else if (string_len_full < options_full_string_buffer_size)
+							{
+								memcpy(&(options_full_string_buffer[string_len_full]),
+									fsopts_list->options[index]->transformation_string,
+									options_full_string_buffer_size - string_len_full);
+							}
+						}
+#endif /* (defined OS_FreeBSD) */
 					}
 
-					++string_len;
-				}
-
-				if (options_string_buffer != NULL)
-				{
-					if (string_len + fsopts_list->options[index]->option_full_len <= options_string_buffer_size)
+#if (defined OS_FreeBSD)
+					if (fsopts_list->options[index]->transformation_string == NULL)
 					{
-						memcpy(&(options_string_buffer[string_len]),
-							fsopts_list->options[index]->option.option,
-							fsopts_list->options[index]->option_full_len);
+#endif /* (defined OS_FreeBSD) */
+						string_len_full += fsopts_list->options[index]->option_full_len;
+#if (defined OS_FreeBSD)
 					}
-					else if (string_len < options_string_buffer_size)
+					else
 					{
-						memcpy(&(options_string_buffer[string_len]),
-							fsopts_list->options[index]->option.option,
-							options_string_buffer_size - string_len);
+						string_len_full += fsopts_list->options[index]->option_full_len - fsopts_list->options[index]->option_len + strlen(fsopts_list->options[index]->transformation_string);
 					}
+#endif /* (defined OS_FreeBSD) */
+					++current_item_full;
+#if (defined OS_FreeBSD)
 				}
+#endif /* (defined OS_FreeBSD) */
 
-				string_len += fsopts_list->options[index]->option_full_len;
-				++current_item;
-			}
-			else
-			{
-				if (fsopts_list->options[index]->option.enabled)
+#if (defined OS_Linux)
+				// string
+				if (!fsopts_list->options[index]->option.flag)
 				{
-					flags |= fsopts_list->options[index]->option.flag;
+					if (current_item > 0)
+					{
+						if ((options_string_buffer != NULL)
+							&& (string_len + 1 <= options_string_buffer_size))
+						{
+							options_string_buffer[string_len] = ',';
+						}
+
+						++string_len;
+					}
+
+					if (options_string_buffer != NULL)
+					{
+						if (string_len + fsopts_list->options[index]->option_full_len <= options_string_buffer_size)
+						{
+							memcpy(&(options_string_buffer[string_len]),
+								fsopts_list->options[index]->option.option,
+								fsopts_list->options[index]->option_full_len);
+						}
+						else if (string_len < options_string_buffer_size)
+						{
+							memcpy(&(options_string_buffer[string_len]),
+								fsopts_list->options[index]->option.option,
+								options_string_buffer_size - string_len);
+						}
+					}
+
+					string_len += fsopts_list->options[index]->option_full_len;
+					++current_item;
 				}
 				else
 				{
-					flags &= ~(fsopts_list->options[index]->option.flag);
+					if (fsopts_list->options[index]->option.enabled)
+					{
+						flags |= fsopts_list->options[index]->option.flag;
+					}
+					else
+					{
+						flags &= ~(fsopts_list->options[index]->option.flag);
+					}
+				}
+#endif /* (defined OS_Linux) */
+			}
+		}
+
+		// uid
+		if ((fsopts_list->option_uid.id_option_value != NULL)
+			&& (fsopts_list->option_uid.id_option != NULL))
+		{
+#if (defined OS_FreeBSD)
+			if (transformation == fsopts_list->option_uid.transformed)
+			{
+#endif /* (defined OS_FreeBSD) */
+				// full string
+				if (current_item_full > 0)
+				{
+					if ((options_full_string_buffer != NULL)
+						&& (string_len_full + 1 <= options_full_string_buffer_size))
+					{
+#if (defined OS_Linux)
+							options_full_string_buffer[string_len_full] = ',';
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+							options_full_string_buffer[string_len_full] = ((transformation == 0) ? ',' : ' ');
+#endif /* (defined OS_FreeBSD) */
+					}
+
+					++string_len_full;
+				}
+
+				if (options_full_string_buffer != NULL)
+				{
+					if (string_len_full + fsopts_list->option_uid.id_option_len <= options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_uid.id_option,
+							fsopts_list->option_uid.id_option_len);
+					}
+					else if (string_len_full < options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_uid.id_option,
+							options_full_string_buffer_size - string_len_full);
+					}
+				}
+
+				string_len_full += fsopts_list->option_uid.id_option_len;
+
+				if (options_full_string_buffer != NULL)
+				{
+					if (string_len_full + fsopts_list->option_uid.id_option_value_len <= options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_uid.id_option_value,
+							fsopts_list->option_uid.id_option_value_len);
+					}
+					else if (string_len_full < options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_uid.id_option_value,
+							options_full_string_buffer_size - string_len_full);
+					}
+				}
+
+				string_len_full += fsopts_list->option_uid.id_option_value_len;
+				++current_item_full;
+#if (defined OS_FreeBSD)
+			}
+#endif /* (defined OS_FreeBSD) */
+
+#if (defined OS_Linux)
+			// string
+			if (current_item > 0)
+			{
+				if ((options_string_buffer != NULL)
+					&& (string_len + 1 <= options_string_buffer_size))
+				{
+					options_string_buffer[string_len] = ',';
+				}
+
+				++string_len;
+			}
+
+			if (options_string_buffer != NULL)
+			{
+				if (string_len + fsopts_list->option_uid.id_option_len <= options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_uid.id_option,
+						fsopts_list->option_uid.id_option_len);
+				}
+				else if (string_len < options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_uid.id_option,
+						options_string_buffer_size - string_len);
 				}
 			}
+
+			string_len += fsopts_list->option_uid.id_option_len;
+
+			if (options_string_buffer != NULL)
+			{
+				if (string_len + fsopts_list->option_uid.id_option_value_len <= options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_uid.id_option_value,
+						fsopts_list->option_uid.id_option_value_len);
+				}
+				else if (string_len < options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_uid.id_option_value,
+						options_string_buffer_size - string_len);
+				}
+			}
+
+			string_len += fsopts_list->option_uid.id_option_value_len;
+			++current_item;
+#endif /* (defined OS_Linux) */
 		}
+
+		// gid
+		if ((fsopts_list->option_gid.id_option_value != NULL)
+			&& (fsopts_list->option_gid.id_option != NULL))
+		{
+#if (defined OS_FreeBSD)
+			if (transformation == fsopts_list->option_gid.transformed)
+			{
+#endif /* (defined OS_FreeBSD) */
+				// full string
+				if (current_item_full > 0)
+				{
+					if ((options_full_string_buffer != NULL)
+						&& (string_len_full + 1 <= options_full_string_buffer_size))
+					{
+#if (defined OS_Linux)
+						options_full_string_buffer[string_len_full] = ',';
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+						options_full_string_buffer[string_len_full] = ((transformation == 0) ? ',' : ' ');
+#endif /* (defined OS_FreeBSD) */
+					}
+
+					++string_len_full;
+				}
+
+				if (options_full_string_buffer != NULL)
+				{
+					if (string_len_full + fsopts_list->option_gid.id_option_len <= options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_gid.id_option,
+							fsopts_list->option_gid.id_option_len);
+					}
+					else if (string_len_full < options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_gid.id_option,
+							options_full_string_buffer_size - string_len_full);
+					}
+				}
+
+				string_len_full += fsopts_list->option_gid.id_option_len;
+
+				if (options_full_string_buffer != NULL)
+				{
+					if (string_len_full + fsopts_list->option_gid.id_option_value_len <= options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_gid.id_option_value,
+							fsopts_list->option_gid.id_option_value_len);
+					}
+					else if (string_len_full < options_full_string_buffer_size)
+					{
+						memcpy(&(options_full_string_buffer[string_len_full]),
+							fsopts_list->option_gid.id_option_value,
+							options_full_string_buffer_size - string_len_full);
+					}
+				}
+
+				string_len_full += fsopts_list->option_gid.id_option_value_len;
+				++current_item_full;
+#if (defined OS_FreeBSD)
+			}
+#endif /* (defined OS_FreeBSD) */
+
+#if (defined OS_Linux)
+			// string
+			if (current_item > 0)
+			{
+				if ((options_string_buffer != NULL)
+					&& (string_len + 1 <= options_string_buffer_size))
+				{
+					options_string_buffer[string_len] = ',';
+				}
+
+				++string_len;
+			}
+
+			if (options_string_buffer != NULL)
+			{
+				if (string_len + fsopts_list->option_gid.id_option_len <= options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_gid.id_option,
+						fsopts_list->option_gid.id_option_len);
+				}
+				else if (string_len < options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_gid.id_option,
+						options_string_buffer_size - string_len);
+				}
+			}
+
+			string_len += fsopts_list->option_gid.id_option_len;
+
+			if (options_string_buffer != NULL)
+			{
+				if (string_len + fsopts_list->option_gid.id_option_value_len <= options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_gid.id_option_value,
+						fsopts_list->option_gid.id_option_value_len);
+				}
+				else if (string_len < options_string_buffer_size)
+				{
+					memcpy(&(options_string_buffer[string_len]),
+						fsopts_list->option_gid.id_option_value,
+						options_string_buffer_size - string_len);
+				}
+			}
+
+			string_len += fsopts_list->option_gid.id_option_value_len;
+			++current_item;
+#endif /* (defined OS_Linux) */
+		}
+#if (defined OS_FreeBSD)
 	}
-
-	// uid
-	if ((fsopts_list->option_uid.id_option_value != NULL)
-		&& (fsopts_list->option_uid.id_option != NULL))
-	{
-		// full string
-		if (current_item_full > 0)
-		{
-			if ((options_full_string_buffer != NULL)
-				&& (string_len_full + 1 <= options_full_string_buffer_size))
-			{
-				options_full_string_buffer[string_len_full] = ',';
-			}
-
-			++string_len_full;
-		}
-
-		if (options_full_string_buffer != NULL)
-		{
-			if (string_len_full + fsopts_list->option_uid.id_option_len <= options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_uid.id_option,
-					fsopts_list->option_uid.id_option_len);
-			}
-			else if (string_len_full < options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_uid.id_option,
-					options_full_string_buffer_size - string_len_full);
-			}
-		}
-
-		string_len_full += fsopts_list->option_uid.id_option_len;
-
-		if (options_full_string_buffer != NULL)
-		{
-			if (string_len_full + fsopts_list->option_uid.id_option_value_len <= options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_uid.id_option_value,
-					fsopts_list->option_uid.id_option_value_len);
-			}
-			else if (string_len_full < options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_uid.id_option_value,
-					options_full_string_buffer_size - string_len_full);
-			}
-		}
-
-		string_len_full += fsopts_list->option_uid.id_option_value_len;
-		++current_item_full;
-
-		// string
-		if (current_item > 0)
-		{
-			if ((options_string_buffer != NULL)
-				&& (string_len + 1 <= options_string_buffer_size))
-			{
-				options_string_buffer[string_len] = ',';
-			}
-
-			++string_len;
-		}
-
-		if (options_string_buffer != NULL)
-		{
-			if (string_len + fsopts_list->option_uid.id_option_len <= options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_uid.id_option,
-					fsopts_list->option_uid.id_option_len);
-			}
-			else if (string_len < options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_uid.id_option,
-					options_string_buffer_size - string_len);
-			}
-		}
-
-		string_len += fsopts_list->option_uid.id_option_len;
-
-		if (options_string_buffer != NULL)
-		{
-			if (string_len + fsopts_list->option_uid.id_option_value_len <= options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_uid.id_option_value,
-					fsopts_list->option_uid.id_option_value_len);
-			}
-			else if (string_len < options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_uid.id_option_value,
-					options_string_buffer_size - string_len);
-			}
-		}
-
-		string_len += fsopts_list->option_uid.id_option_value_len;
-		++current_item;
-	}
-
-	// gid
-	if ((fsopts_list->option_gid.id_option_value != NULL)
-		&& (fsopts_list->option_gid.id_option != NULL))
-	{
-		// full string
-		if (current_item_full > 0)
-		{
-			if ((options_full_string_buffer != NULL)
-				&& (string_len_full + 1 <= options_full_string_buffer_size))
-			{
-				options_full_string_buffer[string_len_full] = ',';
-			}
-
-			++string_len_full;
-		}
-
-		if (options_full_string_buffer != NULL)
-		{
-			if (string_len_full + fsopts_list->option_gid.id_option_len <= options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_gid.id_option,
-					fsopts_list->option_gid.id_option_len);
-			}
-			else if (string_len_full < options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_gid.id_option,
-					options_full_string_buffer_size - string_len_full);
-			}
-		}
-
-		string_len_full += fsopts_list->option_gid.id_option_len;
-
-		if (options_full_string_buffer != NULL)
-		{
-			if (string_len_full + fsopts_list->option_gid.id_option_value_len <= options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_gid.id_option_value,
-					fsopts_list->option_gid.id_option_value_len);
-			}
-			else if (string_len_full < options_full_string_buffer_size)
-			{
-				memcpy(&(options_full_string_buffer[string_len_full]),
-					fsopts_list->option_gid.id_option_value,
-					options_full_string_buffer_size - string_len_full);
-			}
-		}
-
-		string_len_full += fsopts_list->option_gid.id_option_value_len;
-		++current_item_full;
-
-		// string
-		if (current_item > 0)
-		{
-			if ((options_string_buffer != NULL)
-				&& (string_len + 1 <= options_string_buffer_size))
-			{
-				options_string_buffer[string_len] = ',';
-			}
-
-			++string_len;
-		}
-
-		if (options_string_buffer != NULL)
-		{
-			if (string_len + fsopts_list->option_gid.id_option_len <= options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_gid.id_option,
-					fsopts_list->option_gid.id_option_len);
-			}
-			else if (string_len < options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_gid.id_option,
-					options_string_buffer_size - string_len);
-			}
-		}
-
-		string_len += fsopts_list->option_gid.id_option_len;
-
-		if (options_string_buffer != NULL)
-		{
-			if (string_len + fsopts_list->option_gid.id_option_value_len <= options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_gid.id_option_value,
-					fsopts_list->option_gid.id_option_value_len);
-			}
-			else if (string_len < options_string_buffer_size)
-			{
-				memcpy(&(options_string_buffer[string_len]),
-					fsopts_list->option_gid.id_option_value,
-					options_string_buffer_size - string_len);
-			}
-		}
-
-		string_len += fsopts_list->option_gid.id_option_value_len;
-		++current_item;
-	}
+#endif /* (defined OS_FreeBSD) */
 
 	if (options_full_string_length != NULL)
 	{
 		*options_full_string_length = string_len_full;
 	}
 
+#if (defined OS_Linux)
 	if (options_string_length != NULL)
 	{
 		*options_string_length = string_len;
@@ -879,6 +1350,7 @@ int fsopts_generate_string(dtmd_fsopts_list_t *fsopts_list,
 	{
 		*mount_flags = flags;
 	}
+#endif /* (defined OS_Linux) */
 
 	return result_success;
 }
@@ -900,11 +1372,13 @@ int invoke_list_supported_filesystems(int client_number)
 			break;
 		}
 
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#if (defined OS_Linux)
+#if (!defined DISABLE_EXT_MOUNT)
+#else /* (!defined DISABLE_EXT_MOUNT) */
 		if (fsopts->external_fstype == NULL)
 		{
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) */
 			if (first != 0)
 			{
 				first = 0;
@@ -921,10 +1395,12 @@ int invoke_list_supported_filesystems(int client_number)
 			{
 				return result_client_error;
 			}
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#if (defined OS_Linux)
+#if (!defined DISABLE_EXT_MOUNT)
+#else /* (!defined DISABLE_EXT_MOUNT) */
 		}
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#endif /* (!defined DISABLE_EXT_MOUNT) */
+#endif /* (defined OS_Linux) */
 
 		++fsopts;
 	}
@@ -941,18 +1417,17 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 {
 	const struct dtmd_filesystem_options *fsopts;
 	const struct dtmd_mount_option *option_list;
-	const struct dtmd_mount_option *options_lists_array[2];
-	unsigned int array_index;
+	const struct dtmd_mount_option_list *options_lists_array;
 	int first = 1;
 
 	fsopts = get_fsopts_for_fs(filesystem);
-#if (OS == Linux) && (!defined DISABLE_EXT_MOUNT)
-	if (fsopts == NULL)
-#else /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#if (defined OS_Linux) && (defined DISABLE_EXT_MOUNT)
 	if ((fsopts == NULL) || (fsopts->external_fstype != NULL))
-#endif /* (OS == Linux) && (!defined DISABLE_EXT_MOUNT) */
+#else /* (defined OS_Linux) && (defined DISABLE_EXT_MOUNT) */
+	if (fsopts == NULL)
+#endif /* (defined OS_Linux) && (defined DISABLE_EXT_MOUNT) */
 	{
-		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
+		if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\", \"%s\")\n", filesystem, dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype)) < 0)
 		{
 			return result_client_error;
 		}
@@ -960,17 +1435,14 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 		return result_fail;
 	}
 
-	options_lists_array[0] = any_fs_allowed_list;
-	options_lists_array[1] = fsopts->options;
-
 	if (dprintf(clients[client_number]->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n" dtmd_response_argument_supported_filesystem_options_lists "(", filesystem) < 0)
 	{
 		return result_client_error;
 	}
 
-	for (array_index = 0; array_index < 2; ++array_index)
+	for (options_lists_array = fsopts->options; (options_lists_array != NULL) && (options_lists_array->item != NULL); ++options_lists_array)
 	{
-		for (option_list = options_lists_array[array_index]; option_list->option != NULL; ++option_list)
+		for (option_list = options_lists_array->item; option_list->option != NULL; ++option_list)
 		{
 			if (first != 0)
 			{
@@ -998,3 +1470,216 @@ int invoke_list_supported_filesystem_options(int client_number, const char *file
 
 	return result_success;
 }
+
+#if (defined OS_FreeBSD)
+char* convert_option_flags_to_string(uint64_t flags)
+{
+	int length = 0;
+	int count = 0;
+	char *result;
+	const struct dtmd_string_to_mount_flag *mntflagslist;
+
+	// TODO: a loop or a helper function?
+
+	mntflagslist = string_to_mount_flag_list;
+	while (mntflagslist->option != NULL)
+	{
+		if (((mntflagslist->enabled) && ((flags & mntflagslist->flag) == mntflagslist->flag))
+			|| ((!(mntflagslist->enabled)) && ((flags & mntflagslist->flag) == 0)))
+		{
+			length += strlen(mntflagslist->option);
+			if (count > 0)
+			{
+				++length;
+			}
+
+			++count;
+		}
+
+		++mntflagslist;
+	}
+
+	result = (char*) malloc(length + 1);
+	if (result == NULL)
+	{
+		WRITE_LOG(LOG_ERR, "Memory allocation failure");
+		return NULL;
+	}
+
+	length = 0;
+	mntflagslist = string_to_mount_flag_list;
+	while (mntflagslist->option != NULL)
+	{
+		if (((mntflagslist->enabled) && ((flags & mntflagslist->flag) == mntflagslist->flag))
+			|| ((!(mntflagslist->enabled)) && ((flags & mntflagslist->flag) == 0)))
+		{
+			strcpy(&(result[length]), mntflagslist->option);
+			length += strlen(mntflagslist->option);
+
+			if (count > 0)
+			{
+				strcpy(&(result[length]), ",");
+				++length;
+			}
+
+			++count;
+		}
+
+		++mntflagslist;
+	}
+
+	return result;
+}
+
+#endif /* (defined OS_FreeBSD) */
+
+static int validate_is_single_int(const char *option, int option_len)
+{
+	if ((option_len == 1)
+		&& (((*option) == '0')
+			|| ((*option) == '1')))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_is_access_mode(const char *option, int option_len)
+{
+	if ((option_len != 4) || (option[0] != '0'))
+	{
+		return result_fail;
+	}
+
+	return validate_is_octal_number(option + 1, option_len - 1);
+}
+
+static int validate_is_string(const char *option, int option_len)
+{
+	int index;
+
+	for (index = 0; index < option_len; ++index)
+	{
+		if ((!isalnum(option[index]))
+			&& (option[index] != '-')
+			&& (option[index] != '_'))
+		{
+			return result_fail;
+		}
+	}
+
+	return result_success;
+}
+
+static int validate_is_decimal_number(const char *option, int option_len)
+{
+	int index;
+
+	for (index = 0; index < option_len; ++index)
+	{
+		if (!isdigit(option[index]))
+		{
+			return result_fail;
+		}
+	}
+
+	return result_success;
+}
+
+static int validate_is_octal_number(const char *option, int option_len)
+{
+	int index;
+
+	for (index = 0; index < option_len; ++index)
+	{
+		if ((option[index] < '0') || (option[index] > '7'))
+		{
+			return result_fail;
+		}
+	}
+
+	return result_success;
+}
+
+#if (defined OS_Linux)
+/* TODO: a lot of similar text checks, generalize them */
+static int validate_vfat_is_shortname(const char *option, int option_len)
+{
+	if ((option_len == 5)
+		&& ((strncmp(option, "lower", option_len) == 0)
+			|| (strncmp(option, "win95", option_len) == 0)
+			|| (strncmp(option, "winnt", option_len) == 0)
+			|| (strncmp(option, "mixed", option_len) == 0)))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_vfat_is_check(const char *option, int option_len)
+{
+	if ((option_len == 1)
+		&& (((*option) == 'r')
+			|| ((*option) == 'n')
+			|| ((*option) == 's')))
+	{
+		return result_success;
+	}
+	else if ((option_len == 6)
+		&& ((strncmp(option, "normal", option_len) == 0)
+			|| (strncmp(option, "strict", option_len) == 0)))
+	{
+		return result_success;
+	}
+	else if ((option_len == 7)
+		&& (strncmp(option, "relaxed", option_len) == 0))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_vfat_is_conv(const char *option, int option_len)
+{
+	if ((option_len == 1)
+		&& (((*option) == 'b')
+			|| ((*option) == 't')
+			|| ((*option) == 'a')))
+	{
+		return result_success;
+	}
+	else if ((option_len == 4)
+		&& ((strncmp(option, "text", option_len) == 0)
+			|| (strncmp(option, "auto", option_len) == 0)))
+	{
+		return result_success;
+	}
+	else if ((option_len == 6)
+		&& (strncmp(option, "binary", option_len) == 0))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+
+static int validate_iso9660_is_block(const char *option, int option_len)
+{
+	if ((option_len == 3)
+		&& (strncmp(option, "512", option_len) == 0))
+	{
+		return result_success;
+	}
+	else if ((option_len == 4)
+		&& ((strncmp(option, "1024", option_len) == 0)
+			|| (strncmp(option, "2048", option_len) == 0)))
+	{
+		return result_success;
+	}
+
+	return result_fail;
+}
+#endif /* (defined OS_Linux) */

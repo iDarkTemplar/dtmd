@@ -25,26 +25,28 @@
 
 #include <dtmd-misc.h>
 
+#include <dt-command.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int invoke_command(int client_number, dtmd_command_t *cmd);
+int invoke_command(int client_number, dt_command_t *cmd);
 
-int notify_add_disk(const char *path, dtmd_removable_media_type_t type);
-int notify_remove_disk(const char *path);
-int notify_disk_changed(const char *path, dtmd_removable_media_type_t type);
+void notify_add_disk(const char *path, dtmd_removable_media_type_t type);
+void notify_remove_disk(const char *path);
+void notify_disk_changed(const char *path, dtmd_removable_media_type_t type);
 
-int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path);
-int notify_remove_partition(const char *path);
-int notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path);
+void notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path);
+void notify_remove_partition(const char *path);
+void notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path);
 
-int notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
-int notify_remove_stateful_device(const char *path);
-int notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
+void notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
+void notify_remove_stateful_device(const char *path);
+void notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label);
 
-int notify_mount(const char *path, const char *mount_point, const char *mount_options);
-int notify_unmount(const char *path, const char *mount_point);
+void notify_mount(const char *path, const char *mount_point, const char *mount_options);
+void notify_unmount(const char *path, const char *mount_point);
 
 #ifdef __cplusplus
 }

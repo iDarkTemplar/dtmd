@@ -23,6 +23,8 @@
 
 #include <dtmd.h>
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,7 +44,7 @@ struct removable_media
 	char *path;
 	dtmd_removable_media_type_t type;
 
-	unsigned int partitions_count;
+	size_t partitions_count;
 	struct removable_partition **partition;
 };
 
@@ -61,18 +63,18 @@ struct removable_stateful_media
 struct client
 {
 	int clientfd;
-	unsigned int buf_used;
+	size_t buf_used;
 	char buf[dtmd_command_max_length + 1];
 };
 
 extern struct removable_media **media;
-extern unsigned int media_count;
+extern size_t media_count;
 
 extern struct removable_stateful_media **stateful_media;
-extern unsigned int stateful_media_count;
+extern size_t stateful_media_count;
 
 extern struct client **clients;
-extern unsigned int clients_count;
+extern size_t clients_count;
 
 int add_media_block(const char *path, dtmd_removable_media_type_t media_type);
 int remove_media_block(const char *path);

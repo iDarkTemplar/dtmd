@@ -29,15 +29,15 @@ class QCustomStatefulDeviceAction : public QAction
 
 public:
 	explicit QCustomStatefulDeviceAction(QObject *parent = 0);
-	QCustomStatefulDeviceAction(const QString &text, QObject *parent, unsigned int stateful_device, const QString &device_name);
+	QCustomStatefulDeviceAction(const QString &text, QObject *parent, size_t stateful_device, const QString &device_name);
 
 signals:
-	void triggered(unsigned int, QString);
+	void triggered(size_t, QString);
 
 public slots:
 
 protected:
-	unsigned int m_device;
+	size_t m_device;
 	QString m_device_name;
 
 protected slots:

@@ -18,30 +18,37 @@
  *
  */
 
+#if (defined OS_FreeBSD)
+#define _WITH_DPRINTF
+#endif /* (defined OS_FreeBSD) */
+
 #include "daemon/actions.h"
 
 #include "daemon/filesystem_mnt.h"
 #include "daemon/filesystem_opts.h"
 #include "daemon/return_codes.h"
 
+#include <dtmd.h>
+
 #include <stdio.h>
 #include <string.h>
 
 static int print_devices_count(int client_number);
 
-static int print_device(int client_number, unsigned int device);
+static int print_device(int client_number, size_t device);
 
-static int print_partition(int client_number, unsigned int device, unsigned int partition);
+static int print_partition(int client_number, size_t device, size_t partition);
 
 static int print_stateful_devices_count(int client_number);
 
-static int print_stateful_device(int client_number, unsigned int device);
+static int print_stateful_device(int client_number, size_t device);
 
-int invoke_command(int client_number, dtmd_command_t *cmd)
+int invoke_command(int client_number, dt_command_t *cmd)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	int rc;
+	dtmd_error_code_t error_code;
 
 	if ((strcmp(cmd->cmd, dtmd_command_enum_all) == 0) && (cmd->args_count == 0))
 	{
@@ -137,7 +144,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_device "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -182,7 +189,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_partition "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_partition "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -222,7 +229,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_stateful_device "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_list_stateful_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
 			{
 				return result_client_error;
 			}
@@ -232,7 +239,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_mount) == 0) && (cmd->args_count == 2) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1], mount_by_value);
+		rc = invoke_mount(client_number, cmd->args[0], cmd->args[1], mount_by_value, &error_code);
 
 		if (is_result_successful(rc))
 		{
@@ -247,11 +254,12 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s, \"%s\")\n",
 				cmd->args[0],
 				((cmd->args[1] != NULL) ? ("\"") : ("")),
 				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
-				((cmd->args[1] != NULL) ? ("\"") : (""))) < 0)
+				((cmd->args[1] != NULL) ? ("\"") : ("")),
+				dtmd_error_code_to_string(error_code)) < 0)
 			{
 				return result_client_error;
 			}
@@ -261,7 +269,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 	}
 	else if ((strcmp(cmd->cmd, dtmd_command_unmount) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
-		rc = invoke_unmount(client_number, cmd->args[0]);
+		rc = invoke_unmount(client_number, cmd->args[0], &error_code);
 
 		if (is_result_successful(rc))
 		{
@@ -272,7 +280,7 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 		}
 		else
 		{
-			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(clients[client_number]->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
 			{
 				return result_client_error;
 			}
@@ -294,45 +302,39 @@ int invoke_command(int client_number, dtmd_command_t *cmd)
 	}
 }
 
-int notify_add_disk(const char *path, dtmd_removable_media_type_t type)
+void notify_add_disk(const char *path, dtmd_removable_media_type_t type)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_add_disk "(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
 	}
-
-	return result_success;
 }
 
-int notify_remove_disk(const char *path)
+void notify_remove_disk(const char *path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_remove_disk "(\"%s\")\n", path);
 	}
-
-	return result_success;
 }
 
-int notify_disk_changed(const char *path, dtmd_removable_media_type_t type)
+void notify_disk_changed(const char *path, dtmd_removable_media_type_t type)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_disk_changed "(\"%s\", \"%s\")\n", path, dtmd_device_type_to_string(type));
 	}
-
-	return result_success;
 }
 
-int notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path)
+void notify_add_partition(const char *path, const char *fstype, const char *label, const char *parent_path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -346,25 +348,21 @@ int notify_add_partition(const char *path, const char *fstype, const char *label
 			(label != NULL) ? ("\"") : (""),
 			parent_path);
 	}
-
-	return result_success;
 }
 
-int notify_remove_partition(const char *path)
+void notify_remove_partition(const char *path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_remove_partition "(\"%s\")\n", path);
 	}
-
-	return result_success;
 }
 
-int notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path)
+void notify_partition_changed(const char *path, const char *fstype, const char *label, const char *parent_path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -378,13 +376,11 @@ int notify_partition_changed(const char *path, const char *fstype, const char *l
 			(label != NULL) ? ("\"") : (""),
 			parent_path);
 	}
-
-	return result_success;
 }
 
-int notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
+void notify_add_stateful_device(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -399,25 +395,21 @@ int notify_add_stateful_device(const char *path, dtmd_removable_media_type_t typ
 			(label != NULL) ? (label) : ("nil"),
 			(label != NULL) ? ("\"") : (""));
 	}
-
-	return result_success;
 }
 
-int notify_remove_stateful_device(const char *path)
+void notify_remove_stateful_device(const char *path)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_remove_stateful_device "(\"%s\")\n", path);
 	}
-
-	return result_success;
 }
 
-int notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
+void notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
@@ -432,37 +424,31 @@ int notify_stateful_device_changed(const char *path, dtmd_removable_media_type_t
 			(label != NULL) ? (label) : ("nil"),
 			(label != NULL) ? ("\"") : (""));
 	}
-
-	return result_success;
 }
 
-int notify_mount(const char *path, const char *mount_point, const char *mount_options)
+void notify_mount(const char *path, const char *mount_point, const char *mount_options)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_mount "(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
 	}
-
-	return result_success;
 }
 
-int notify_unmount(const char *path, const char *mount_point)
+void notify_unmount(const char *path, const char *mount_point)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < clients_count; ++i)
 	{
 		dprintf(clients[i]->clientfd, dtmd_notification_unmount "(\"%s\", \"%s\")\n", path, mount_point);
 	}
-
-	return result_success;
 }
 
 static int print_devices_count(int client_number)
 {
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_devices "(\"%zu\")\n",
 		media_count) < 0)
 	{
 		return result_client_error;
@@ -471,7 +457,7 @@ static int print_devices_count(int client_number)
 	return result_success;
 }
 
-static int print_device(int client_number, unsigned int device)
+static int print_device(int client_number, size_t device)
 {
 #ifndef NDEBUG
 	if (device > media_count)
@@ -480,7 +466,7 @@ static int print_device(int client_number, unsigned int device)
 	}
 #endif /* NDEBUG */
 
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_device "(\"%s\", \"%s\", \"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_device "(\"%s\", \"%s\", \"%zu\")\n",
 		media[device]->path,
 		dtmd_device_type_to_string(media[device]->type),
 		media[device]->partitions_count) < 0)
@@ -491,7 +477,7 @@ static int print_device(int client_number, unsigned int device)
 	return result_success;
 }
 
-static int print_partition(int client_number, unsigned int device, unsigned int partition)
+static int print_partition(int client_number, size_t device, size_t partition)
 {
 #ifndef NDEBUG
 	if ((device > media_count) || (partition > media[device]->partitions_count))
@@ -524,7 +510,7 @@ static int print_partition(int client_number, unsigned int device, unsigned int 
 
 static int print_stateful_devices_count(int client_number)
 {
-	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_devices "(\"%d\")\n",
+	if (dprintf(clients[client_number]->clientfd, dtmd_response_argument_stateful_devices "(\"%zu\")\n",
 		stateful_media_count) < 0)
 	{
 		return result_client_error;
@@ -533,7 +519,7 @@ static int print_stateful_devices_count(int client_number)
 	return result_success;
 }
 
-static int print_stateful_device(int client_number, unsigned int device)
+static int print_stateful_device(int client_number, size_t device)
 {
 #ifndef NDEBUG
 	if (device > stateful_media_count)

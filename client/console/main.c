@@ -44,7 +44,7 @@ int first = 1;
 		fprintf(stdout, "\n"); \
 	}
 
-void client_callback(void *arg, const dtmd_command_t *cmd)
+void client_callback(void *arg, const dt_command_t *cmd)
 {
 	if (arg == (void*)1)
 	{
@@ -207,11 +207,11 @@ void client_print_partition(const dtmd_partition_t *partition)
 
 void client_print_device(const dtmd_device_t *device)
 {
-	unsigned int i;
+	size_t i;
 
 	fprintf(stdout, "Path: %s\n", device->path);
 	fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(device->type));
-	fprintf(stdout, "Partitions: %u\n\n", device->partitions_count);
+	fprintf(stdout, "Partitions: %zu\n\n", device->partitions_count);
 
 	for (i = 0; i < device->partitions_count; ++i)
 	{
@@ -220,7 +220,7 @@ void client_print_device(const dtmd_device_t *device)
 			fprintf(stdout, "\n");
 		}
 
-		fprintf(stdout, "Partition %u:\n", i);
+		fprintf(stdout, "Partition %zu:\n", i);
 		client_print_partition(device->partition[i]);
 	}
 }
@@ -256,7 +256,7 @@ int client_enumerate(void)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, count_stateful, i;
+	size_t count, count_stateful, i;
 	dtmd_device_t **devices;
 	dtmd_stateful_device_t **stateful_devices;
 
@@ -270,23 +270,23 @@ int client_enumerate(void)
 	result = dtmd_enum_devices(lib, -1, &count, &devices, &count_stateful, &stateful_devices);
 	if (result != dtmd_ok)
 	{
-		fprintf(stderr, "Couldn't enumerate devices, error code %d\n", result);
+		fprintf(stderr, "Couldn't enumerate devices, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		dtmd_deinit(lib);
 		return -1;
 	}
 
-	fprintf(stdout, "Found %u devices\n\n", count + count_stateful);
+	fprintf(stdout, "Found %zu devices\n\n", count + count_stateful);
 
 	for (i = 0; i < count_stateful; ++i)
 	{
-		fprintf(stdout, "Device %u:\n", i);
+		fprintf(stdout, "Device %zu:\n", i);
 		client_print_stateful_device(stateful_devices[i]);
 		fprintf(stdout, "\n");
 	}
 
 	for (i = 0; i < count; ++i)
 	{
-		fprintf(stdout, "Device %u:\n", i + count_stateful);
+		fprintf(stdout, "Device %zu:\n", i + count_stateful);
 		client_print_device(devices[i]);
 		fprintf(stdout, "\n");
 	}
@@ -314,7 +314,7 @@ int client_list_device(const char *path)
 	result = dtmd_list_device(lib, -1, path, &device);
 	if (result != dtmd_ok)
 	{
-		fprintf(stderr, "Couldn't list device, error code %d\n", result);
+		fprintf(stderr, "Couldn't list device, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		dtmd_deinit(lib);
 		return -1;
 	}
@@ -350,7 +350,7 @@ int client_list_partition(const char *path)
 	result = dtmd_list_partition(lib, -1, path, &partition);
 	if (result != dtmd_ok)
 	{
-		fprintf(stderr, "Couldn't list partition, error code %d\n", result);
+		fprintf(stderr, "Couldn't list partition, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		dtmd_deinit(lib);
 		return -1;
 	}
@@ -386,7 +386,7 @@ int client_list_stateful_device(const char *path)
 	result = dtmd_list_stateful_device(lib, -1, path, &stateful_device);
 	if (result != dtmd_ok)
 	{
-		fprintf(stderr, "Couldn't list stateful device, error code %d\n", result);
+		fprintf(stderr, "Couldn't list stateful device, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		dtmd_deinit(lib);
 		return -1;
 	}
@@ -426,7 +426,7 @@ int client_mount(char *device, char *mount_opts)
 	}
 	else
 	{
-		fprintf(stdout, "Mount failed, error code %d\n", result);
+		fprintf(stdout, "Mount failed, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		func_result = -1;
 	}
 
@@ -455,7 +455,7 @@ int client_unmount(char *device)
 	}
 	else
 	{
-		fprintf(stdout, "Unmount failed, error code %d\n", result);
+		fprintf(stdout, "Unmount failed, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		func_result = -1;
 	}
 
@@ -468,7 +468,7 @@ int client_list_supported_filesystems(void)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, i;
+	size_t count, i;
 	const char **filesystems;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
@@ -481,12 +481,12 @@ int client_list_supported_filesystems(void)
 	result = dtmd_list_supported_filesystems(lib, -1, &count, &filesystems);
 	if (result != dtmd_ok)
 	{
-		fprintf(stderr, "Couldn't list supported filesystems, error code %d\n", result);
+		fprintf(stderr, "Couldn't list supported filesystems, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		dtmd_deinit(lib);
 		return -1;
 	}
 
-	fprintf(stdout, "Got %u supported filesystems:\n", count);
+	fprintf(stdout, "Got %zu supported filesystems:\n", count);
 
 	for (i = 0; i < count; ++i)
 	{
@@ -503,7 +503,7 @@ int client_list_supported_filesystem_options(const char *filesystem)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	unsigned int count, i;
+	size_t count, i;
 	const char **options_list;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
@@ -516,12 +516,12 @@ int client_list_supported_filesystem_options(const char *filesystem)
 	result = dtmd_list_supported_filesystem_options(lib, -1,filesystem, &count, &options_list);
 	if (result != dtmd_ok)
 	{
-		fprintf(stderr, "Couldn't list supported filesystems, error code %d\n", result);
+		fprintf(stderr, "Couldn't list supported filesystems, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
 		dtmd_deinit(lib);
 		return -1;
 	}
 
-	fprintf(stdout, "Got %u supported filesystem options for %s:\n", count, filesystem);
+	fprintf(stdout, "Got %zu supported filesystem options for %s:\n", count, filesystem);
 
 	for (i = 0; i < count; ++i)
 	{

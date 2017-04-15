@@ -27,22 +27,14 @@
 extern "C" {
 #endif
 
-typedef struct dtmd_command
-{
-	char *cmd;
-	unsigned int args_count;
-	char **args;
-} dtmd_command_t;
-
-int dtmd_validate_command(const char *buffer);
-dtmd_command_t* dtmd_parse_command(const char *buffer);
-void dtmd_free_command(dtmd_command_t *cmd);
-
 const char* dtmd_device_type_to_string(dtmd_removable_media_type_t type);
 dtmd_removable_media_type_t dtmd_string_to_device_type(const char *string);
 
 const char* dtmd_device_state_to_string(dtmd_removable_media_state_t state);
 dtmd_removable_media_state_t dtmd_string_to_device_state(const char *string);
+
+const char* dtmd_error_code_to_string(dtmd_error_code_t code);
+dtmd_error_code_t dtmd_string_to_error_code(const char *string);
 
 #ifdef __cplusplus
 }

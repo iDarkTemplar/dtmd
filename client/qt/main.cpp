@@ -70,18 +70,25 @@ int main(int argc, char **argv)
 	QApplication app(argc, argv);
 	QScopedPointer<Control> control;
 
-	QTextCodec::setCodecForTr(QTextCodec::codecForName("UTF-8"));
+#if QT_VERSION >= 0x050000
+	QTextCodec::setCodecForLocale(
+#else
+	QTextCodec::setCodecForTr(
+#endif
+		QTextCodec::codecForName("UTF-8")
+	);
+
 	QLocale::setDefault(QLocale::system());
 
 	if (!QSystemTrayIcon::isSystemTrayAvailable())
 	{
-		QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("System tray is not supported"));
+		QMessageBox::critical(NULL, QObject::tr("Fatal error"), QObject::tr("System tray is not supported"));
 		return 0;
 	}
 
 	if (setSigHandlers() != 0)
 	{
-		QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Could not set signal handlers"));
+		QMessageBox::critical(NULL, QObject::tr("Fatal error"), QObject::tr("Could not set signal handlers"));
 		return 0;
 	}
 
@@ -91,12 +98,12 @@ int main(int argc, char **argv)
 	}
 	catch (const std::exception &e)
 	{
-		QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Initialization failed") + QString("\n") + QObject::trUtf8("Error message: ") + QString::fromLocal8Bit(e.what()));
+		QMessageBox::critical(NULL, QObject::tr("Fatal error"), QObject::tr("Initialization failed") + QString("\n") + QObject::tr("Error message: ") + QString::fromLocal8Bit(e.what()));
 		return 0;
 	}
 	catch (...)
 	{
-		QMessageBox::critical(NULL, QObject::trUtf8("Fatal error"), QObject::trUtf8("Initialization failed"));
+		QMessageBox::critical(NULL, QObject::tr("Fatal error"), QObject::tr("Initialization failed"));
 		return 0;
 	}
 

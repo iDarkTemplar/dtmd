@@ -31,17 +31,17 @@
 #include <unistd.h>
 
 struct removable_media **media = NULL;
-unsigned int media_count = 0;
+size_t media_count = 0;
 
 struct removable_stateful_media **stateful_media = NULL;
-unsigned int stateful_media_count = 0;
+size_t stateful_media_count = 0;
 
 struct client **clients = NULL;
-unsigned int clients_count = 0;
+size_t clients_count = 0;
 
 int add_media_block(const char *path, dtmd_removable_media_type_t media_type)
 {
-	unsigned int i;
+	size_t i;
 	struct removable_media *cur_media;
 	struct removable_media **tmp;
 
@@ -98,8 +98,8 @@ add_media_block_error_1:
 
 int remove_media_block(const char *path)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	struct removable_media **tmp;
 	struct removable_media *del;
 
@@ -180,7 +180,7 @@ int remove_media_block(const char *path)
 
 int change_media_block(const char *path, dtmd_removable_media_type_t media_type)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < media_count; ++i)
 	{
@@ -208,8 +208,8 @@ int change_media_block(const char *path, dtmd_removable_media_type_t media_type)
 int add_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label)
 {
 	int rc;
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	struct removable_partition *cur_partition;
 	struct removable_partition **tmp;
 
@@ -321,8 +321,8 @@ add_media_partition_error_1:
 
 int remove_media_partition(const char *block, const char *partition)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 	struct removable_partition **tmp;
 	struct removable_partition *del;
 
@@ -396,8 +396,8 @@ int remove_media_partition(const char *block, const char *partition)
 
 int change_media_partition(const char *block, dtmd_removable_media_type_t media_type, const char *partition, const char *fstype, const char *label)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 
 	for (i = 0; i < media_count; ++i)
 	{
@@ -491,8 +491,8 @@ int change_media_partition(const char *block, dtmd_removable_media_type_t media_
 
 void remove_all_media(void)
 {
-	unsigned int i;
-	unsigned int j;
+	size_t i;
+	size_t j;
 
 	if (media_count > 0)
 	{
@@ -551,7 +551,7 @@ void remove_all_media(void)
 
 int add_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
 {
-	unsigned int i;
+	size_t i;
 	struct removable_stateful_media *cur_media;
 	struct removable_stateful_media **tmp;
 
@@ -650,7 +650,7 @@ add_stateful_media_error_1:
 
 int remove_stateful_media(const char *path)
 {
-	unsigned int i;
+	size_t i;
 	struct removable_stateful_media **tmp;
 	struct removable_stateful_media *del;
 
@@ -718,7 +718,7 @@ int remove_stateful_media(const char *path)
 
 int change_stateful_media(const char *path, dtmd_removable_media_type_t media_type, dtmd_removable_media_state_t state, const char *fstype, const char *label)
 {
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < stateful_media_count; ++i)
 	{
@@ -810,7 +810,7 @@ int change_stateful_media(const char *path, dtmd_removable_media_type_t media_ty
 
 void remove_all_stateful_media(void)
 {
-	unsigned int i;
+	size_t i;
 
 	if (stateful_media_count > 0)
 	{
@@ -856,7 +856,7 @@ void remove_all_stateful_media(void)
 
 int add_client(int client)
 {
-	unsigned int i;
+	size_t i;
 	struct client *cur_client;
 	struct client **tmp;
 
@@ -902,7 +902,7 @@ add_client_error_1:
 
 int remove_client(int client)
 {
-	unsigned int i;
+	size_t i;
 	struct client **tmp;
 	struct client *del;
 
@@ -944,7 +944,7 @@ int remove_client(int client)
 
 void remove_all_clients(void)
 {
-	unsigned int i;
+	size_t i;
 
 	if (clients != NULL)
 	{

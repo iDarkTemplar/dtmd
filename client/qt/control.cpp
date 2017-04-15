@@ -106,7 +106,7 @@ void Control::change_state_icon()
 	}
 } // unlock
 
-void Control::triggeredOpen(unsigned int device, unsigned int partition, QString partition_name)
+void Control::triggeredOpen(size_t device, size_t partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
 		|| (partition >= m_devices.at(device).partitions.size())
@@ -144,10 +144,27 @@ void Control::triggeredOpen(unsigned int device, unsigned int partition, QString
 		mount_point = QString::fromLocal8Bit(part.mnt_point.c_str());
 	}
 
-	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
+	// In order to properly open directory, it should have odd number of '/' characters. Just leave first character if the string begins with more than one character
+	{
+		size_t last_index = 0;
+		QChar char_looking_for('/');
+
+		for (size_t mount_point_len = mount_point.size();
+			(last_index < mount_point_len) && (mount_point.at(last_index) == char_looking_for);
+			++last_index)
+		{
+		}
+
+		if (last_index != 1)
+		{
+			mount_point.remove(0, last_index - 1);
+		}
+	}
+
+	QDesktopServices::openUrl(QUrl(QString("file://") + mount_point));
 }
 
-void Control::triggeredOpen(unsigned int stateful_device, QString device_name)
+void Control::triggeredOpen(size_t stateful_device, QString device_name)
 {
 	if ((stateful_device >= m_stateful_devices.size())
 		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
@@ -187,7 +204,7 @@ void Control::triggeredOpen(unsigned int stateful_device, QString device_name)
 	QDesktopServices::openUrl(QUrl(QString("file:///") + mount_point));
 }
 
-void Control::triggeredMount(unsigned int device, unsigned int partition, QString partition_name)
+void Control::triggeredMount(size_t device, size_t partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
 		|| (partition >= m_devices.at(device).partitions.size())
@@ -209,7 +226,7 @@ void Control::triggeredMount(unsigned int device, unsigned int partition, QStrin
 	}
 }
 
-void Control::triggeredMount(unsigned int stateful_device, QString device_name)
+void Control::triggeredMount(size_t stateful_device, QString device_name)
 {
 	if ((stateful_device >= m_stateful_devices.size())
 		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
@@ -230,7 +247,7 @@ void Control::triggeredMount(unsigned int stateful_device, QString device_name)
 	}
 }
 
-void Control::triggeredUnmount(unsigned int device, unsigned int partition, QString partition_name)
+void Control::triggeredUnmount(size_t device, size_t partition, QString partition_name)
 {
 	if ((device >= m_devices.size())
 		|| (partition >= m_devices.at(device).partitions.size())
@@ -252,7 +269,7 @@ void Control::triggeredUnmount(unsigned int device, unsigned int partition, QStr
 	}
 }
 
-void Control::triggeredUnmount(unsigned int stateful_device, QString device_name)
+void Control::triggeredUnmount(size_t stateful_device, QString device_name)
 {
 	if ((stateful_device >= m_stateful_devices.size())
 		|| (QString::fromLocal8Bit(m_stateful_devices.at(stateful_device).path.c_str()) != device_name))
@@ -291,37 +308,37 @@ void Control::BuildMenu()
 						QString::fromLocal8Bit(dev->label.empty() ? dev->path.c_str() : dev->label.c_str()));
 
 					QScopedPointer<QCustomStatefulDeviceAction> action;
-					action.reset(new QCustomStatefulDeviceAction(QObject::trUtf8("Open device"),
+					action.reset(new QCustomStatefulDeviceAction(QObject::tr("Open device"),
 						menu,
 						dev - m_stateful_devices.begin(),
 						QString::fromLocal8Bit(dev->path.c_str())));
 
-					QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
-						this, SLOT(triggeredOpen(uint,QString)), Qt::DirectConnection);
+					QObject::connect(action.data(), SIGNAL(triggered(size_t,QString)),
+						this, SLOT(triggeredOpen(size_t,QString)), Qt::DirectConnection);
 
 					menu->addAction(action.take());
 
 					if (is_mounted)
 					{
-						action.reset(new QCustomStatefulDeviceAction(QObject::trUtf8("Unmount device"),
+						action.reset(new QCustomStatefulDeviceAction(QObject::tr("Unmount device"),
 							menu,
 							dev - m_stateful_devices.begin(),
 							QString::fromLocal8Bit(dev->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
-							this, SLOT(triggeredUnmount(uint,QString)), Qt::DirectConnection);
+						QObject::connect(action.data(), SIGNAL(triggered(size_t,QString)),
+							this, SLOT(triggeredUnmount(size_t,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
 					}
 					else
 					{
-						action.reset(new QCustomStatefulDeviceAction(QObject::trUtf8("Mount device"),
+						action.reset(new QCustomStatefulDeviceAction(QObject::tr("Mount device"),
 							menu,
 							dev - m_stateful_devices.begin(),
 							QString::fromLocal8Bit(dev->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,QString)),
-							this, SLOT(triggeredMount(uint,QString)), Qt::DirectConnection);
+						QObject::connect(action.data(), SIGNAL(triggered(size_t,QString)),
+							this, SLOT(triggeredMount(size_t,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
 					}
@@ -344,40 +361,40 @@ void Control::BuildMenu()
 							QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str()));
 
 						QScopedPointer<QCustomDeviceAction> action;
-						action.reset(new QCustomDeviceAction(QObject::trUtf8("Open device"),
+						action.reset(new QCustomDeviceAction(QObject::tr("Open device"),
 							menu,
 							dev - m_devices.begin(),
 							it - dev->partitions.begin(),
 							QString::fromLocal8Bit(it->path.c_str())));
 
-						QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-							this, SLOT(triggeredOpen(uint,uint,QString)), Qt::DirectConnection);
+						QObject::connect(action.data(), SIGNAL(triggered(size_t,size_t,QString)),
+							this, SLOT(triggeredOpen(size_t,size_t,QString)), Qt::DirectConnection);
 
 						menu->addAction(action.take());
 
 						if (is_mounted)
 						{
-							action.reset(new QCustomDeviceAction(QObject::trUtf8("Unmount device"),
+							action.reset(new QCustomDeviceAction(QObject::tr("Unmount device"),
 								menu,
 								dev - m_devices.begin(),
 								it - dev->partitions.begin(),
 								QString::fromLocal8Bit(it->path.c_str())));
 
-							QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-								this, SLOT(triggeredUnmount(uint,uint,QString)), Qt::DirectConnection);
+							QObject::connect(action.data(), SIGNAL(triggered(size_t,size_t,QString)),
+								this, SLOT(triggeredUnmount(size_t,size_t,QString)), Qt::DirectConnection);
 
 							menu->addAction(action.take());
 						}
 						else
 						{
-							action.reset(new QCustomDeviceAction(QObject::trUtf8("Mount device"),
+							action.reset(new QCustomDeviceAction(QObject::tr("Mount device"),
 								menu,
 								dev - m_devices.begin(),
 								it - dev->partitions.begin(),
 								QString::fromLocal8Bit(it->path.c_str())));
 
-							QObject::connect(action.data(), SIGNAL(triggered(uint,uint,QString)),
-								this, SLOT(triggeredMount(uint,uint,QString)), Qt::DirectConnection);
+							QObject::connect(action.data(), SIGNAL(triggered(size_t,size_t,QString)),
+								this, SLOT(triggeredMount(size_t,size_t,QString)), Qt::DirectConnection);
 
 							menu->addAction(action.take());
 						}
@@ -390,7 +407,7 @@ void Control::BuildMenu()
 		}
 	} // unlock
 
-	new_menu->addAction(QObject::trUtf8("Exit"), this, SLOT(exit()));
+	new_menu->addAction(QObject::tr("Exit"), this, SLOT(exit()));
 
 	m_tray.setContextMenu(new_menu.data());
 	m_menu.reset(new_menu.take());
@@ -536,7 +553,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 
 						if (!cmd.args[1].empty())
 						{
-							title = QObject::trUtf8("Device attached");
+							title = QObject::tr("Device attached");
 							message = QString::fromLocal8Bit(cmd.args[2].empty() ? cmd.args[0].c_str() : cmd.args[2].c_str());
 						}
 
@@ -562,7 +579,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 
 					if (it != dev->partitions.end())
 					{
-						title = QObject::trUtf8("Device removed");
+						title = QObject::tr("Device removed");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						dev->partitions.erase(it);
 						modified = true;
@@ -600,7 +617,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 						it->fstype = cmd.args[1];
 						it->label  = cmd.args[2];
 
-						title = QObject::trUtf8("Device changed");
+						title = QObject::tr("Device changed");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						modified = true;
 					}
@@ -632,7 +649,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 
 					if (dev.state == dtmd_removable_media_state_ok)
 					{
-						title = QObject::trUtf8("Device added");
+						title = QObject::tr("Device added");
 						message = QString::fromLocal8Bit(dev.label.empty() ? dev.path.c_str() : dev.label.c_str());
 						modified = true;
 					}
@@ -655,7 +672,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 				{
 					if (it->state == dtmd_removable_media_state_ok)
 					{
-						title = QObject::trUtf8("Device removed");
+						title = QObject::tr("Device removed");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						modified = true;
 					}
@@ -693,14 +710,14 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					if ((last_state != dtmd_removable_media_state_ok)
 						&& (it->state == dtmd_removable_media_state_ok))
 					{
-						title = QObject::trUtf8("Device changed to state: available");
+						title = QObject::tr("Device changed to state: available");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						modified = true;
 					}
 					else if ((last_state == dtmd_removable_media_state_ok)
 						&& (it->state != dtmd_removable_media_state_ok))
 					{
-						title = QObject::trUtf8("Device changed to state: unavailable");
+						title = QObject::tr("Device changed to state: unavailable");
 						message = QString::fromLocal8Bit(last_name.c_str());
 						modified = true;
 					}
@@ -727,7 +744,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					{
 						it->mnt_point = cmd.args[1];
 						it->mnt_opts  = cmd.args[2];
-						title = QObject::trUtf8("Device mounted");
+						title = QObject::tr("Device mounted");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						modified = true;
 						break;
@@ -749,7 +766,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					{
 						it2->mnt_point = cmd.args[1];
 						it2->mnt_opts  = cmd.args[2];
-						title = QObject::trUtf8("Device mounted");
+						title = QObject::tr("Device mounted");
 						message = QString::fromLocal8Bit(it2->label.empty() ? it2->path.c_str() : it2->label.c_str());
 						modified = true;
 					}
@@ -775,7 +792,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					{
 						it->mnt_point.clear();
 						it->mnt_opts.clear();
-						title = QObject::trUtf8("Device unmounted");
+						title = QObject::tr("Device unmounted");
 						message = QString::fromLocal8Bit(it->label.empty() ? it->path.c_str() : it->label.c_str());
 						modified = true;
 						break;
@@ -797,7 +814,7 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 					{
 						it2->mnt_point.clear();
 						it2->mnt_opts.clear();
-						title = QObject::trUtf8("Device unmounted");
+						title = QObject::tr("Device unmounted");
 						message = QString::fromLocal8Bit(it2->label.empty() ? it2->path.c_str() : it2->label.c_str());
 						modified = true;
 					}
@@ -816,16 +833,16 @@ void Control::dtmd_callback(void *arg, const dtmd::command &cmd)
 		}
 		catch (const std::exception &e)
 		{
-			ptr->exitSignalled(QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error") + QString("\n") + QObject::trUtf8("Error message: ") + QString::fromLocal8Bit(e.what()));
+			ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error") + QString("\n") + QObject::tr("Error message: ") + QString::fromLocal8Bit(e.what()));
 		}
 		catch (...)
 		{
-			ptr->exitSignalled(QObject::trUtf8("Fatal error"), QObject::trUtf8("Runtime error"));
+			ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error"));
 		}
 	}
 	else
 	{
-		ptr->exitSignalled(QObject::trUtf8("Exiting"), QObject::trUtf8("Daemon sent exit message"));
+		ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Daemon sent exit message"));
 	}
 }
 
