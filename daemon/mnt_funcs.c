@@ -104,7 +104,7 @@ static void mark_each_device_recursive(dtmd_removable_media_t *media_ptr)
 {
 	dtmd_removable_media_t *iter_media_ptr;
 
-	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		mark_each_device_recursive(iter_media_ptr);
 	}
@@ -138,7 +138,7 @@ static void process_changes_recursive(dtmd_removable_media_t *media_ptr)
 
 	media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) & is_mounted_now);
 
-	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		process_changes_recursive(iter_media_ptr);
 	}

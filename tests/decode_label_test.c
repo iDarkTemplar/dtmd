@@ -76,16 +76,19 @@ int main(int argc, char **argv)
 	char *label_test2 = "test\\x20\\040label\\z";
 	char *label_test3 = "label\\0a1fail";
 	char *label_test4 = "label\\xfzfail";
+	char *label_test5 = "test\\x00\\000label\\z";
 
 	char *label_result1;
 	char *label_result2;
 	char *label_result3;
 	char *label_result4;
+	char *label_result5;
 
 	char *label_expected_result1 = "test\\007\\010\\014\\012\\015\\011\\134\\047\\042S ";
 	char *label_expected_result2 = "test  label\\z";
 	char *label_expected_result3 = NULL;
 	char *label_expected_result4 = NULL;
+	char *label_expected_result5 = "test\\000\\000label\\z";
 
 	tests_init();
 
@@ -96,11 +99,13 @@ int main(int argc, char **argv)
 	test_compare(((label_result2 = decode_label(label_test2)) != NULL) && (strcmp(label_result2, label_expected_result2) == 0));
 	test_compare((label_result3 = decode_label(label_test3)) == NULL);
 	test_compare((label_result4 = decode_label(label_test4)) == NULL);
+	test_compare(((label_result5 = decode_label(label_test5)) != NULL) && (strcmp(label_result5, label_expected_result5) == 0));
 
 	print_and_free(label_test1, label_result1, label_expected_result1);
 	print_and_free(label_test2, label_result2, label_expected_result2);
 	print_and_free(label_test3, label_result3, label_expected_result3);
 	print_and_free(label_test4, label_result4, label_expected_result4);
+	print_and_free(label_test5, label_result5, label_expected_result5);
 
 	return tests_result();
 }

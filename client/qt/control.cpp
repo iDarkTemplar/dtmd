@@ -78,7 +78,7 @@ Control::Control()
 	{
 		std::list<std::shared_ptr<dtmd::removable_media> > temp_devices;
 
-		dtmd_result_t result = m_lib->list_all_removable_devices(dtmd::timeout_infinite, temp_devices);
+		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
 		if (result != dtmd_ok)
 		{
 			std::stringstream errMsg;
@@ -137,7 +137,7 @@ void Control::triggeredOpen(const std::string &device_name)
 	if (media_ptr->mnt_point.empty())
 	{
 		setIconState(working, Control::defaultTimeout);
-		dtmd_result_t result = m_lib->mount(dtmd::timeout_infinite, media_ptr->path);
+		dtmd_result_t result = m_lib->mount(defaultTimeout, media_ptr->path);
 
 		if (result == dtmd_ok)
 		{
@@ -149,12 +149,12 @@ void Control::triggeredOpen(const std::string &device_name)
 			return;
 		}
 
-		std::shared_ptr<dtmd::removable_media> temp;
+		std::list<std::shared_ptr<dtmd::removable_media> > temp;
 
-		result = m_lib->list_removable_device(dtmd::timeout_infinite, media_ptr->path, temp);
-		if ((result == dtmd_ok) && (temp) && (media_ptr->path == temp->path))
+		result = m_lib->list_removable_device(defaultTimeout, media_ptr->path, temp);
+		if ((result == dtmd_ok) && (temp.size() == 1) && (media_ptr->path == temp.front()->path))
 		{
-			mount_point = QString::fromLocal8Bit(temp->mnt_point.c_str());
+			mount_point = QString::fromLocal8Bit(temp.front()->mnt_point.c_str());
 		}
 		else
 		{
@@ -196,7 +196,7 @@ void Control::triggeredMount(const std::string &device_name)
 	}
 
 	setIconState(working, Control::defaultTimeout);
-	dtmd_result_t result = m_lib->mount(dtmd::timeout_infinite, media_ptr->path);
+	dtmd_result_t result = m_lib->mount(defaultTimeout, media_ptr->path);
 
 	if (result == dtmd_ok)
 	{
@@ -217,7 +217,7 @@ void Control::triggeredUnmount(const std::string &device_name)
 	}
 
 	setIconState(working, Control::defaultTimeout);
-	dtmd_result_t result = m_lib->unmount(dtmd::timeout_infinite, media_ptr->path);
+	dtmd_result_t result = m_lib->unmount(defaultTimeout, media_ptr->path);
 
 	if (result == dtmd_ok)
 	{
@@ -466,7 +466,20 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 			{
 				if (cmd.args[0] == dtmd_root_device_path)
 				{
-					m_devices.push_back(obtained_device);
+					auto iter_end = m_devices.end();
+					auto iter = m_devices.begin();
+
+					while (iter != iter_end)
+					{
+						if (obtained_device->path < (*iter)->path)
+						{
+							break;
+						}
+
+						++iter;
+					}
+
+					m_devices.insert(iter, obtained_device);
 					modified = true;
 				}
 				else
@@ -475,7 +488,21 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 					if (device_ptr)
 					{
 						obtained_device->parent = device_ptr;
-						device_ptr->children.push_back(obtained_device);
+
+						auto iter_end = device_ptr->children.end();
+						auto iter = device_ptr->children.begin();
+
+						while (iter != iter_end)
+						{
+							if (obtained_device->path < (*iter)->path)
+							{
+								break;
+							}
+
+							++iter;
+						}
+
+						device_ptr->children.insert(iter, obtained_device);
 						modified = true;
 					}
 				}

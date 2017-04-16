@@ -130,42 +130,47 @@ std::shared_ptr<removable_media> removable_media::createFromRemovableMedia(const
 	return result;
 }
 
-void removable_media::fillFromRemovableMedia(const dtmd_removable_media_t *removable_media)
+bool removable_media::operator<(const removable_media &other) const
+{
+	return (this->path < other.path);
+}
+
+void removable_media::fillFromRemovableMedia(const dtmd_removable_media_t *raw_removable_media)
 {
 	this->clear();
 
-	if (removable_media != NULL)
+	if (raw_removable_media != NULL)
 	{
-		if (removable_media->path != NULL)
+		if (raw_removable_media->path != NULL)
 		{
-			this->path = removable_media->path;
+			this->path = raw_removable_media->path;
 		}
 
-		this->type = removable_media->type;
-		this->subtype = removable_media->subtype;
-		this->state = removable_media->state;
+		this->type = raw_removable_media->type;
+		this->subtype = raw_removable_media->subtype;
+		this->state = raw_removable_media->state;
 
-		if (removable_media->fstype != NULL)
+		if (raw_removable_media->fstype != NULL)
 		{
-			this->fstype = removable_media->fstype;
+			this->fstype = raw_removable_media->fstype;
 		}
 
-		if (removable_media->label != NULL)
+		if (raw_removable_media->label != NULL)
 		{
-			this->label = removable_media->label;
+			this->label = raw_removable_media->label;
 		}
 
-		if (removable_media->mnt_point != NULL)
+		if (raw_removable_media->mnt_point != NULL)
 		{
-			this->mnt_point = removable_media->mnt_point;
+			this->mnt_point = raw_removable_media->mnt_point;
 		}
 
-		if (removable_media->mnt_opts != NULL)
+		if (raw_removable_media->mnt_opts != NULL)
 		{
-			this->mnt_opts = removable_media->mnt_opts;
+			this->mnt_opts = raw_removable_media->mnt_opts;
 		}
 
-		for (dtmd_removable_media_t *iter = removable_media->first_child; iter != NULL; iter = iter->next_node)
+		for (dtmd_removable_media_t *iter = raw_removable_media->children_list; iter != NULL; iter = iter->next_node)
 		{
 			auto child = removable_media::createFromRemovableMedia(iter);
 			child->parent = this->shared_from_this();
@@ -284,7 +289,6 @@ dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::sh
 {
 	dtmd_result_t result;
 	dtmd_removable_media_t *returned_removable_device;
-	dtmd_removable_media_t *removable_devices_iter;
 
 	result = dtmd_list_all_removable_devices(this->m_handle, timeout, &returned_removable_device);
 	if (result == dtmd_ok)
@@ -293,7 +297,7 @@ dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::sh
 		{
 			removable_devices_list.clear();
 
-			for (removable_devices_iter = returned_removable_device; removable_devices_iter != NULL; removable_devices_iter = removable_devices_iter->next_node)
+			for (dtmd_removable_media_t *removable_devices_iter = returned_removable_device; removable_devices_iter != NULL; removable_devices_iter = removable_devices_iter->next_node)
 			{
 				auto item = removable_media::createFromRemovableMedia(removable_devices_iter);
 				removable_devices_list.push_back(item);
@@ -311,7 +315,7 @@ dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::sh
 	return result;
 }
 
-dtmd_result_t library::list_removable_device(int timeout, const std::string &removable_device_path, std::shared_ptr<removable_media> &removable_device)
+dtmd_result_t library::list_removable_device(int timeout, const std::string &removable_device_path, std::list<std::shared_ptr<removable_media> > &removable_devices_list)
 {
 	dtmd_result_t result;
 	dtmd_removable_media_t *returned_removable_device;
@@ -321,7 +325,14 @@ dtmd_result_t library::list_removable_device(int timeout, const std::string &rem
 	{
 		try
 		{
-			removable_device = removable_media::createFromRemovableMedia(returned_removable_device);
+			removable_devices_list.clear();
+
+			for (dtmd_removable_media_t *removable_devices_iter = returned_removable_device; removable_devices_iter != NULL; removable_devices_iter = removable_devices_iter->next_node)
+			{
+				auto item = removable_media::createFromRemovableMedia(removable_devices_iter);
+				removable_devices_list.push_back(item);
+			}
+
 			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
 		}
 		catch (...)

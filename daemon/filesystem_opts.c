@@ -77,7 +77,6 @@ static int validate_is_octal_number(const char *option, int option_len);
 #if (defined OS_Linux)
 static int validate_vfat_is_shortname(const char *option, int option_len);
 static int validate_vfat_is_check(const char *option, int option_len);
-static int validate_vfat_is_conv(const char *option, int option_len);
 static int validate_iso9660_is_block(const char *option, int option_len);
 #endif /* (defined OS_Linux) */
 

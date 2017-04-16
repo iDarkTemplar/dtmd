@@ -229,7 +229,7 @@ dtmd_removable_media_t* dtmd_find_media(const char *path, dtmd_removable_media_t
 			return iter_media_ptr;
 		}
 
-		result = dtmd_find_media(path, iter_media_ptr->first_child);
+		result = dtmd_find_media(path, iter_media_ptr->children_list);
 		if (result != NULL)
 		{
 			return result;

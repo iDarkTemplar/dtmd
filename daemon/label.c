@@ -39,6 +39,8 @@
 	\xdd – Hexadecimal representation
 */
 
+#define allowed_extra_chars_list " ."
+
 int compare_labels(const char *decoded_label, const char *encoded_label)
 {
 	int i;
@@ -188,7 +190,7 @@ int compare_labels(const char *decoded_label, const char *encoded_label)
 				}
 
 				if (((!iscntrl(k)) && (!ispunct(k)))
-					|| (k == '.') || (k == ' '))
+					|| ((k != '\0') && (strchr(allowed_extra_chars_list, k) != NULL)))
 				{
 					if ((*decoded_label) != k)
 					{
@@ -233,7 +235,7 @@ int compare_labels(const char *decoded_label, const char *encoded_label)
 				}
 
 				if (((!iscntrl(k)) && (!ispunct(k)))
-					|| (k == '.') || (k == ' '))
+					|| ((k != '\0') && (strchr(allowed_extra_chars_list, k) != NULL)))
 				{
 					if ((*decoded_label) != k)
 					{
@@ -273,7 +275,7 @@ int compare_labels(const char *decoded_label, const char *encoded_label)
 		else
 		{
 			if (((!iscntrl(*encoded_label)) && (!ispunct(*encoded_label)))
-				|| (*encoded_label == '.') || (*encoded_label == ' '))
+				|| ((*encoded_label != '\0') && (strchr(allowed_extra_chars_list, *encoded_label) != NULL)))
 			{
 				if ((*decoded_label) != (*encoded_label))
 				{
@@ -431,7 +433,7 @@ char* decode_label(const char *label)
 				}
 
 				if (((!iscntrl(k)) && (!ispunct(k)))
-					|| (k == '.') || (k == ' '))
+					|| ((k != '\0') && (strchr(allowed_extra_chars_list, k) != NULL)))
 				{
 					*cur_result = k;
 				}
@@ -470,7 +472,7 @@ char* decode_label(const char *label)
 				}
 
 				if (((!iscntrl(k)) && (!ispunct(k)))
-					|| (k == '.') || (k == ' '))
+					|| ((k != '\0') && (strchr(allowed_extra_chars_list, k) != NULL)))
 				{
 					*cur_result = k;
 				}
@@ -495,7 +497,7 @@ char* decode_label(const char *label)
 		else
 		{
 			if (((!iscntrl(*label)) && (!ispunct(*label)))
-				|| (*label == '.') || (*label == ' '))
+				|| ((*label != '\0') && (strchr(allowed_extra_chars_list, *label) != NULL)))
 			{
 				*cur_result = *label;
 			}

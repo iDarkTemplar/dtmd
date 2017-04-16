@@ -110,6 +110,7 @@ typedef struct dtmd_helper_state_list_all_removable_devices
 typedef struct dtmd_helper_state_list_removable_device
 {
 	int got_started;
+	int accept_multiple_devices;
 	dtmd_removable_media_t *result;
 } dtmd_helper_state_list_removable_device_t;
 
@@ -506,6 +507,7 @@ dtmd_result_t dtmd_list_removable_device(dtmd_t *handle, int timeout, const char
 	params.device_path = device_path;
 
 	state.got_started = 0;
+	state.accept_multiple_devices = ((strcmp(device_path, dtmd_root_device_path) == 0) ? 1 : 0);
 	state.result = NULL;
 
 	res = dtmd_helper_generic_process(handle,
@@ -715,19 +717,18 @@ static dtmd_result_t dtmd_fill_removable_device_from_notification_implementation
 		break;
 	}
 
-	constructed_media->path         = NULL;
-	constructed_media->type         = dtmd_removable_media_type_unknown_or_persistent;
-	constructed_media->subtype      = dtmd_removable_media_subtype_unknown_or_persistent;
-	constructed_media->state        = dtmd_removable_media_state_unknown;
-	constructed_media->fstype       = NULL;
-	constructed_media->label        = NULL;
-	constructed_media->mnt_point    = NULL;
-	constructed_media->mnt_opts     = NULL;
-	constructed_media->parent       = NULL;
-	constructed_media->first_child  = NULL;
-	constructed_media->last_child   = NULL;
-	constructed_media->next_node    = NULL;
-	constructed_media->prev_node    = NULL;
+	constructed_media->path          = NULL;
+	constructed_media->type          = dtmd_removable_media_type_unknown_or_persistent;
+	constructed_media->subtype       = dtmd_removable_media_subtype_unknown_or_persistent;
+	constructed_media->state         = dtmd_removable_media_state_unknown;
+	constructed_media->fstype        = NULL;
+	constructed_media->label         = NULL;
+	constructed_media->mnt_point     = NULL;
+	constructed_media->mnt_opts      = NULL;
+	constructed_media->parent        = NULL;
+	constructed_media->children_list = NULL;
+	constructed_media->next_node     = NULL;
+	constructed_media->prev_node     = NULL;
 
 	if (!dtmd_helper_fill_data(&(constructed_media->path), &(cmd->args[1]), internal_fill_type))
 	{
@@ -1292,7 +1293,7 @@ static void dtmd_helper_free_removable_device_recursive(dtmd_removable_media_t *
 	}
 
 	// then recursively free children
-	next = device->first_child;
+	next = device->children_list;
 
 	while (next != NULL)
 	{
@@ -1611,6 +1612,8 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 	int is_parent_path = 0;
 	dtmd_removable_media_t *media_ptr = NULL;
 	dtmd_removable_media_t *constructed_media = NULL;
+	dtmd_removable_media_t *last_ptr = NULL;
+	dtmd_removable_media_t **root_ptr = NULL;
 
 	if (state->got_started)
 	{
@@ -1648,37 +1651,44 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 
 			if (is_parent_path)
 			{
-				if (state->result != NULL)
-				{
-					media_ptr = state->result;
-
-					while (media_ptr->next_node != NULL)
-					{
-						media_ptr = media_ptr->next_node;
-					}
-
-					constructed_media->prev_node = media_ptr;
-					media_ptr->next_node = constructed_media;
-				}
-				else
-				{
-					state->result = constructed_media;
-				}
+				constructed_media->parent = NULL;
+				root_ptr = &(state->result);
 			}
 			else
 			{
 				constructed_media->parent = media_ptr;
+				root_ptr = &(media_ptr->children_list);
+			}
 
-				if (media_ptr->last_child != NULL)
+			media_ptr = *root_ptr;
+
+			while (media_ptr != NULL)
+			{
+				if (strcmp(constructed_media->path, media_ptr->path) < 0)
 				{
-					media_ptr->last_child->next_node = constructed_media;
-					constructed_media->prev_node = media_ptr->last_child;
-					media_ptr->last_child = constructed_media;
+					break;
 				}
-				else
+
+				last_ptr = media_ptr;
+				media_ptr = media_ptr->next_node;
+			}
+
+			if (last_ptr != NULL)
+			{
+				constructed_media->prev_node = last_ptr;
+				constructed_media->next_node = last_ptr->next_node;
+				last_ptr->next_node = constructed_media;
+
+				if (constructed_media->next_node != NULL)
 				{
-					media_ptr->first_child = media_ptr->last_child = constructed_media;
+					constructed_media->next_node->prev_node = constructed_media;
 				}
+			}
+			else
+			{
+				constructed_media->prev_node = NULL;
+				constructed_media->next_node = *root_ptr;
+				*root_ptr = constructed_media;
 			}
 		}
 		else
@@ -1738,6 +1748,8 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_removable_device_imp
 	int is_parent_path = 0;
 	dtmd_removable_media_t *media_ptr = NULL;
 	dtmd_removable_media_t *constructed_media = NULL;
+	dtmd_removable_media_t *last_ptr = NULL;
+	dtmd_removable_media_t **root_ptr = NULL;
 
 	if (state->got_started)
 	{
@@ -1776,37 +1788,44 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_removable_device_imp
 
 			if (is_parent_path)
 			{
-				if (state->result != NULL)
-				{
-					media_ptr = state->result;
-
-					while (media_ptr->next_node != NULL)
-					{
-						media_ptr = media_ptr->next_node;
-					}
-
-					constructed_media->prev_node = media_ptr;
-					media_ptr->next_node = constructed_media;
-				}
-				else
-				{
-					state->result = constructed_media;
-				}
+				constructed_media->parent = NULL;
+				root_ptr = &(state->result);
 			}
 			else
 			{
 				constructed_media->parent = media_ptr;
+				root_ptr = &(media_ptr->children_list);
+			}
 
-				if (media_ptr->last_child != NULL)
+			media_ptr = *root_ptr;
+
+			while (media_ptr != NULL)
+			{
+				if (strcmp(constructed_media->path, media_ptr->path) < 0)
 				{
-					media_ptr->last_child->next_node = constructed_media;
-					constructed_media->prev_node = media_ptr->last_child;
-					media_ptr->last_child = constructed_media;
+					break;
 				}
-				else
+
+				last_ptr = media_ptr;
+				media_ptr = media_ptr->next_node;
+			}
+
+			if (last_ptr != NULL)
+			{
+				constructed_media->prev_node = last_ptr;
+				constructed_media->next_node = last_ptr->next_node;
+				last_ptr->next_node = constructed_media;
+
+				if (constructed_media->next_node != NULL)
 				{
-					media_ptr->first_child = media_ptr->last_child = constructed_media;
+					constructed_media->next_node->prev_node = constructed_media;
 				}
+			}
+			else
+			{
+				constructed_media->prev_node = NULL;
+				constructed_media->next_node = *root_ptr;
+				*root_ptr = constructed_media;
 			}
 		}
 		else
@@ -2152,7 +2171,7 @@ inline static int dtmd_helper_exit_list_removable_device_implementation(dtmd_t *
 	{
 		if ((!state->got_started)
 			|| (state->result == NULL)
-			|| (state->result->next_node != NULL))
+			|| ((!state->accept_multiple_devices) && (state->result->next_node != NULL)))
 		{
 			handle->result_state = dtmd_invalid_state;
 			return 0;

@@ -179,7 +179,7 @@ void print_device_recursive(dtmd_removable_media_t *media_ptr, int *printing_fir
 
 	helper_print_device(media_ptr);
 
-	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		print_device_recursive(iter_media_ptr, printing_first_device);
 	}
@@ -213,7 +213,7 @@ size_t count_devices_recursive(dtmd_removable_media_t *media_ptr)
 		break;
 	}
 
-	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		result += count_devices_recursive(iter_media_ptr);
 	}
@@ -273,7 +273,7 @@ int client_list_removable_device(const char *path)
 {
 	dtmd_t *lib;
 	dtmd_result_t result;
-	dtmd_removable_media_t *device;
+	dtmd_removable_media_t *devices;
 	int printing_first_device = 1;
 
 	lib = dtmd_init(&client_callback, (void*)0, &result);
@@ -283,7 +283,7 @@ int client_list_removable_device(const char *path)
 		return -1;
 	}
 
-	result = dtmd_list_removable_device(lib, dtmd_library_timeout_infinite, path, &device);
+	result = dtmd_list_removable_device(lib, dtmd_library_timeout_infinite, path, &devices);
 	if (result != dtmd_ok)
 	{
 		fprintf(stderr, "Couldn't list device, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
@@ -291,16 +291,9 @@ int client_list_removable_device(const char *path)
 		return -1;
 	}
 
-	if (device != NULL)
-	{
-		print_device_recursive(device, &printing_first_device);
-		dtmd_free_removable_devices(lib, device);
-	}
-	else
-	{
-		fprintf(stdout, "Didn't find device with specified path!\n");
-	}
+	print_devices(devices, &printing_first_device);
 
+	dtmd_free_removable_devices(lib, devices);
 	dtmd_deinit(lib);
 
 	return 0;

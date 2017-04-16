@@ -936,7 +936,7 @@ static int invoke_unmount_recursive(struct client *client_ptr, dtmd_removable_me
 	int result;
 	dtmd_removable_media_t *iter_media_ptr;
 
-	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		result = invoke_unmount_recursive(client_ptr, iter_media_ptr);
 		if (is_result_fatal_error(result))

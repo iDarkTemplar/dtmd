@@ -30,8 +30,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-// TODO: consider making removable media lists sorted by path
-
 dtmd_removable_media_t *removable_media_root = NULL;
 
 struct client *client_root = NULL;
@@ -45,14 +43,9 @@ static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 	// first unlink node
 	if (media_ptr->parent != NULL)
 	{
-		if (media_ptr->parent->first_child == media_ptr)
+		if (media_ptr->parent->children_list == media_ptr)
 		{
-			media_ptr->parent->first_child = media_ptr->next_node;
-		}
-
-		if (media_ptr->parent->last_child == media_ptr)
-		{
-			media_ptr->parent->last_child = media_ptr->prev_node;
+			media_ptr->parent->children_list = media_ptr->next_node;
 		}
 	}
 
@@ -67,7 +60,7 @@ static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 	}
 
 	// then recursively free children
-	next = media_ptr->first_child;
+	next = media_ptr->children_list;
 
 	while (next != NULL)
 	{
@@ -123,6 +116,8 @@ int add_media(const char *parent_path,
 	int is_parent_path = 0;
 	dtmd_removable_media_t *media_ptr = NULL;
 	dtmd_removable_media_t *constructed_media;
+	dtmd_removable_media_t *last_ptr = NULL;
+	dtmd_removable_media_t **root_ptr = NULL;
 
 	if (strcmp(parent_path, dtmd_root_device_path) == 0)
 	{
@@ -215,49 +210,49 @@ int add_media(const char *parent_path,
 		constructed_media->mnt_opts = NULL;
 	}
 
-	constructed_media->first_child = NULL;
-	constructed_media->last_child = NULL;
+	constructed_media->children_list = NULL;
 
 	if (is_parent_path)
 	{
 		constructed_media->parent = NULL;
-
-		if (removable_media_root != NULL)
-		{
-			media_ptr = removable_media_root;
-
-			while (media_ptr->next_node != NULL)
-			{
-				media_ptr = media_ptr->next_node;
-			}
-
-			constructed_media->prev_node = media_ptr;
-			media_ptr->next_node = constructed_media;
-		}
-		else
-		{
-			removable_media_root = constructed_media;
-			constructed_media->prev_node = NULL;
-		}
+		root_ptr = &removable_media_root;
 	}
 	else
 	{
 		constructed_media->parent = media_ptr;
-
-		if (media_ptr->last_child != NULL)
-		{
-			media_ptr->last_child->next_node = constructed_media;
-			constructed_media->prev_node = media_ptr->last_child;
-			media_ptr->last_child = constructed_media;
-		}
-		else
-		{
-			media_ptr->first_child = media_ptr->last_child = constructed_media;
-			constructed_media->prev_node = NULL;
-		}
+		root_ptr = &(media_ptr->children_list);
 	}
 
-	constructed_media->next_node = NULL;
+	media_ptr = *root_ptr;
+
+	while (media_ptr != NULL)
+	{
+		if (strcmp(constructed_media->path, media_ptr->path) < 0)
+		{
+			break;
+		}
+
+		last_ptr = media_ptr;
+		media_ptr = media_ptr->next_node;
+	}
+
+	if (last_ptr != NULL)
+	{
+		constructed_media->prev_node = last_ptr;
+		constructed_media->next_node = last_ptr->next_node;
+		last_ptr->next_node = constructed_media;
+
+		if (constructed_media->next_node != NULL)
+		{
+			constructed_media->next_node->prev_node = constructed_media;
+		}
+	}
+	else
+	{
+		constructed_media->prev_node = NULL;
+		constructed_media->next_node = *root_ptr;
+		*root_ptr = constructed_media;
+	}
 
 	notify_removable_device_added(parent_path,
 		path,

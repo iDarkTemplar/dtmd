@@ -84,7 +84,9 @@ public:
 		return std::make_shared<removable_media>(removable_media_private{0}, std::forward<T>(args)...);
 	}
 
-	void fillFromRemovableMedia(const dtmd_removable_media_t *removable_media);
+	bool operator<(const removable_media &other) const;
+
+	void fillFromRemovableMedia(const dtmd_removable_media_t *raw_removable_media);
 	void clear();
 
 	std::string getParentPath() const;
@@ -120,7 +122,7 @@ public:
 	virtual ~library();
 
 	dtmd_result_t list_all_removable_devices(int timeout, std::list<std::shared_ptr<removable_media> > &removable_devices_list);
-	dtmd_result_t list_removable_device(int timeout, const std::string &removable_device_path, std::shared_ptr<removable_media> &removable_device);
+	dtmd_result_t list_removable_device(int timeout, const std::string &removable_device_path, std::list<std::shared_ptr<removable_media> > &removable_devices_list);
 	dtmd_result_t mount(int timeout, const std::string &path);
 	dtmd_result_t mount(int timeout, const std::string &path, const std::string &mount_options);
 	dtmd_result_t unmount(int timeout, const std::string &path);

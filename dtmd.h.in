@@ -79,8 +79,7 @@ typedef struct dtmd_removable_media
 
 	struct dtmd_removable_media *parent;
 
-	struct dtmd_removable_media *first_child;
-	struct dtmd_removable_media *last_child;
+	struct dtmd_removable_media *children_list;
 
 	struct dtmd_removable_media *next_node;
 	struct dtmd_removable_media *prev_node;
