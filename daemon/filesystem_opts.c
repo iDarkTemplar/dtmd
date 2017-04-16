@@ -129,6 +129,7 @@ static const struct dtmd_mount_option common_fs_allowed_list[] =
 	{ "dirsync", 0, NULL },
 	{ NULL,      0, NULL }
 };
+
 static const struct dtmd_mount_option vfat_allow[] =
 {
 	{ "flush",        0, NULL },
@@ -143,7 +144,6 @@ static const struct dtmd_mount_option vfat_allow[] =
 	{ "blocksize=",   1, &validate_is_decimal_number },
 	{ "allow_utime=", 1, &validate_is_octal_number },
 	{ "check=",       1, &validate_vfat_is_check },
-	{ "conv=",        1, &validate_vfat_is_conv },
 	{ NULL,           0, NULL }
 };
 
@@ -1636,30 +1636,6 @@ static int validate_vfat_is_check(const char *option, int option_len)
 	}
 	else if ((option_len == 7)
 		&& (strncmp(option, "relaxed", option_len) == 0))
-	{
-		return result_success;
-	}
-
-	return result_fail;
-}
-
-static int validate_vfat_is_conv(const char *option, int option_len)
-{
-	if ((option_len == 1)
-		&& (((*option) == 'b')
-			|| ((*option) == 't')
-			|| ((*option) == 'a')))
-	{
-		return result_success;
-	}
-	else if ((option_len == 4)
-		&& ((strncmp(option, "text", option_len) == 0)
-			|| (strncmp(option, "auto", option_len) == 0)))
-	{
-		return result_success;
-	}
-	else if ((option_len == 6)
-		&& (strncmp(option, "binary", option_len) == 0))
 	{
 		return result_success;
 	}

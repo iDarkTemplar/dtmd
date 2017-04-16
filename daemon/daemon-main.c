@@ -323,7 +323,6 @@ int main(int argc, char **argv)
 	char buffer[12];
 	const int backlog = 4;
 	size_t i;
-	size_t j;
 	struct stat st;
 	int daemonpipe[2] = { -1, -1 };
 	unsigned char daemondata;
@@ -747,11 +746,17 @@ int main(int argc, char **argv)
 #endif /* (defined OS_FreeBSD) */
 		pollfds[2].revents = 0;
 
-		for (client_ptr = client_root; client_ptr != NULL; client_ptr = client_ptr->next_node)
+		client_ptr = client_root;
+		i = 0;
+
+		while (client_ptr != NULL)
 		{
 			pollfds[i + pollfds_count_default].fd      = client_ptr->clientfd;
 			pollfds[i + pollfds_count_default].events  = POLLIN;
 			pollfds[i + pollfds_count_default].revents = 0;
+
+			client_ptr = client_ptr->next_node;
+			++i;
 		}
 
 		rc = poll(pollfds, pollfds_count, -1);

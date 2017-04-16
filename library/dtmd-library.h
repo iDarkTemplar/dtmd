@@ -55,6 +55,12 @@ typedef enum dtmd_result
 	dtmd_label_decoding_error = -11
 } dtmd_result_t;
 
+typedef enum dtmd_fill_type
+{
+	dtmd_fill_copy = 0, // copy the data from dt_command to structure
+	dtmd_fill_link = 1 // link fields in structure to fields in dt_commands, thus structure remains valid only while dt_command exists unmodified
+} dtmd_fill_type_t;
+
 dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result);
 void dtmd_deinit(dtmd_t *handle);
 
@@ -65,6 +71,8 @@ dtmd_result_t dtmd_mount(dtmd_t *handle, int timeout, const char *path, const ch
 dtmd_result_t dtmd_unmount(dtmd_t *handle, int timeout, const char *path);
 dtmd_result_t dtmd_list_supported_filesystems(dtmd_t *handle, int timeout, size_t *supported_filesystems_count, const char ***supported_filesystems_list);
 dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout, const char *filesystem, size_t *supported_filesystem_options_count, const char ***supported_filesystem_options_list);
+
+dtmd_result_t dtmd_fill_removable_device_from_notification(dtmd_t *handle, const dt_command_t *cmd, dtmd_fill_type_t fill_type, dtmd_removable_media_t **result);
 
 int dtmd_is_state_invalid(dtmd_t *handle);
 int dtmd_is_notification_valid_removable_device(dtmd_t *handle, const dt_command_t *cmd);

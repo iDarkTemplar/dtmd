@@ -30,6 +30,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+// TODO: consider making removable media lists sorted by path
+
 dtmd_removable_media_t *removable_media_root = NULL;
 
 struct client *client_root = NULL;
@@ -37,7 +39,23 @@ size_t clients_count = 0;
 
 static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 {
+	dtmd_removable_media_t *cur;
+	dtmd_removable_media_t *next;
+
 	// first unlink node
+	if (media_ptr->parent != NULL)
+	{
+		if (media_ptr->parent->first_child == media_ptr)
+		{
+			media_ptr->parent->first_child = media_ptr->next_node;
+		}
+
+		if (media_ptr->parent->last_child == media_ptr)
+		{
+			media_ptr->parent->last_child = media_ptr->prev_node;
+		}
+	}
+
 	if (media_ptr->prev_node != NULL)
 	{
 		media_ptr->prev_node->next_node = media_ptr->next_node;
@@ -49,9 +67,13 @@ static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 	}
 
 	// then recursively free children
-	while (media_ptr->first_child != NULL)
+	next = media_ptr->first_child;
+
+	while (next != NULL)
 	{
-		remove_media_helper(media_ptr->first_child);
+		cur = next;
+		next = cur->next_node;
+		remove_media_helper(cur);
 	}
 
 	// do notifications
@@ -100,7 +122,7 @@ int add_media(const char *parent_path,
 {
 	int is_parent_path = 0;
 	dtmd_removable_media_t *media_ptr = NULL;
-	dtmd_removable_media_t *constructed_media = NULL;
+	dtmd_removable_media_t *constructed_media;
 
 	if (strcmp(parent_path, dtmd_root_device_path) == 0)
 	{
@@ -150,7 +172,7 @@ int add_media(const char *parent_path,
 
 	if (label != NULL)
 	{
-		constructed_media->label = strdup(label);
+		constructed_media->label = decode_label(label);
 		if (constructed_media->label == NULL)
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
@@ -243,17 +265,19 @@ int add_media(const char *parent_path,
 		media_subtype,
 		state,
 		fstype,
-		label,
+		constructed_media->label,
 		mnt_point,
 		mnt_opts);
 
 	return result_success;
 
+/*
 add_media_error_7:
 	if (constructed_media->mnt_opts != NULL)
 	{
 		free(constructed_media->mnt_opts);
 	}
+*/
 
 add_media_error_6:
 	if (constructed_media->mnt_point != NULL)
@@ -285,7 +309,7 @@ add_media_error_1:
 
 int remove_media(const char *path)
 {
-	dtmd_removable_media_t *media_ptr = NULL;
+	dtmd_removable_media_t *media_ptr;
 
 	media_ptr = dtmd_find_media(path, removable_media_root);
 	if (media_ptr == NULL)
@@ -314,7 +338,7 @@ int change_media(const char *parent_path,
 	const char *mnt_point,
 	const char *mnt_opts)
 {
-	dtmd_removable_media_t *media_ptr = NULL;
+	dtmd_removable_media_t *media_ptr;
 
 	media_ptr = dtmd_find_media(path, removable_media_root);
 	if (media_ptr == NULL)
@@ -445,12 +469,22 @@ int change_media(const char *parent_path,
 		}
 	}
 
+	notify_removable_device_changed(parent_path,
+		path,
+		media_type,
+		media_subtype,
+		state,
+		fstype,
+		media_ptr->label,
+		mnt_point,
+		mnt_opts);
+
 	return result_success;
 }
 
 void remove_all_media(void)
 {
-	dtmd_removable_media_t *next = NULL;
+	dtmd_removable_media_t *next;
 	dtmd_removable_media_t *cur = NULL;
 
 	next = removable_media_root;
@@ -468,7 +502,7 @@ void remove_all_media(void)
 int add_client(int client_fd)
 {
 	struct client *cur_client;
-	struct client *client_iter;
+	struct client *client_iter = NULL;
 
 	cur_client = client_root;
 
@@ -489,6 +523,9 @@ int add_client(int client_fd)
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_client_error_1;
 	}
+
+	cur_client->clientfd = client_fd;
+	cur_client->buf_used = 0;
 
 	if (client_iter != NULL)
 	{
@@ -562,7 +599,7 @@ int remove_client(int client_fd)
 void remove_all_clients(void)
 {
 	struct client *next;
-	struct client *cur;
+	struct client *cur = NULL;
 
 	next = client_root;
 

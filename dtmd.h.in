@@ -121,7 +121,7 @@ typedef struct dtmd_removable_media
 
 #define dtmd_notification_removable_device_added "removable_device_added"
 /* parameters: parent_path, path, type */
-/* additional parameters for type 'removable_device' and 'stateful_device': subtype
+/* additional parameters for type 'removable_device' and 'stateful_device': subtype */
 /* additional parameters for type 'stateful_device': state */
 /* additional parameters for type 'device_partition' and 'stateful_device': fstype (or NULL), label (or NULL), mount_point (or NULL), mount_options (or NULL) */
 

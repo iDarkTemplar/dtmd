@@ -29,17 +29,15 @@ class QCustomDeviceAction : public QAction
 
 public:
 	explicit QCustomDeviceAction(QObject *parent = 0);
-	QCustomDeviceAction(const QString &text, QObject *parent, size_t device, size_t partition, const QString &partition_name);
+	QCustomDeviceAction(const QString &text, QObject *parent, const std::string &device_name);
 
 signals:
-	void triggered(size_t, size_t, QString);
+	void triggered(const std::string &);
 
 public slots:
 
 protected:
-	size_t m_device;
-	size_t m_partition;
-	QString m_partition_name;
+	std::string m_device_name;
 
 protected slots:
 	void retrigger();

@@ -60,7 +60,6 @@ protected:
 
 public:
 	explicit removable_media(const removable_media_private &);
-	explicit removable_media(const removable_media_private &, const dtmd_removable_media_t *removable_media);
 	explicit removable_media(const removable_media_private &,
 		const std::shared_ptr<removable_media> &l_parent,
 		const std::string &l_path,
@@ -73,6 +72,11 @@ public:
 		const std::string &l_mnt_opts = std::string());
 
 	virtual ~removable_media();
+
+	// Next function copies data of current node, but leaves parent pointer and children list intact
+	void copyFromRemovableMedia(const removable_media &other);
+
+	static std::shared_ptr<removable_media> createFromRemovableMedia(const dtmd_removable_media_t *raw_removable_media);
 
 	template <typename... T>
 	static std::shared_ptr<removable_media> create(T &&...args)
@@ -99,6 +103,10 @@ public:
 
 	std::weak_ptr<removable_media> parent;
 	std::list<std::shared_ptr<removable_media> > children;
+
+private:
+	explicit removable_media(const removable_media &other) = delete;
+	removable_media& operator=(const removable_media &other) = delete;
 };
 
 class library;
@@ -119,6 +127,8 @@ public:
 	dtmd_result_t list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list);
 	dtmd_result_t list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list);
 
+	dtmd_result_t fill_removable_device_from_notification(const command &cmd, std::shared_ptr<removable_media> &removable_device) const;
+
 	bool isStateInvalid() const;
 	bool isNotificationValidRemovableDevice(const command &cmd) const;
 	dtmd_error_code_t getCodeOfCommandFail() const;
@@ -135,6 +145,9 @@ private:
 	callback m_cb;
 	void *m_arg;
 };
+
+std::shared_ptr<removable_media> find_removable_media(const std::string &path, const std::list<std::shared_ptr<removable_media> > &root);
+std::shared_ptr<removable_media> find_removable_media(const std::string &path, const std::shared_ptr<removable_media> &root);
 
 } // namespace dtmd
 

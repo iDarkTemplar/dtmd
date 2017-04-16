@@ -43,12 +43,15 @@ size_t clients_count = 0;
 		return -1; \
 	}
 
+// TODO: support this test on FreeBSD
+
 int main(int argc, char **argv)
 {
-	char *filesystem_opts_vfat = "flush,utf8=1,shortname=mixed,umask=000,dmask=000,fmask=000,codepage=cp1251,iocharset=utf8,showexec,blocksize=4096,allow_utime=1,check=0,conv=1";
-	char *filesystem_opts_ntfs_3g = "umask=000,dmask=000,fmask=000,iocharset=utf-8,windows_names,allow_other";
-	char *filesystem_opts_iso9660 = "norock,nojoliet,iocharset=utf-8,mode=000,dmode=000,utf8,block=4096,conv=1";
-	char *filesystem_opts_udf = "iocharset=utf-8,umask=000,mode=000,dmode=000,undelete";
+#if (defined OS_Linux)
+	char *filesystem_opts_vfat = "flush,utf8=1,shortname=mixed,umask=0000,dmask=0000,fmask=0000,codepage=cp1251,iocharset=utf8,showexec,blocksize=4096,allow_utime=1,check=s";
+	char *filesystem_opts_ntfs_3g = "umask=0000,dmask=0000,fmask=0000,iocharset=utf-8,windows_names,allow_other";
+	char *filesystem_opts_iso9660 = "norock,nojoliet,iocharset=utf-8,mode=0000,utf8,block=1024";
+	char *filesystem_opts_udf = "iocharset,umask=0000,undelete";
 
 	char *default_opts1 = "exec,atime,nodiratime,ro,sync,dirsync";
 	char *default_opts2 = "exec,noexec,nodev,nosuid,atime,noatime,ro,rw";
@@ -70,12 +73,19 @@ int main(int argc, char **argv)
 
 	uid_t uid = 21;
 	gid_t gid = 987;
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 	tests_init();
 
 	(void)argc;
 	(void)argv;
 
+#if (defined OS_Linux)
 	get_fsopts(vfat);
 	get_fsopts(ntfs);
 	get_fsopts(iso9660);
@@ -87,8 +97,8 @@ int main(int argc, char **argv)
 	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 1: vfat", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
-	test_compare_comment(len_full == 142, "Test 1: vfat");
-	test_compare_comment(len == 142, "Test 1: vfat");
+	test_compare_comment(len_full == 138, "Test 1: vfat");
+	test_compare_comment(len == 138, "Test 1: vfat");
 	test_compare_comment(flags == 0, "Test 1: vfat");
 
 	// Test 2: ntfs-3g
@@ -97,8 +107,8 @@ int main(int argc, char **argv)
 	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 2: ntfs-3g", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
-	test_compare_comment(len_full == 71, "Test 2: ntfs-3g");
-	test_compare_comment(len == 71, "Test 2: ntfs-3g");
+	test_compare_comment(len_full == 74, "Test 2: ntfs-3g");
+	test_compare_comment(len == 74, "Test 2: ntfs-3g");
 	test_compare_comment(flags == 0, "Test 2: ntfs-3g");
 
 	// Test 3: iso9660
@@ -107,8 +117,8 @@ int main(int argc, char **argv)
 	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 3: iso9660", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
-	test_compare_comment(len_full == 73, "Test 3: iso9660");
-	test_compare_comment(len == 73, "Test 3: iso9660");
+	test_compare_comment(len_full == 57, "Test 3: iso9660");
+	test_compare_comment(len == 57, "Test 3: iso9660");
 	test_compare_comment(flags == 0, "Test 3: iso9660");
 
 	// Test 4: udf
@@ -117,8 +127,8 @@ int main(int argc, char **argv)
 	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 4: udf", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
-	test_compare_comment(len_full == 53, "Test 4: udf");
-	test_compare_comment(len == 53, "Test 4: udf");
+	test_compare_comment(len_full == 29, "Test 4: udf");
+	test_compare_comment(len == 29, "Test 4: udf");
 	test_compare_comment(flags == 0, "Test 4: udf");
 
 	// Test 5: default options set 1
@@ -192,8 +202,8 @@ int main(int argc, char **argv)
 	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 13: vfat with options, uid and gid", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
-	test_compare_comment(len_full == 157, "Test 13: vfat with options, uid and gid");
-	test_compare_comment(len == 157, "Test 13: vfat with options, uid and gid");
+	test_compare_comment(len_full == 153, "Test 13: vfat with options, uid and gid");
+	test_compare_comment(len == 153, "Test 13: vfat with options, uid and gid");
 	test_compare_comment(flags == 0, "Test 13: vfat with options, uid and gid");
 
 	// Test 14: invalid options set 1 for vfat
@@ -205,6 +215,12 @@ int main(int argc, char **argv)
 	init_options_list(&fsopts_list);
 	test_compare_comment_deinit(convert_options_to_list(invalid_opts2, fsopts_vfat, NULL, NULL, &fsopts_list) == result_fail, "Test 15: invalid options set 2 for vfat", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
+#else /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+#else /* (defined OS_FreeBSD) */
+#error Unsupported OS
+#endif /* (defined OS_FreeBSD) */
+#endif /* (defined OS_Linux) */
 
 	return tests_result();
 }

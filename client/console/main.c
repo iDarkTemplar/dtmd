@@ -44,16 +44,9 @@ int first = 1;
 		fprintf(stdout, "\n"); \
 	}
 
-void helper_print_device(const char *path,
-	dtmd_removable_media_type_t type,
-	dtmd_removable_media_subtype_t subtype,
-	dtmd_removable_media_state_t state,
-	const char *fstype,
-	const char *label,
-	const char *mnt_point,
-	const char *mnt_opts)
+void helper_print_device(const dtmd_removable_media_t *media_ptr)
 {
-	switch (type)
+	switch (media_ptr->type)
 	{
 	case dtmd_removable_media_type_device_partition:
 	case dtmd_removable_media_type_stateless_device:
@@ -65,39 +58,39 @@ void helper_print_device(const char *path,
 		return;
 	}
 
-	fprintf(stdout, "Path: %s\n", path);
-	fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(type));
+	fprintf(stdout, "Path: %s\n", media_ptr->path);
+	fprintf(stdout, "Type: %s\n", dtmd_device_type_to_string(media_ptr->type));
 
-	switch (type)
+	switch (media_ptr->type)
 	{
 	case dtmd_removable_media_type_stateless_device:
-		fprintf(stdout, "Subtype: %s\n", dtmd_device_subtype_to_string(subtype));
+		fprintf(stdout, "Subtype: %s\n", dtmd_device_subtype_to_string(media_ptr->subtype));
 		break;
 
 	case dtmd_removable_media_type_stateful_device:
-		fprintf(stdout, "Subtype: %s\n", dtmd_device_subtype_to_string(subtype));
-		fprintf(stdout, "State: %s\n", dtmd_device_state_to_string(state));
+		fprintf(stdout, "Subtype: %s\n", dtmd_device_subtype_to_string(media_ptr->subtype));
+		fprintf(stdout, "State: %s\n", dtmd_device_state_to_string(media_ptr->state));
 		// NOTE: fallthrough
 
 	case dtmd_removable_media_type_device_partition:
-		if (fstype != NULL)
+		if (media_ptr->fstype != NULL)
 		{
-			fprintf(stdout, "Filesystem type: %s\n", fstype);
+			fprintf(stdout, "Filesystem type: %s\n", media_ptr->fstype);
 		}
 
-		if (label != NULL)
+		if (media_ptr->label != NULL)
 		{
-			fprintf(stdout, "Label: %s\n", label);
+			fprintf(stdout, "Label: %s\n", media_ptr->label);
 		}
 
-		if (mnt_point != NULL)
+		if (media_ptr->mnt_point != NULL)
 		{
-			fprintf(stdout, "Mount point: %s\n", mnt_point);
+			fprintf(stdout, "Mount point: %s\n", media_ptr->mnt_point);
 		}
 
-		if (mnt_opts != NULL)
+		if (media_ptr->mnt_opts != NULL)
 		{
-			fprintf(stdout, "Mount options: %s\n", mnt_opts);
+			fprintf(stdout, "Mount options: %s\n", media_ptr->mnt_opts);
 		}
 		break;
 
@@ -107,60 +100,22 @@ void helper_print_device(const char *path,
 	}
 }
 
-void helper_callback_print_device(const dt_command_t *cmd)
+void helper_callback_print_device(dtmd_t *library, const dt_command_t *cmd)
 {
-	const char *path = NULL;
-	dtmd_removable_media_type_t type = dtmd_removable_media_type_unknown_or_persistent;
-	dtmd_removable_media_subtype_t subtype = dtmd_removable_media_subtype_unknown_or_persistent;
-	dtmd_removable_media_state_t state = dtmd_removable_media_state_unknown;
-	const char *fstype = NULL;
-	const char *label = NULL;
-	const char *mnt_point = NULL;
-	const char *mnt_opts = NULL;
+	dtmd_result_t result;
+	dtmd_removable_media_t *device;
 
-	path = cmd->args[1];
-	type = dtmd_string_to_device_type(cmd->args[2]);
-
-	switch (type)
+	result = dtmd_fill_removable_device_from_notification(library, cmd, dtmd_fill_link, &device);
+	if (result == dtmd_ok)
 	{
-	case dtmd_removable_media_type_device_partition:
-		fstype    = cmd->args[3];
-		label     = cmd->args[4];
-		mnt_point = cmd->args[5];
-		mnt_opts  = cmd->args[6];
-		break;
-
-	case dtmd_removable_media_type_stateless_device:
-		subtype = dtmd_string_to_device_subtype(cmd->args[3]);
-		break;
-
-	case dtmd_removable_media_type_stateful_device:
-		subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
-		state     = dtmd_string_to_device_state(cmd->args[4]);
-		fstype    = cmd->args[5];
-		label     = cmd->args[6];
-		mnt_point = cmd->args[7];
-		mnt_opts  = cmd->args[8];
-		break;
-
-	case dtmd_removable_media_type_unknown_or_persistent:
-	default:
-		break;
+		helper_print_device(device);
+		dtmd_free_removable_devices(library, device);
 	}
-
-	helper_print_device(path,
-		type,
-		subtype,
-		state,
-		fstype,
-		label,
-		mnt_point,
-		mnt_opts);
 }
 
 void client_callback(dtmd_t *library, void *arg, const dt_command_t *cmd)
 {
-	if (arg != (void*)1)
+	if (arg == (void*)1)
 	{
 		if (cmd != NULL)
 		{
@@ -168,7 +123,7 @@ void client_callback(dtmd_t *library, void *arg, const dt_command_t *cmd)
 			{
 				print_first(first);
 				fprintf(stdout, "Device added\n");
-				helper_callback_print_device(cmd);
+				helper_callback_print_device(library, cmd);
 			}
 			else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_removed) == 0) && (cmd->args_count == 1)
 				&& (cmd->args[0] != NULL))
@@ -180,7 +135,7 @@ void client_callback(dtmd_t *library, void *arg, const dt_command_t *cmd)
 			{
 				print_first(first);
 				fprintf(stdout, "Device changed\n");
-				helper_callback_print_device(cmd);
+				helper_callback_print_device(library, cmd);
 			}
 			else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_mounted) == 0) && (cmd->args_count == 3)
 				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
@@ -222,14 +177,7 @@ void print_device_recursive(dtmd_removable_media_t *media_ptr, int *printing_fir
 
 	print_first(*printing_first_device);
 
-	helper_print_device(media_ptr->path,
-		media_ptr->type,
-		media_ptr->subtype,
-		media_ptr->state,
-		media_ptr->fstype,
-		media_ptr->label,
-		media_ptr->mnt_point,
-		media_ptr->mnt_opts);
+	helper_print_device(media_ptr);
 
 	for (iter_media_ptr = media_ptr->first_child; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{

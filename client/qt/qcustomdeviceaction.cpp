@@ -21,23 +21,19 @@
 #include "client/qt/qcustomdeviceaction.hpp"
 
 QCustomDeviceAction::QCustomDeviceAction(QObject *parent)
-	: QAction(parent),
-	m_device(0),
-	m_partition(0)
+	: QAction(parent)
 {
 	QObject::connect(this, SIGNAL(triggered()), this, SLOT(retrigger()), Qt::DirectConnection);
 }
 
-QCustomDeviceAction::QCustomDeviceAction(const QString &text, QObject *parent, size_t device, size_t partition, const QString &partition_name)
+QCustomDeviceAction::QCustomDeviceAction(const QString &text, QObject *parent, const std::string &device_name)
 	: QAction(text, parent),
-	m_device(device),
-	m_partition(partition),
-	m_partition_name(partition_name)
+	m_device_name(device_name)
 {
 	QObject::connect(this, SIGNAL(triggered()), this, SLOT(retrigger()), Qt::DirectConnection);
 }
 
 void QCustomDeviceAction::retrigger()
 {
-	emit triggered(m_device, m_partition, m_partition_name);
+	emit triggered(m_device_name);
 }

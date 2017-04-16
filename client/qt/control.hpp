@@ -30,6 +30,7 @@
 #include <vector>
 #include <map>
 #include <list>
+#include <tuple>
 
 #include <dtmd-library++.hpp>
 
@@ -43,21 +44,19 @@ public:
 
 public slots:
 	void change_state_icon();
-	void triggeredOpen(size_t device, size_t partition, QString partition_name);
-	void triggeredOpen(size_t stateful_device, QString device_name);
-	void triggeredMount(size_t device, size_t partition, QString partition_name);
-	void triggeredMount(size_t stateful_device, QString device_name);
-	void triggeredUnmount(size_t device, size_t partition, QString partition_name);
-	void triggeredUnmount(size_t stateful_device, QString device_name);
+	void triggeredOpen(const std::string &device_name);
+	void triggeredMount(const std::string &device_name);
+	void triggeredUnmount(const std::string &device_name);
 
 private:
 	Q_DISABLE_COPY(Control)
 
+	void buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::removable_media> &device_ptr);
 	void BuildMenu();
 
-	QIcon iconFromType(dtmd_removable_media_type_t type, bool is_mounted);
+	QIcon iconFromSubtype(dtmd_removable_media_subtype_t type, bool is_mounted);
 
-	static void dtmd_callback(void *arg, const dtmd::command &cmd);
+	static void dtmd_callback(const dtmd::library &library_instance, void *arg, const dtmd::command &cmd);
 
 	enum app_state
 	{
@@ -75,12 +74,15 @@ private:
 	void setIconState(app_state state, int millisecondsTimeoutHint);
 	void triggerBuildMenu();
 
+	std::tuple<bool, QString, QString> processCommand(const dtmd::command &cmd);
+
 	static const int defaultTimeout;
 
 	QSystemTrayIcon m_tray;
 	QScopedPointer<dtmd::library> m_lib;
-	std::vector<dtmd::stateful_device> m_stateful_devices;
-	std::vector<dtmd::device> m_devices;
+	std::list<std::shared_ptr<dtmd::removable_media> > m_devices;
+	std::list<dtmd::command> m_saved_commands;
+	bool m_devices_initialized;
 	QMutex m_devices_mutex;
 
 	std::map<app_state, QIcon> m_icons_map;

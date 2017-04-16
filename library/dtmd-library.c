@@ -37,6 +37,8 @@
 #include <stdio.h>
 #include <time.h>
 
+#define dtmd_removable_media_internal_state_fields_are_linked  (1<<0)
+
 typedef enum dtmd_library_state
 {
 	dtmd_state_default,
@@ -45,6 +47,13 @@ typedef enum dtmd_library_state
 	dtmd_state_in_list_supported_filesystems,
 	dtmd_state_in_list_supported_filesystem_options
 } dtmd_library_state_t;
+
+typedef enum dtmd_internal_fill_type
+{
+	dtmd_internal_fill_copy = 0,
+	dtmd_internal_fill_link = 1,
+	dtmd_internal_fill_move = 2
+} dtmd_internal_fill_type_t;
 
 struct dtmd_library
 {
@@ -122,6 +131,9 @@ typedef struct dtmd_helper_state_list_supported_filesystem_options
 
 static void* dtmd_worker_function(void *arg);
 
+static int dtmd_helper_fill_data(char **where, char **from, dtmd_internal_fill_type_t internal_fill_type);
+static dtmd_result_t dtmd_fill_removable_device_from_notification_implementation(dtmd_t *handle, dt_command_t *cmd, dtmd_internal_fill_type_t internal_fill_type, dtmd_removable_media_t **result);
+
 static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dt_command_t *cmd);
 static dtmd_result_t dtmd_helper_handle_callback_cmd(dtmd_t *handle, dt_command_t *cmd);
 static dtmd_result_t dtmd_helper_wait_for_input(int handle, int timeout);
@@ -164,8 +176,6 @@ static void dtmd_helper_free_removable_device_recursive(dtmd_removable_media_t *
 static void dtmd_helper_free_removable_device(dtmd_removable_media_t *device);
 static void dtmd_helper_free_supported_filesystems(size_t supported_filesystems_count, const char **supported_filesystems_list);
 static void dtmd_helper_free_supported_filesystem_options(size_t supported_filesystem_options_count, const char **supported_filesystem_options_list);
-
-static int dtmd_helper_string_to_int(const char *string, size_t *number);
 
 static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
 static dtmd_result_t dtmd_helper_read_data(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end);
@@ -640,6 +650,208 @@ dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout
 	return res;
 }
 
+static int dtmd_helper_fill_data(char **where, char **from, dtmd_internal_fill_type_t internal_fill_type)
+{
+	switch (internal_fill_type)
+	{
+	case dtmd_internal_fill_copy:
+		if (*from != NULL)
+		{
+			*where = strdup(*from);
+			if (*where == NULL)
+			{
+				return 0;
+			}
+		}
+		else
+		{
+			*where = NULL;
+		}
+
+		return 1;
+		break;
+
+	case dtmd_internal_fill_move:
+		*where = *from;
+		*from = NULL;
+		return 1;
+		break;
+
+	case dtmd_internal_fill_link:
+		*where = *from;
+		return 1;
+		break;
+
+	default:
+		return dtmd_input_error;
+		break;
+	}
+
+	return 0;
+}
+
+static dtmd_result_t dtmd_fill_removable_device_from_notification_implementation(dtmd_t *handle, dt_command_t *cmd, dtmd_internal_fill_type_t internal_fill_type, dtmd_removable_media_t **result)
+{
+	dtmd_removable_media_t *constructed_media = NULL;
+
+	constructed_media = (dtmd_removable_media_t*) malloc(sizeof(dtmd_removable_media_t));
+	if (constructed_media == NULL)
+	{
+		handle->result_state = dtmd_memory_error;
+		goto dtmd_fill_removable_device_from_notification_implementation_error_1;
+	}
+
+	constructed_media->private_data = NULL;
+
+	switch (internal_fill_type)
+	{
+	case dtmd_internal_fill_link:
+		constructed_media->private_data = (void*) (dtmd_removable_media_internal_state_fields_are_linked);
+		break;
+
+	case dtmd_internal_fill_copy:
+	case dtmd_internal_fill_move:
+	default:
+		break;
+	}
+
+	constructed_media->path         = NULL;
+	constructed_media->type         = dtmd_removable_media_type_unknown_or_persistent;
+	constructed_media->subtype      = dtmd_removable_media_subtype_unknown_or_persistent;
+	constructed_media->state        = dtmd_removable_media_state_unknown;
+	constructed_media->fstype       = NULL;
+	constructed_media->label        = NULL;
+	constructed_media->mnt_point    = NULL;
+	constructed_media->mnt_opts     = NULL;
+	constructed_media->parent       = NULL;
+	constructed_media->first_child  = NULL;
+	constructed_media->last_child   = NULL;
+	constructed_media->next_node    = NULL;
+	constructed_media->prev_node    = NULL;
+
+	if (!dtmd_helper_fill_data(&(constructed_media->path), &(cmd->args[1]), internal_fill_type))
+	{
+		handle->result_state = dtmd_memory_error;
+		goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+	}
+
+	constructed_media->type         = dtmd_string_to_device_type(cmd->args[2]);
+
+	switch (constructed_media->type)
+	{
+	case dtmd_removable_media_type_device_partition:
+		if (!dtmd_helper_fill_data(&(constructed_media->fstype), &(cmd->args[3]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+
+		if (!dtmd_helper_fill_data(&(constructed_media->label), &(cmd->args[4]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+
+		if (!dtmd_helper_fill_data(&(constructed_media->mnt_point), &(cmd->args[5]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+
+		if (!dtmd_helper_fill_data(&(constructed_media->mnt_opts), &(cmd->args[6]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+		break;
+
+	case dtmd_removable_media_type_stateless_device:
+		constructed_media->subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
+		break;
+
+	case dtmd_removable_media_type_stateful_device:
+		constructed_media->subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
+		constructed_media->state     = dtmd_string_to_device_state(cmd->args[4]);
+
+		if (!dtmd_helper_fill_data(&(constructed_media->fstype), &(cmd->args[5]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+
+		if (!dtmd_helper_fill_data(&(constructed_media->label), &(cmd->args[6]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+
+		if (!dtmd_helper_fill_data(&(constructed_media->mnt_point), &(cmd->args[7]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+
+		if (!dtmd_helper_fill_data(&(constructed_media->mnt_opts), &(cmd->args[8]), internal_fill_type))
+		{
+			handle->result_state = dtmd_memory_error;
+			goto dtmd_fill_removable_device_from_notification_implementation_error_2;
+		}
+		break;
+
+	case dtmd_removable_media_type_unknown_or_persistent:
+	default:
+		break;
+	}
+
+	*result = constructed_media;
+
+	return dtmd_ok;
+
+dtmd_fill_removable_device_from_notification_implementation_error_2:
+	dtmd_helper_free_removable_device_recursive(constructed_media);
+
+dtmd_fill_removable_device_from_notification_implementation_error_1:
+	return handle->result_state;
+}
+
+dtmd_result_t dtmd_fill_removable_device_from_notification(dtmd_t *handle, const dt_command_t *cmd, dtmd_fill_type_t fill_type, dtmd_removable_media_t **result)
+{
+	dtmd_internal_fill_type_t internal_fill_type;
+
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((cmd == NULL) || (result == NULL))
+	{
+		return dtmd_input_error;
+	}
+
+	switch (fill_type)
+	{
+	case dtmd_fill_copy:
+		internal_fill_type = dtmd_internal_fill_copy;
+		break;
+
+	case dtmd_fill_link:
+		internal_fill_type = dtmd_internal_fill_link;
+		break;
+
+	default:
+		return dtmd_input_error;
+		break;
+	}
+
+	if (!(dtmd_is_notification_valid_removable_device(handle, cmd)))
+	{
+		return dtmd_input_error;
+	}
+
+	/* it's safe to do a cast here since allowed fill types a read-only ones */
+	return dtmd_fill_removable_device_from_notification_implementation(handle, (dt_command_t*) cmd, internal_fill_type, result);
+}
+
 int dtmd_is_state_invalid(dtmd_t *handle)
 {
 	if (handle == NULL)
@@ -1090,29 +1302,32 @@ static void dtmd_helper_free_removable_device_recursive(dtmd_removable_media_t *
 	}
 
 	// and free node itself
-	if (device->path != NULL)
+	if (!(((size_t) device->private_data) & dtmd_removable_media_internal_state_fields_are_linked))
 	{
-		free(device->path);
-	}
+		if (device->path != NULL)
+		{
+			free(device->path);
+		}
 
-	if (device->fstype != NULL)
-	{
-		free(device->fstype);
-	}
+		if (device->fstype != NULL)
+		{
+			free(device->fstype);
+		}
 
-	if (device->label != NULL)
-	{
-		free(device->label);
-	}
+		if (device->label != NULL)
+		{
+			free(device->label);
+		}
 
-	if (device->mnt_point != NULL)
-	{
-		free(device->mnt_point);
-	}
+		if (device->mnt_point != NULL)
+		{
+			free(device->mnt_point);
+		}
 
-	if (device->mnt_opts != NULL)
-	{
-		free(device->mnt_opts);
+		if (device->mnt_opts != NULL)
+		{
+			free(device->mnt_opts);
+		}
 	}
 
 	free(device);
@@ -1141,34 +1356,6 @@ static void dtmd_helper_free_supported_filesystems(size_t supported_filesystems_
 static void dtmd_helper_free_supported_filesystem_options(size_t supported_filesystem_options_count, const char **supported_filesystem_options_list)
 {
 	dtmd_helper_free_string_array(supported_filesystem_options_count, supported_filesystem_options_list);
-}
-
-static int dtmd_helper_string_to_int(const char *string, size_t *number)
-{
-	size_t result = 0;
-
-	if (string[0] == 0)
-	{
-		return 0;
-	}
-
-	do
-	{
-		if ((*string >= '0') && (*string <= '9'))
-		{
-			result = (result * 10) + (*string - '0');
-		}
-		else
-		{
-			return 0;
-		}
-
-		++string;
-	} while (*string != 0);
-
-	*number = result;
-
-	return 1;
 }
 
 static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, struct timespec *time_cur, struct timespec *time_end)
@@ -1452,73 +1639,15 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 				}
 			}
 
-			constructed_media = (dtmd_removable_media_t*) malloc(sizeof(dtmd_removable_media_t));
-			if (constructed_media == NULL)
+			res = dtmd_fill_removable_device_from_notification_implementation(handle, cmd, dtmd_internal_fill_move, &constructed_media);
+			if (res != dtmd_ok)
 			{
-				handle->result_state = dtmd_memory_error;
+				handle->result_state = res;
 				return dtmd_helper_result_error;
 			}
 
-			constructed_media->private_data = NULL;
-			constructed_media->path         = cmd->args[1];
-			cmd->args[1]                    = NULL;
-			constructed_media->type         = dtmd_string_to_device_type(cmd->args[2]);
-
-			switch (constructed_media->type)
-			{
-			case dtmd_removable_media_type_device_partition:
-				constructed_media->subtype   = dtmd_removable_media_subtype_unknown_or_persistent;
-				constructed_media->state     = dtmd_removable_media_state_unknown;
-				constructed_media->fstype    = cmd->args[3];
-				cmd->args[3]                 = NULL;
-				constructed_media->label     = cmd->args[4];
-				cmd->args[4]                 = NULL;
-				constructed_media->mnt_point = cmd->args[5];
-				cmd->args[5]                 = NULL;
-				constructed_media->mnt_opts  = cmd->args[6];
-				cmd->args[6]                 = NULL;
-				break;
-
-			case dtmd_removable_media_type_stateless_device:
-				constructed_media->subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
-				constructed_media->state     = dtmd_removable_media_state_unknown;
-				constructed_media->fstype    = NULL;
-				constructed_media->label     = NULL;
-				constructed_media->mnt_point = NULL;
-				constructed_media->mnt_opts  = NULL;
-				break;
-
-			case dtmd_removable_media_type_stateful_device:
-				constructed_media->subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
-				constructed_media->state     = dtmd_string_to_device_state(cmd->args[4]);
-				constructed_media->fstype    = cmd->args[5];
-				cmd->args[5]                 = NULL;
-				constructed_media->label     = cmd->args[6];
-				cmd->args[6]                 = NULL;
-				constructed_media->mnt_point = cmd->args[7];
-				cmd->args[7]                 = NULL;
-				constructed_media->mnt_opts  = cmd->args[8];
-				cmd->args[8]                 = NULL;
-				break;
-
-			case dtmd_removable_media_type_unknown_or_persistent:
-			default:
-				constructed_media->subtype   = dtmd_removable_media_subtype_unknown_or_persistent;
-				constructed_media->state     = dtmd_removable_media_state_unknown;
-				constructed_media->fstype    = NULL;
-				constructed_media->label     = NULL;
-				constructed_media->mnt_point = NULL;
-				constructed_media->mnt_opts  = NULL;
-				break;
-			}
-
-			constructed_media->first_child = NULL;
-			constructed_media->last_child = NULL;
-
 			if (is_parent_path)
 			{
-				constructed_media->parent = NULL;
-
 				if (state->result != NULL)
 				{
 					media_ptr = state->result;
@@ -1534,7 +1663,6 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 				else
 				{
 					state->result = constructed_media;
-					constructed_media->prev_node = NULL;
 				}
 			}
 			else
@@ -1550,11 +1678,8 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 				else
 				{
 					media_ptr->first_child = media_ptr->last_child = constructed_media;
-					constructed_media->prev_node = NULL;
 				}
 			}
-
-			constructed_media->next_node = NULL;
 		}
 		else
 		{
@@ -1600,9 +1725,6 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 	}
 
 	return dtmd_helper_result_ok;
-
-dtmd_helper_process_list_all_removable_devices_implementation_error_1:
-	return dtmd_helper_result_error;
 }
 
 static dtmd_helper_result_t dtmd_helper_process_list_all_removable_devices(dtmd_t *handle, dt_command_t *cmd, void *params, void *state)
@@ -1645,73 +1767,15 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_removable_device_imp
 				}
 			}
 
-			constructed_media = (dtmd_removable_media_t*) malloc(sizeof(dtmd_removable_media_t));
-			if (constructed_media == NULL)
+			res = dtmd_fill_removable_device_from_notification_implementation(handle, cmd, dtmd_internal_fill_move, &constructed_media);
+			if (res != dtmd_ok)
 			{
-				handle->result_state = dtmd_memory_error;
+				handle->result_state = res;
 				return dtmd_helper_result_error;
 			}
 
-			constructed_media->private_data = NULL;
-			constructed_media->path         = cmd->args[1];
-			cmd->args[1]                    = NULL;
-			constructed_media->type         = dtmd_string_to_device_type(cmd->args[2]);
-
-			switch (constructed_media->type)
-			{
-			case dtmd_removable_media_type_device_partition:
-				constructed_media->subtype   = dtmd_removable_media_subtype_unknown_or_persistent;
-				constructed_media->state     = dtmd_removable_media_state_unknown;
-				constructed_media->fstype    = cmd->args[3];
-				cmd->args[3]                 = NULL;
-				constructed_media->label     = cmd->args[4];
-				cmd->args[4]                 = NULL;
-				constructed_media->mnt_point = cmd->args[5];
-				cmd->args[5]                 = NULL;
-				constructed_media->mnt_opts  = cmd->args[6];
-				cmd->args[6]                 = NULL;
-				break;
-
-			case dtmd_removable_media_type_stateless_device:
-				constructed_media->subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
-				constructed_media->state     = dtmd_removable_media_state_unknown;
-				constructed_media->fstype    = NULL;
-				constructed_media->label     = NULL;
-				constructed_media->mnt_point = NULL;
-				constructed_media->mnt_opts  = NULL;
-				break;
-
-			case dtmd_removable_media_type_stateful_device:
-				constructed_media->subtype   = dtmd_string_to_device_subtype(cmd->args[3]);
-				constructed_media->state     = dtmd_string_to_device_state(cmd->args[4]);
-				constructed_media->fstype    = cmd->args[5];
-				cmd->args[5]                 = NULL;
-				constructed_media->label     = cmd->args[6];
-				cmd->args[6]                 = NULL;
-				constructed_media->mnt_point = cmd->args[7];
-				cmd->args[7]                 = NULL;
-				constructed_media->mnt_opts  = cmd->args[8];
-				cmd->args[8]                 = NULL;
-				break;
-
-			case dtmd_removable_media_type_unknown_or_persistent:
-			default:
-				constructed_media->subtype   = dtmd_removable_media_subtype_unknown_or_persistent;
-				constructed_media->state     = dtmd_removable_media_state_unknown;
-				constructed_media->fstype    = NULL;
-				constructed_media->label     = NULL;
-				constructed_media->mnt_point = NULL;
-				constructed_media->mnt_opts  = NULL;
-				break;
-			}
-
-			constructed_media->first_child = NULL;
-			constructed_media->last_child = NULL;
-
 			if (is_parent_path)
 			{
-				constructed_media->parent = NULL;
-
 				if (state->result != NULL)
 				{
 					media_ptr = state->result;
@@ -1727,7 +1791,6 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_removable_device_imp
 				else
 				{
 					state->result = constructed_media;
-					constructed_media->prev_node = NULL;
 				}
 			}
 			else
@@ -1743,11 +1806,8 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_removable_device_imp
 				else
 				{
 					media_ptr->first_child = media_ptr->last_child = constructed_media;
-					constructed_media->prev_node = NULL;
 				}
 			}
-
-			constructed_media->next_node = NULL;
 		}
 		else
 		{
