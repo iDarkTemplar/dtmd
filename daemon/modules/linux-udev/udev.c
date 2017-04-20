@@ -22,6 +22,7 @@
 #include "daemon/lists.h"
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
+#include <dtmd-misc.h>
 
 #include <libudev.h>
 #include <stdlib.h>
@@ -111,6 +112,14 @@ static void device_system_fill_device(struct udev_device *dev, const char *path,
 			else if (strcmp(state, ID_CDROM_MEDIA_STATE_BLANK) == 0)
 			{
 				device_info->state = dtmd_removable_media_state_clear;
+			}
+		}
+		else
+		{
+			/* Some fake CDROMs don't provide state, in that case rely on fstype availability */
+			if (device_info->fstype != NULL)
+			{
+				device_info->state = dtmd_removable_media_state_ok;
 			}
 		}
 	}

@@ -39,6 +39,10 @@ class command
 public:
 	command();
 	explicit command(const dt_command_t *raw_cmd);
+
+	command(const command &other) = default;
+	command& operator=(const command &other) = default;
+
 	virtual ~command();
 
 	void fillFromCmd(const dt_command_t *raw_cmd);
@@ -107,7 +111,7 @@ public:
 	std::list<std::shared_ptr<removable_media> > children;
 
 private:
-	explicit removable_media(const removable_media &other) = delete;
+	removable_media(const removable_media &other) = delete;
 	removable_media& operator=(const removable_media &other) = delete;
 };
 
@@ -137,9 +141,9 @@ public:
 
 private:
 	// delete default constructor, copy constructor and assign operator
-	library();
-	library(const library &other);
-	library& operator=(const library &other);
+	library() = delete;
+	library(const library &other) = delete;
+	library& operator=(const library &other) = delete;
 
 	static void local_callback(dtmd_t *library_ptr, void *arg, const dt_command_t *cmd);
 
