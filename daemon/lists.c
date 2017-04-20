@@ -343,7 +343,7 @@ int change_media(const char *parent_path,
 	}
 
 	/* Check parent path, it must not change */
-	if (parent_path != ((media_ptr->parent != NULL) ? media_ptr->parent->path : dtmd_root_device_path))
+	if (strcmp(parent_path, ((media_ptr->parent != NULL) ? media_ptr->parent->path : dtmd_root_device_path)) != 0)
 	{
 		WRITE_LOG_ARGS(LOG_ERR,
 			"Parent path for device \"%s\" changed from \"%s\" to \"%s\"",
