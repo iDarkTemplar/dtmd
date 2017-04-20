@@ -1469,8 +1469,8 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 
 	switch (device_info->media_subtype)
 	{
-	case dtmd_removable_media_removable_disk:
-	case dtmd_removable_media_sd_card:
+	case dtmd_removable_media_subtype_removable_disk:
+	case dtmd_removable_media_subtype_sd_card:
 		device_info->media_type = dtmd_removable_media_type_stateless_device;
 		device_info->fstype     = NULL;
 		device_info->label      = NULL;
@@ -1478,7 +1478,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 		*device                 = device_info;
 		return 1;
 
-	case dtmd_removable_media_cdrom:
+	case dtmd_removable_media_subtype_cdrom:
 		device_info->media_type = dtmd_removable_media_type_stateful_device;
 
 		/*
@@ -1947,7 +1947,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				skip_device = 1; // Use first good name of device, skip other.
 				break;
 
-			DEV_MATCH_BUS:
+			case DEV_MATCH_BUS:
 			default:
 				break;
 			}
@@ -2501,7 +2501,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 	struct gconfig *conf;
 	char *raw_label;
 
-	dtmd_removable_media_type_t media_type;
+	dtmd_removable_media_subtype_t media_subtype;
 	dtmd_info_t *device_info;
 	dtmd_device_action_type_t action_type = dtmd_device_action_unknown;
 	char *devname = NULL;
@@ -2584,26 +2584,33 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 		case dtmd_device_action_add:
 		case dtmd_device_action_online:
 		case dtmd_device_action_change:
-			result = helper_get_device_subtype(devname, &media_type);
+			result = helper_get_device_subtype(devname, &media_subtype);
 
 			switch (result)
 			{
 			case result_success:
 				// It's device
-				device_info->media_type  = media_type;
-				device_info->path_parent = NULL;
-
-				switch (device_info->media_type)
+				device_info->media_subtype = media_subtype;
+				device_info->path_parent   = strdup(dtmd_root_device_path);
+				if (device_info->path_parent == NULL)
 				{
-				case dtmd_removable_media_removable_disk:
-				case dtmd_removable_media_sd_card:
+					WRITE_LOG(LOG_ERR, "Memory allocation failure");
+					result = result_fatal_error;
+					goto device_system_monitor_receive_device_exit_2;
+				}
+
+				switch (device_info->media_subtype)
+				{
+				case dtmd_removable_media_subtype_removable_disk:
+				case dtmd_removable_media_subtype_sd_card:
 					device_info->media_type = dtmd_removable_media_type_stateless_device;
 					break;
 
-				case dtmd_removable_media_cdrom:
+				case dtmd_removable_media_subtype_cdrom:
 					device_info->media_type = dtmd_removable_media_type_stateful_device;
 					break;
 
+				case dtmd_removable_media_subtype_unknown_or_persistent:
 				default:
 					device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
 					break;
@@ -2657,7 +2664,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 							strcpy((char*) device_info->path_parent, devices_dir "/");
 							strcat((char*) device_info->path_parent, gp_part->lg_name);
 
-							result = helper_get_device_subtype(device_info->path_parent, &(device_info->media_type));
+							result = helper_get_device_subtype(device_info->path_parent, &(device_info->media_subtype));
 							if (result != result_success)
 							{
 								goto device_system_monitor_receive_device_exit_5;
@@ -2715,7 +2722,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 					goto device_system_monitor_receive_device_exit_4;
 				}
 
-				device_info->media_subtype = dtmd_removable_media_unknown_or_persistent;
+				device_info->media_subtype = dtmd_removable_media_subtype_unknown_or_persistent;
 				device_info->media_type    = dtmd_removable_media_type_unknown_or_persistent;
 				device_info->path_parent   = NULL;
 				device_info->fstype        = NULL;
@@ -2734,7 +2741,7 @@ device_system_monitor_receive_device_found_partition:
 
 		case dtmd_device_action_remove:
 		case dtmd_device_action_offline:
-			device_info->media_subtype = dtmd_removable_media_unknown_or_persistent;
+			device_info->media_subtype = dtmd_removable_media_subtype_unknown_or_persistent;
 			device_info->media_type    = dtmd_removable_media_type_unknown_or_persistent;
 			device_info->path_parent   = NULL;
 			device_info->fstype        = NULL;

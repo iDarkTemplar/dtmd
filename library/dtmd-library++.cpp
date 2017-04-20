@@ -28,11 +28,11 @@ command::command()
 {
 }
 
-command::command(const dt_command_t *cmd)
+command::command(const dt_command_t *raw_cmd)
 {
-	if (cmd != NULL)
+	if (raw_cmd != NULL)
 	{
-		this->fillFromCmd(cmd);
+		this->fillFromCmd(raw_cmd);
 	}
 }
 
@@ -40,23 +40,23 @@ command::~command()
 {
 }
 
-void command::fillFromCmd(const dt_command_t *cmd)
+void command::fillFromCmd(const dt_command_t *raw_cmd)
 {
 	this->clear();
 
-	if (cmd != NULL)
+	if (raw_cmd != NULL)
 	{
-		this->cmd = cmd->cmd;
+		this->cmd = raw_cmd->cmd;
 
-		if (cmd->args != NULL)
+		if (raw_cmd->args != NULL)
 		{
-			this->args.reserve(cmd->args_count);
+			this->args.reserve(raw_cmd->args_count);
 
-			for (size_t i = 0; i < cmd->args_count; ++i)
+			for (size_t i = 0; i < raw_cmd->args_count; ++i)
 			{
-				if (cmd->args[i] != NULL)
+				if (raw_cmd->args[i] != NULL)
 				{
-					this->args.push_back(cmd->args[i]);
+					this->args.push_back(raw_cmd->args[i]);
 				}
 				else
 				{

@@ -1074,12 +1074,13 @@ static int dtmd_helper_is_state_invalid(dtmd_result_t result)
 {
 	switch (result)
 	{
-		case dtmd_ok:
-		case dtmd_timeout:
-		case dt_command_failed:
-			return 0;
-		default:
-			return 1;
+	case dtmd_ok:
+	case dtmd_timeout:
+	case dt_command_failed:
+		return 0;
+
+	default:
+		return 1;
 	}
 }
 
@@ -2162,7 +2163,7 @@ inline static void dtmd_helper_exit_clear_list_all_removable_devices_implementat
 
 static void dtmd_helper_exit_clear_list_all_removable_devices(void *state)
 {
-	return dtmd_helper_exit_clear_list_all_removable_devices_implementation((dtmd_helper_state_list_all_removable_devices_t*) state);
+	dtmd_helper_exit_clear_list_all_removable_devices_implementation((dtmd_helper_state_list_all_removable_devices_t*) state);
 }
 
 inline static int dtmd_helper_exit_list_removable_device_implementation(dtmd_t *handle, dtmd_helper_state_list_removable_device_t *state)
@@ -2201,7 +2202,7 @@ inline static void dtmd_helper_exit_clear_list_removable_device_implementation(d
 
 static void dtmd_helper_exit_clear_list_removable_device(void *state)
 {
-	return dtmd_helper_exit_clear_list_removable_device_implementation((dtmd_helper_state_list_removable_device_t*) state);
+	dtmd_helper_exit_clear_list_removable_device_implementation((dtmd_helper_state_list_removable_device_t*) state);
 }
 
 inline static int dtmd_helper_exit_list_supported_filesystems_implementation(dtmd_t *handle, dtmd_helper_state_list_supported_filesystems_t *state)

@@ -500,6 +500,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		NULL,
 		NULL,
 		NULL,
+		NULL,
 		NULL
 	}
 };

@@ -38,10 +38,10 @@ class command
 {
 public:
 	command();
-	explicit command(const dt_command_t *cmd);
+	explicit command(const dt_command_t *raw_cmd);
 	virtual ~command();
 
-	void fillFromCmd(const dt_command_t *cmd);
+	void fillFromCmd(const dt_command_t *raw_cmd);
 	void clear();
 
 	bool isEmpty() const;

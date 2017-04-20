@@ -97,7 +97,8 @@ endif (CMAKE_COMPILER_IS_GNUCC)
 
 # clang compiler options
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-	set (CLANG_WARNINGS "-Weverything -Wno-missing-prototypes -Wno-padded -Wno-sign-conversion -Wno-conversion -Wno-disabled-macro-expansion -Wno-cast-align" )
+	set (CLANG_WARNINGS "-Weverything -Wno-missing-prototypes -Wno-padded -Wno-sign-conversion -Wno-conversion -Wno-disabled-macro-expansion -Wno-cast-align")
+	set (CLANG_WARNINGS "${CLANG_WARNINGS} -Wno-c++98-compat -Wno-covered-switch-default -Wno-switch-enum -Wno-switch")
 
 	set (CMAKE_C_FLAGS_RELEASE "-O3 -pipe ${CLANG_WARNINGS} -DNDEBUG")
 	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})

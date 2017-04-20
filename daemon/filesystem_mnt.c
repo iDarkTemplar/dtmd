@@ -303,7 +303,7 @@ invoke_mount_internal_error_1:
 #endif /* (defined OS_Linux) */
 
 #if (defined OS_FreeBSD)
-static int invoke_mount_external(int client_number,
+static int invoke_mount_external(struct client *client_ptr,
 	const char *path,
 	const char *mount_path,
 	const char *mount_cmd_exe,
@@ -390,7 +390,7 @@ invoke_mount_external_error_1:
 
 static char* calculate_path(const char *path, const char *label, enum mount_by_value_enum *mount_type)
 {
-	const char *mount_dev_start;
+	const char *mount_dev_start = NULL;
 
 	int mount_dev_len;
 	int mount_path_len;

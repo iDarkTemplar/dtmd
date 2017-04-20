@@ -23,9 +23,9 @@
 #include "daemon/label.h"
 #include "tests/dt_tests.h"
 
-void print_and_free(char *orig, char *label, char *expected)
+void print_and_free(const char *orig, char *label, const char *expected)
 {
-	char *cur;
+	const char *cur;
 
 	printf("Orig:  %s\n\n", orig);
 
@@ -72,11 +72,11 @@ void print_and_free(char *orig, char *label, char *expected)
 
 int main(int argc, char **argv)
 {
-	char *label_test1 = "test\\a\\b\\f\\n\\r\\t\\\\\\'\\\"\\123\\x20";
-	char *label_test2 = "test\\x20\\040label\\z";
-	char *label_test3 = "label\\0a1fail";
-	char *label_test4 = "label\\xfzfail";
-	char *label_test5 = "test\\x00\\000label\\z";
+	const char *label_test1 = "test\\a\\b\\f\\n\\r\\t\\\\\\'\\\"\\123\\x20";
+	const char *label_test2 = "test\\x20\\040label\\z";
+	const char *label_test3 = "label\\0a1fail";
+	const char *label_test4 = "label\\xfzfail";
+	const char *label_test5 = "test\\x00\\000label\\z";
 
 	char *label_result1;
 	char *label_result2;
@@ -84,11 +84,11 @@ int main(int argc, char **argv)
 	char *label_result4;
 	char *label_result5;
 
-	char *label_expected_result1 = "test\\007\\010\\014\\012\\015\\011\\134\\047\\042S ";
-	char *label_expected_result2 = "test  label\\z";
-	char *label_expected_result3 = NULL;
-	char *label_expected_result4 = NULL;
-	char *label_expected_result5 = "test\\000\\000label\\z";
+	const char *label_expected_result1 = "test\\007\\010\\014\\012\\015\\011\\134\\047\\042S ";
+	const char *label_expected_result2 = "test  label\\z";
+	const char *label_expected_result3 = NULL;
+	const char *label_expected_result4 = NULL;
+	const char *label_expected_result5 = "test\\000\\000label\\z";
 
 	tests_init();
 
