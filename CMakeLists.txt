@@ -171,11 +171,11 @@ endif (DEFINED CLIENT_QT)
 
 CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/dtmd.h.in ${CMAKE_CURRENT_BINARY_DIR}/dtmd.h @ONLY )
 
-set ( LINUX_UDEV_SOURCES daemon/modules/linux-udev/udev.c )
+set ( LINUX_UDEV_SOURCES daemon/modules/linux-udev/system_module.c )
 set ( LINUX_UDEV_HEADERS )
 set ( LINUX_UDEV_LIBS )
 
-set ( UNIX_KERNEL_SOURCES daemon/modules/unix-kernel/kernel.c )
+set ( UNIX_KERNEL_SOURCES daemon/modules/unix-userspace/system_module.c )
 set ( UNIX_KERNEL_HEADERS )
 set ( UNIX_KERNEL_LIBS pthread )
 
