@@ -125,13 +125,23 @@
 
 #define IFLIST_REPLY_BUFFER 8192
 
+typedef struct dtmd_enumeration_item
+{
+	dtmd_info_t *item;
+
+	struct dtmd_enumeration_item *next;
+} dtmd_enumeration_item_t;
+
 struct dtmd_device_enumeration
 {
 	dtmd_device_system_t *system;
 
-	dtmd_info_t **devices;
-	uint32_t devices_count;
-	uint32_t current_device;
+	dtmd_enumeration_item_t *first;
+	dtmd_enumeration_item_t *last;
+	dtmd_enumeration_item_t *current;
+
+	struct dtmd_device_enumeration *next;
+	struct dtmd_device_enumeration *prev;
 };
 
 typedef struct dtmd_monitor_item
@@ -150,15 +160,10 @@ struct dtmd_device_monitor
 
 	dtmd_monitor_item_t *first;
 	dtmd_monitor_item_t *last;
+
+	struct dtmd_device_monitor *next;
+	struct dtmd_device_monitor *prev;
 };
-
-typedef struct dtmd_device_internal
-{
-	dtmd_info_t *device;
-
-	dtmd_info_t **partitions;
-	uint32_t partitions_count;
-} dtmd_device_internal_t;
 
 struct dtmd_device_system
 {
@@ -167,17 +172,11 @@ struct dtmd_device_system
 	pthread_mutex_t control_mutex;
 	pthread_t worker_thread;
 
-	dtmd_device_internal_t **devices;
-	uint32_t devices_count;
+	dtmd_device_enumeration_t *first_enumeration;
+	dtmd_device_enumeration_t *last_enumeration;
 
-	dtmd_info_t **stateful_devices;
-	uint32_t stateful_devices_count;
-
-	uint16_t enumeration_count;
-	dtmd_device_enumeration_t **enumerations;
-
-	uint16_t monitor_count;
-	dtmd_device_monitor_t **monitors;
+	dtmd_device_monitor_t *first_monitor;
+	dtmd_device_monitor_t *last_monitor;
 };
 
 typedef struct dtmd_info_private
@@ -462,7 +461,7 @@ static int open_netlink_socket(void)
 	return fd;
 }
 
-static int helper_read_device(dtmd_device_system_t *device_system, const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
+static int helper_read_device(const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
 {
 	char *device_type;
 	struct stat stat_entry;
@@ -518,23 +517,14 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 		goto helper_read_device_error_1;
 	}
 
-	device_info->private_data = malloc(sizeof(dtmd_info_private_t));
-	if (device_info->private_data == NULL)
-	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = result_fatal_error;
-		goto helper_read_device_error_2;
-	}
-
-	((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
-	((dtmd_info_private_t*) device_info->private_data)->counter = 1;
+	device_info->private_data = NULL;
 
 	device_info->path = (char*) malloc(strlen(devices_dir "/") + strlen(device_name) + 1);
 	if (device_info->path == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = result_fatal_error;
-		goto helper_read_device_error_3;
+		goto helper_read_device_error_2;
 	}
 
 	strcpy((char*) device_info->path, devices_dir "/");
@@ -546,7 +536,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = result_fatal_error;
-		goto helper_read_device_error_4;
+		goto helper_read_device_error_3;
 	}
 
 	switch (media_subtype)
@@ -582,7 +572,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 			break;
 
 		default:
-			goto helper_read_device_error_5;
+			goto helper_read_device_error_4;
 		}
 
 		*device = device_info;
@@ -593,14 +583,11 @@ static int helper_read_device(dtmd_device_system_t *device_system, const char *n
 		break;
 	}
 
-helper_read_device_error_5:
+helper_read_device_error_4:
 	free((char*) device_info->path_parent);
 
-helper_read_device_error_4:
-	free((char*) device_info->path);
-
 helper_read_device_error_3:
-	free(device_info->private_data);
+	free((char*) device_info->path);
 
 helper_read_device_error_2:
 	free(device_info);
@@ -610,133 +597,73 @@ helper_read_device_error_1:
 }
 #endif /* (defined OS_Linux) */
 
-static int device_system_init_add_stateless_device(dtmd_device_system_t *device_system, dtmd_info_t *device)
+static int enumeration_add_device(dtmd_device_enumeration_t *enumeration, dtmd_info_t *device)
 {
-	uint32_t index;
-	dtmd_device_internal_t *internal_device;
-	void *tmp;
+	dtmd_enumeration_item_t *enumeration_item;
 	int result;
 
-	for (index = 0; index < device_system->devices_count; ++index)
+	for (enumeration_item = enumeration->first; enumeration_item != NULL; enumeration_item = enumeration_item->next)
 	{
-		if (strcmp(device_system->devices[index]->device->path, device->path) == 0)
+		if (strcmp(enumeration_item->item->path, device->path) == 0)
 		{
 			result = result_fail;
-			goto device_system_init_add_stateless_device_error_1;
+			goto enumeration_add_device_error_1;
 		}
 	}
 
-	internal_device = (dtmd_device_internal_t*) malloc(sizeof(dtmd_device_internal_t));
-	if (internal_device == NULL)
+	enumeration_item = (dtmd_enumeration_item_t*) malloc(sizeof(dtmd_enumeration_item_t));
+	if (enumeration_item == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = result_fatal_error;
-		goto device_system_init_add_stateless_device_error_1;
+		goto enumeration_add_device_error_1;
 	}
 
-	tmp = realloc(device_system->devices, (device_system->devices_count + 1) * sizeof(dtmd_device_internal_t*));
-	if (tmp == NULL)
+	enumeration_item->item = device;
+	enumeration_item->next = NULL;
+
+	if (enumeration->first == NULL)
 	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = result_fatal_error;
-		goto device_system_init_add_stateless_device_error_2;
+		enumeration->first = enumeration_item;
+		enumeration->current = enumeration->first;
 	}
 
-	device_system->devices = (dtmd_device_internal_t**) tmp;
+	if (enumeration->last != NULL)
+	{
+		enumeration->last->next = enumeration_item;
+	}
 
-	internal_device->device           = device;
-	internal_device->partitions       = NULL;
-	internal_device->partitions_count = 0;
-
-	device_system->devices[device_system->devices_count] = internal_device;
-	++(device_system->devices_count);
+	enumeration->last = enumeration_item;
 
 	return result_success;
 
-device_system_init_add_stateless_device_error_2:
-	free(internal_device);
-
-device_system_init_add_stateless_device_error_1:
-	device_system_free_device(device);
-
-	return result;
-}
-
-static int device_system_init_add_stateful_device(dtmd_device_system_t *device_system, dtmd_info_t *device)
-{
-	uint32_t index;
-	void *tmp;
-	int result;
-
-	for (index = 0; index < device_system->stateful_devices_count; ++index)
-	{
-		if (strcmp(device_system->stateful_devices[index]->path, device->path) == 0)
-		{
-			result = result_fail;
-			goto device_system_init_add_stateful_device_error_1;
-		}
-	}
-
-	tmp = realloc(device_system->stateful_devices, (device_system->stateful_devices_count + 1) * sizeof(dtmd_info_t*));
-	if (tmp == NULL)
-	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = result_fatal_error;
-		goto device_system_init_add_stateful_device_error_1;
-	}
-
-	device_system->stateful_devices = (dtmd_info_t**) tmp;
-
-	device_system->stateful_devices[device_system->stateful_devices_count] = device;
-	++(device_system->stateful_devices_count);
-
-	return result_success;
-
-device_system_init_add_stateful_device_error_1:
+enumeration_add_device_error_1:
 	device_system_free_device(device);
 
 	return result;
 }
 
 #if (defined OS_Linux)
-static int helper_read_device_partitions(dtmd_device_system_t *device_system, dtmd_device_internal_t *device, const char *device_name)
+static int helper_read_device_partitions(dtmd_device_enumeration_t *enumeration, dtmd_info_t *device, const char *device_name)
 {
 	blkid_probe pr;
 	blkid_partlist ls;
 	blkid_partition par;
 	int nparts, i, index, string_len;
-	char *string_device_parent;
 	char *string;
 	struct stat stat_entry;
 	dtmd_info_t *device_info;
 	int result;
 
-	string_device_parent = (char*) malloc(strlen(devices_dir "/") + strlen(device_name) + 1);
-	if (string_device_parent == NULL)
-	{
-		result = result_fatal_error;
-		goto device_system_read_device_partitions_error_1;
-	}
-
-	strcpy(string_device_parent, devices_dir "/");
-	strcat(string_device_parent, device_name);
-
-	pr = blkid_new_probe_from_filename(string_device_parent);
+	pr = blkid_new_probe_from_filename(device->path);
 	if (pr == NULL)
 	{
 		result = result_fail;
-		goto device_system_read_device_partitions_error_2;
+		goto helper_read_device_partitions_error_1;
 	}
 
 	ls = blkid_probe_get_partitions(pr);
 	nparts = blkid_partlist_numof_partitions(ls);
-
-	device->partitions = (dtmd_info_t**) malloc(nparts * sizeof(dtmd_info_t*));
-	if (device->partitions == NULL)
-	{
-		result = result_fatal_error;
-		goto device_system_read_device_partitions_error_3;
-	}
 
 	for (i = 0; i < nparts; ++i)
 	{
@@ -747,27 +674,27 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 		if (string_len < 0)
 		{
 			result = result_fatal_error;
-			goto device_system_read_device_partitions_error_3;
+			goto helper_read_device_partitions_error_2;
 		}
 
 		string = (char*) malloc(string_len+1);
 		if (string == NULL)
 		{
 			result = result_fatal_error;
-			goto device_system_read_device_partitions_error_3;
+			goto helper_read_device_partitions_error_2;
 		}
 
 		result = snprintf(string, string_len + 1, devices_dir "/%s%d", device_name, index);
 		if (result != string_len)
 		{
 			result = result_fatal_error;
-			goto device_system_read_device_partitions_error_4;
+			goto helper_read_device_partitions_error_3;
 		}
 
 		if (stat(string, &stat_entry) != 0)
 		{
 			result = result_fail;
-			goto device_system_read_device_partitions_error_4;
+			goto helper_read_device_partitions_error_3;
 		}
 
 		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
@@ -775,50 +702,42 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			result = result_fatal_error;
-			goto device_system_read_device_partitions_error_4;
+			goto helper_read_device_partitions_error_3;
 		}
 
-		device_info->private_data = malloc(sizeof(dtmd_info_private_t));
-		if (device_info->private_data == NULL)
-		{
-			WRITE_LOG(LOG_ERR, "Memory allocation failure");
-			result = result_fatal_error;
-			goto device_system_read_device_partitions_error_5;
-		}
-
-		((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
-		((dtmd_info_private_t*) device_info->private_data)->counter = 1;
+		device_info->private_data = NULL;
 
 		device_info->path = string;
-		device_info->path_parent = strdup(string_device_parent);
+		device_info->path_parent = strdup(device->path);
 		if (device_info->path_parent == NULL)
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			result = result_fatal_error;
-			goto device_system_read_device_partitions_error_6;
+			goto helper_read_device_partitions_error_4;
 		}
 
 		device_info->media_type    = dtmd_removable_media_type_device_partition;
-		device_info->media_subtype = device->device->media_subtype;
+		device_info->media_subtype = device->media_subtype;
 		device_info->state         = dtmd_removable_media_state_unknown;
 
 		result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
 		if (is_result_fatal_error(result))
 		{
-			goto device_system_read_device_partitions_error_7;
+			goto helper_read_device_partitions_error_5;
 		}
 
-		device->partitions[device->partitions_count] = device_info;
-		++(device->partitions_count);
+		result = enumeration_add_device(enumeration, device_info);
+		if (is_result_fatal_error(result))
+		{
+			goto helper_read_device_partitions_error_2;
+		}
 	}
 
 	blkid_free_probe(pr);
 
-	free(string_device_parent);
-
 	return result_success;
 
-device_system_read_device_partitions_error_7:
+helper_read_device_partitions_error_5:
 	if (device_info->fstype != NULL)
 	{
 		free((char*) device_info->fstype);
@@ -831,26 +750,20 @@ device_system_read_device_partitions_error_7:
 
 	free((char*) device_info->path_parent);
 
-device_system_read_device_partitions_error_6:
-	free(device_info->private_data);
-
-device_system_read_device_partitions_error_5:
+helper_read_device_partitions_error_4:
 	free(device_info);
 
-device_system_read_device_partitions_error_4:
+helper_read_device_partitions_error_3:
 	free(string);
 
-device_system_read_device_partitions_error_3:
+helper_read_device_partitions_error_2:
 	blkid_free_probe(pr);
 
-device_system_read_device_partitions_error_2:
-	free(string_device_parent);
-
-device_system_read_device_partitions_error_1:
+helper_read_device_partitions_error_1:
 	return result;
 }
 
-static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
+static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enumeration)
 {
 	DIR *dir_pointer = NULL;
 	struct dirent *dirent_device = NULL;
@@ -928,18 +841,18 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 			strcat(file_name, "/");
 
-			result = helper_read_device(device_system, file_name, dirent_device->d_name, 1, &device);
+			result = helper_read_device(file_name, dirent_device->d_name, 1, &device);
 			switch (result)
 			{
 			case 1: // device
-				result = device_system_init_add_stateless_device(device_system, device);
+				result = enumeration_add_device(enumeration, device);
 				switch (result)
 				{
 				case result_success: // ok
-					result = helper_read_device_partitions(device_system, device_system->devices[device_system->devices_count-1], dirent_device->d_name);
+					result = helper_read_device_partitions(enumeration, device, dirent_device->d_name);
 					if (is_result_failure(result))
 					{
-						goto device_system_init_fill_devices_error_plain_1;
+						goto device_system_run_device_enumeration_error_plain_1;
 					}
 					break;
 
@@ -947,13 +860,13 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					break;
 
 				default: // error
-					goto device_system_init_fill_devices_error_plain_1;
+					goto device_system_run_device_enumeration_error_plain_1;
 					//break;
 				}
 				break;
 
 			case 2: // stateful_device
-				result = device_system_init_add_stateful_device(device_system, device);
+				result = enumeration_add_device(enumeration, device);
 				switch (result)
 				{
 				case result_success: // ok
@@ -963,7 +876,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					break;
 
 				default: // error
-					goto device_system_init_fill_devices_error_plain_1;
+					goto device_system_run_device_enumeration_error_plain_1;
 					//break;
 				}
 				break;
@@ -972,7 +885,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				break;
 
 			default:
-				goto device_system_init_fill_devices_error_plain_1;
+				goto device_system_run_device_enumeration_error_plain_1;
 				//break;
 			}
 		}
@@ -1158,18 +1071,18 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 											strcat(file_name, "/");
 
-											result = helper_read_device(device_system, file_name, dirent_usb_target_device->d_name, 0, &device);
+											result = helper_read_device(file_name, dirent_usb_target_device->d_name, 0, &device);
 											switch (result)
 											{
 											case 1: // device
-												result = device_system_init_add_stateless_device(device_system, device);
+												result = enumeration_add_device(enumeration, device);
 												switch (result)
 												{
 												case result_success: // ok
-													result = helper_read_device_partitions(device_system, device_system->devices[device_system->devices_count-1], dirent_usb_target_device->d_name);
+													result = helper_read_device_partitions(enumeration, device, dirent_usb_target_device->d_name);
 													if (is_result_failure(result))
 													{
-														goto device_system_init_fill_devices_error_usb_2;
+														goto device_system_run_device_enumeration_error_usb_2;
 													}
 													break;
 
@@ -1177,13 +1090,13 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 													break;
 
 												default: // error
-													goto device_system_init_fill_devices_error_usb_2;
+													goto device_system_run_device_enumeration_error_usb_2;
 													//break;
 												}
 												break;
 
 											case 2: // stateful_device
-												result = device_system_init_add_stateful_device(device_system, device);
+												result = enumeration_add_device(enumeration, device);
 												switch (result)
 												{
 												case result_success: // ok
@@ -1193,7 +1106,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 													break;
 
 												default: // error
-													goto device_system_init_fill_devices_error_usb_2;
+													goto device_system_run_device_enumeration_error_usb_2;
 													//break;
 												}
 												break;
@@ -1202,7 +1115,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 												break;
 
 											default:
-												goto device_system_init_fill_devices_error_plain_1;
+												goto device_system_run_device_enumeration_error_plain_1;
 												//break;
 											}
 										}
@@ -1314,18 +1227,18 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 					strcat(file_name, "/");
 
-					result = helper_read_device(device_system, file_name, dirent_mmc_device->d_name, 0, &device);
+					result = helper_read_device(file_name, dirent_mmc_device->d_name, 0, &device);
 					switch (result)
 					{
 					case 1: // device
-						result = device_system_init_add_stateless_device(device_system, device);
+						result = enumeration_add_device(enumeration, device);
 						switch (result)
 						{
 						case result_success: // ok
-							result = helper_read_device_partitions(device_system, device_system->devices[device_system->devices_count-1], dirent_mmc_device->d_name);
+							result = helper_read_device_partitions(enumeration, device, dirent_mmc_device->d_name);
 							if (is_result_failure(result))
 							{
-								goto device_system_init_fill_devices_error_mmc_2;
+								goto device_system_run_device_enumeration_error_mmc_2;
 							}
 							break;
 
@@ -1333,13 +1246,13 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 							break;
 
 						default: // error
-							goto device_system_init_fill_devices_error_mmc_2;
+							goto device_system_run_device_enumeration_error_mmc_2;
 							//break;
 						}
 						break;
 
 					case 2: // stateful_device
-						result = device_system_init_add_stateful_device(device_system, device);
+						result = enumeration_add_device(enumeration, device);
 						switch (result)
 						{
 						case result_success: // ok
@@ -1349,7 +1262,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 							break;
 
 						default: // error
-							goto device_system_init_fill_devices_error_mmc_2;
+							goto device_system_run_device_enumeration_error_mmc_2;
 							//break;
 						}
 						break;
@@ -1358,7 +1271,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 						break;
 
 					default:
-						goto device_system_init_fill_devices_error_mmc_2;
+						goto device_system_run_device_enumeration_error_mmc_2;
 						//break;
 					}
 				}
@@ -1382,26 +1295,26 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 	return result_success;
 
-device_system_init_fill_devices_error_mmc_2:
+device_system_run_device_enumeration_error_mmc_2:
 	closedir(dir_pointer_mmc_device);
 	closedir(dir_pointer_mmc);
 
-	goto device_system_init_fill_devices_error_mmc_1;
+	goto device_system_run_device_enumeration_error_mmc_1;
 
-device_system_init_fill_devices_error_usb_2:
+device_system_run_device_enumeration_error_usb_2:
 	closedir(dir_pointer_usb_target_device);
 	closedir(dir_pointer_usb_target);
 	closedir(dir_pointer_usb_host);
 	closedir(dir_pointer_usb_device);
 	closedir(dir_pointer_usb);
 
-	goto device_system_init_fill_devices_error_usb_1;
+	goto device_system_run_device_enumeration_error_usb_1;
 
-device_system_init_fill_devices_error_plain_1:
+device_system_run_device_enumeration_error_plain_1:
 	closedir(dir_pointer);
 
-device_system_init_fill_devices_error_mmc_1:
-device_system_init_fill_devices_error_usb_1:
+device_system_run_device_enumeration_error_mmc_1:
+device_system_run_device_enumeration_error_usb_1:
 	return result;
 }
 #endif /* (defined OS_Linux) */
@@ -1423,7 +1336,7 @@ static dtmd_removable_media_subtype_t helper_get_device_subtype_from_data(const 
 	}
 }
 
-static int helper_read_device(dtmd_device_system_t *device_system, const struct device_match_result *dev_result, const char *device_name, dtmd_info_t **device)
+static int helper_read_device(const struct device_match_result *dev_result, const char *device_name, dtmd_info_t **device)
 {
 	int result;
 	dtmd_info_t *device_info;
@@ -1436,23 +1349,14 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 		goto helper_read_device_error_1;
 	}
 
-	device_info->private_data = malloc(sizeof(dtmd_info_private_t));
-	if (device_info->private_data == NULL)
-	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = result_fatal_error;
-		goto helper_read_device_error_2;
-	}
-
-	((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
-	((dtmd_info_private_t*) device_info->private_data)->counter = 1;
+	device_info->private_data = NULL;
 
 	device_info->path = (char*) malloc(strlen(devices_dir "/")  + strlen(device_name) + 1);
 	if (device_info->path == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = result_fatal_error;
-		goto helper_read_device_error_3;
+		goto helper_read_device_error_2;
 	}
 
 	strcpy((char*) device_info->path, devices_dir "/");
@@ -1464,7 +1368,7 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		result = result_fatal_error;
-		goto helper_read_device_error_4;
+		goto helper_read_device_error_3;
 	}
 
 	switch (device_info->media_subtype)
@@ -1501,11 +1405,13 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 			break;
 
 		default:
-			goto helper_read_device_error_4;
+			goto helper_read_device_error_3;
 		}
 		*/
 		// TODO: right definition of CD-ROM state
-		device_info->state = dtmd_removable_media_state_ok;
+		device_info->fstype = NULL;
+		device_info->label  = NULL;
+		device_info->state  = dtmd_removable_media_state_unknown;
 
 		*device = device_info;
 		return 2;
@@ -1516,15 +1422,12 @@ static int helper_read_device(dtmd_device_system_t *device_system, const struct 
 	}
 
 /*
-helper_read_device_error_5:
+helper_read_device_error_4:
 */
 	free((char*) device_info->path_parent);
 
-helper_read_device_error_4:
-	free((char*) device_info->path);
-
 helper_read_device_error_3:
-	free(device_info->private_data);
+	free((char*) device_info->path);
 
 helper_read_device_error_2:
 	free(device_info);
@@ -1578,7 +1481,7 @@ static struct gconfig* find_config_param(struct gprovider *pp, const char *name)
 	return (NULL);
 }
 
-static int helper_read_device_partitions(dtmd_device_system_t *device_system, dtmd_device_internal_t *device, const char *device_name)
+static int helper_read_device_partitions(dtmd_device_enumeration_t *enumeration, dtmd_info_t *device, const char *device_name)
 {
 	struct gmesh mesh;
 	struct gclass *classp_part, *classp_label;
@@ -1586,28 +1489,17 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 	struct gprovider *pp_part;
 	struct gconfig *conf;
 	int result;
-	char *string_device_parent;
 	char *string;
 	char *raw_label;
 	struct stat stat_entry;
 	dtmd_info_t *device_info;
-
-	string_device_parent = (char*) malloc(strlen(devices_dir "/") + strlen(device_name) + 1);
-	if (string_device_parent == NULL)
-	{
-		result = result_fatal_error;
-		goto helper_read_device_partitions_error_1;
-	}
-
-	strcpy(string_device_parent, devices_dir "/");
-	strcat(string_device_parent, device_name);
 
 	result = geom_gettree(&mesh);
 	if (result != 0)
 	{
 		WRITE_LOG(LOG_WARNING, "Failed to get geom tree");
 		result = result_fatal_error;
-		goto helper_read_device_partitions_error_2;
+		goto helper_read_device_partitions_error_1;
 	}
 
 	classp_part = find_class(&mesh, GEOM_CLASS_PART);
@@ -1615,7 +1507,7 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Geom class \"%s\" not found", GEOM_CLASS_PART);
 		result = result_fatal_error;
-		goto helper_read_device_partitions_error_3;
+		goto helper_read_device_partitions_error_2;
 	}
 
 	classp_label = find_class(&mesh, GEOM_CLASS_LABEL);
@@ -1623,7 +1515,7 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Geom class \"%s\" not found", GEOM_CLASS_LABEL);
 		result = result_fatal_error;
-		goto helper_read_device_partitions_error_3;
+		goto helper_read_device_partitions_error_2;
 	}
 
 	gp_part = find_geom(classp_part, device_name);
@@ -1631,21 +1523,13 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "No such geom found: %s", device_name);
 		result = result_fatal_error;
-		goto helper_read_device_partitions_error_3;
+		goto helper_read_device_partitions_error_2;
 	}
 
 	result = 0;
 	LIST_FOREACH(pp_part, &gp_part->lg_provider, lg_provider)
 	{
 		++result;
-	}
-
-	device->partitions = (dtmd_info_t**) malloc(result * sizeof(dtmd_info_t*));
-	if (device->partitions == NULL)
-	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		result = result_fatal_error;
-		goto helper_read_device_partitions_error_3;
 	}
 
 	LIST_FOREACH(pp_part, &gp_part->lg_provider, lg_provider)
@@ -1655,7 +1539,7 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			result = result_fatal_error;
-			goto helper_read_device_partitions_error_3;
+			goto helper_read_device_partitions_error_2;
 		}
 
 		strcpy(string, devices_dir "/");
@@ -1665,7 +1549,7 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 		{
 			WRITE_LOG_ARGS(LOG_WARNING, "Device node doesn't exist: %s", string);
 			result = result_fail;
-			goto helper_read_device_partitions_error_4;
+			goto helper_read_device_partitions_error_3;
 		}
 
 		device_info = (dtmd_info_t*) malloc(sizeof(dtmd_info_t));
@@ -1673,31 +1557,21 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			result = result_fatal_error;
-			goto helper_read_device_partitions_error_4;
+			goto helper_read_device_partitions_error_3;
 		}
 
-		device_info->private_data = malloc(sizeof(dtmd_info_private_t));
-		if (device_info->private_data == NULL)
-		{
-			WRITE_LOG(LOG_ERR, "Memory allocation failure");
-			result = result_fatal_error;
-			goto helper_read_device_partitions_error_5;
-		}
-
-		((dtmd_info_private_t*) device_info->private_data)->system  = device_system;
-		((dtmd_info_private_t*) device_info->private_data)->counter = 1;
-
+		device_info->private_data = NULL;
 		device_info->path = string;
-		device_info->path_parent = strdup(string_device_parent);
+		device_info->path_parent = strdup(device->path);
 		if (device_info->path_parent == NULL)
 		{
 			WRITE_LOG(LOG_ERR, "Memory allocation failure");
 			result = result_fatal_error;
-			goto helper_read_device_partitions_error_6;
+			goto helper_read_device_partitions_error_4;
 		}
 
 		device_info->media_type    = dtmd_removable_media_type_device_partition;
-		device_info->media_subtype = device->device->media_subtype;
+		device_info->media_subtype = device->media_subtype;
 		device_info->state         = dtmd_removable_media_state_unknown;
 
 		device_info->fstype = NULL;
@@ -1712,7 +1586,7 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 			{
 				WRITE_LOG(LOG_ERR, "Memory allocation failure");
 				result = result_fatal_error;
-				goto helper_read_device_partitions_error_7;
+				goto helper_read_device_partitions_error_5;
 			}
 
 			gp_label = find_geom(classp_label, pp_part->lg_name);
@@ -1729,51 +1603,47 @@ static int helper_read_device_partitions(dtmd_device_system_t *device_system, dt
 				{
 					WRITE_LOG(LOG_ERR, "Memory allocation failure");
 					result = result_fatal_error;
-					goto helper_read_device_partitions_error_8;
+					goto helper_read_device_partitions_error_6;
 				}
 			}
 		}
 
-		device->partitions[device->partitions_count] = device_info;
-		++(device->partitions_count);
+		result = enumeration_add_device(enumeration, device_info);
+		if (is_result_fatal_error(result))
+		{
+			goto helper_read_device_partitions_error_2;
+		}
 	}
 
 	geom_deletetree(&mesh);
-	free(string_device_parent);
 
 	return result_success;
 
 /*
-helper_read_device_partitions_error_9:
+helper_read_device_partitions_error_7:
 	free((char*) device_info->label);
 */
 
-helper_read_device_partitions_error_8:
+helper_read_device_partitions_error_6:
 	free((char*) device_info->fstype);
 
-helper_read_device_partitions_error_7:
+helper_read_device_partitions_error_5:
 	free((char*) device_info->path_parent);
 
-helper_read_device_partitions_error_6:
-	free(device_info->private_data);
-
-helper_read_device_partitions_error_5:
+helper_read_device_partitions_error_4:
 	free(device_info);
 
-helper_read_device_partitions_error_4:
+helper_read_device_partitions_error_3:
 	free(string);
 
-helper_read_device_partitions_error_3:
-	geom_deletetree(&mesh);
-
 helper_read_device_partitions_error_2:
-	free(string_device_parent);
+	geom_deletetree(&mesh);
 
 helper_read_device_partitions_error_1:
 	return result;
 }
 
-static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
+static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enumeration)
 {
 	union ccb ccb;
 	int bufsize, fd;
@@ -1789,7 +1659,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 	{
 		WRITE_LOG_ARGS(LOG_WARNING, "Failed to open device '%s'", XPT_DEVICE);
 		result = result_fatal_error;
-		goto device_system_init_fill_devices_error_1;
+		goto device_system_run_device_enumeration_error_1;
 	}
 
 	bzero(&ccb, sizeof(union ccb));
@@ -1806,7 +1676,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 	{
 		WRITE_LOG(LOG_WARNING, "Failed to allocate memory");
 		result = result_fatal_error;
-		goto device_system_init_fill_devices_error_2;
+		goto device_system_run_device_enumeration_error_2;
 	}
 
 	ccb.cdm.num_matches = 0;
@@ -1874,7 +1744,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				{
 					WRITE_LOG(LOG_WARNING, "Length calculation error");
 					result = result_fatal_error;
-					goto device_system_init_fill_devices_error_3;
+					goto device_system_run_device_enumeration_error_3;
 				}
 
 				device_name = (char*) malloc(result + 1);
@@ -1882,7 +1752,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				{
 					WRITE_LOG(LOG_WARNING, "Memory allocation failure");
 					result = result_fatal_error;
-					goto device_system_init_fill_devices_error_3;
+					goto device_system_run_device_enumeration_error_3;
 				}
 
 				result = snprintf(device_name, result + 1, "%s%d", periph_result->periph_name, periph_result->unit_number);
@@ -1890,21 +1760,21 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 				{
 					WRITE_LOG(LOG_WARNING, "Name calculation error");
 					result = result_fatal_error;
-					goto device_system_init_fill_devices_error_4;
+					goto device_system_run_device_enumeration_error_4;
 				}
 
-				result = helper_read_device(device_system, dev_result, device_name, &device);
+				result = helper_read_device(dev_result, device_name, &device);
 				switch (result)
 				{
 				case 1: // device
-					result = device_system_init_add_stateless_device(device_system, device);
+					result = enumeration_add_device(enumeration, device);
 					switch (result)
 					{
 					case result_success: // ok
-						result = helper_read_device_partitions(device_system, device_system->devices[device_system->devices_count-1], device_name);
+						result = helper_read_device_partitions(enumeration, device, device_name);
 						if (is_result_failure(result))
 						{
-							goto device_system_init_fill_devices_error_4;
+							goto device_system_run_device_enumeration_error_4;
 						}
 						break;
 
@@ -1912,13 +1782,13 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 						break;
 
 					default: // error
-						goto device_system_init_fill_devices_error_4;
+						goto device_system_run_device_enumeration_error_4;
 						//break;
 					}
 					break;
 
 				case 2: // stateful_device
-					result = device_system_init_add_stateful_device(device_system, device);
+					result = enumeration_add_device(enumeration, device);
 					switch (result)
 					{
 					case result_success: // ok
@@ -1928,7 +1798,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 						break;
 
 					default: // error
-						goto device_system_init_fill_devices_error_4;
+						goto device_system_run_device_enumeration_error_4;
 						//break;
 					}
 					break;
@@ -1937,7 +1807,7 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 					break;
 
 				default:
-					goto device_system_init_fill_devices_error_4;
+					goto device_system_run_device_enumeration_error_4;
 					//break;
 				}
 
@@ -1956,71 +1826,22 @@ static int device_system_init_fill_devices(dtmd_device_system_t *device_system)
 
 	result = result_success;
 
-device_system_init_fill_devices_error_4:
+device_system_run_device_enumeration_error_4:
 	if (device_name != NULL)
 	{
 		free(device_name);
 	}
 
-device_system_init_fill_devices_error_3:
+device_system_run_device_enumeration_error_3:
 	free(ccb.cdm.matches);
 
-device_system_init_fill_devices_error_2:
+device_system_run_device_enumeration_error_2:
 	close(fd);
 
-device_system_init_fill_devices_error_1:
+device_system_run_device_enumeration_error_1:
 	return result;
 }
 #endif /* (defined OS_FreeBSD) */
-
-static void device_system_free_all_devices(dtmd_device_system_t *device_system)
-{
-	uint32_t i, j;
-
-	if (device_system->devices != NULL)
-	{
-		for (i = 0; i < device_system->devices_count; ++i)
-		{
-			if (device_system->devices[i] != NULL)
-			{
-				if (device_system->devices[i]->device != NULL)
-				{
-					device_system_free_device(device_system->devices[i]->device);
-				}
-
-				if (device_system->devices[i]->partitions != NULL)
-				{
-					for (j = 0; j < device_system->devices[i]->partitions_count; ++j)
-					{
-						if (device_system->devices[i]->partitions[j] != NULL)
-						{
-							device_system_free_device(device_system->devices[i]->partitions[j]);
-						}
-					}
-
-					free(device_system->devices[i]->partitions);
-				}
-
-				free(device_system->devices[i]);
-			}
-		}
-
-		free(device_system->devices);
-	}
-
-	if (device_system->stateful_devices != NULL)
-	{
-		for (i = 0; i < device_system->stateful_devices_count; ++i)
-		{
-			if (device_system->stateful_devices[i] != NULL)
-			{
-				device_system_free_device(device_system->stateful_devices[i]);
-			}
-		}
-
-		free(device_system->stateful_devices);
-	}
-}
 
 static dtmd_info_t* device_system_copy_device(dtmd_info_t *device)
 {
@@ -2875,11 +2696,7 @@ static void* device_system_worker_function(void *arg)
 	int rc;
 	dtmd_info_t *device;
 	dtmd_device_action_type_t action;
-	dtmd_removable_media_type_t found_device_type;
-	uint32_t device_index, partition_index, parent_index, monitor_index;
-	int found_parent;
-	void *tmp;
-	dtmd_device_internal_t *device_item;
+	dtmd_device_monitor_t *monitor_iter;
 
 	device_system = (dtmd_device_system_t*) arg;
 
@@ -2947,312 +2764,17 @@ static void* device_system_worker_function(void *arg)
 						goto device_system_worker_function_error_2;
 					}
 
-					found_device_type = dtmd_removable_media_type_unknown_or_persistent;
-					found_parent = 0;
-
-					for (device_index = 0; device_index < device_system->devices_count; ++device_index)
+					for (monitor_iter = device_system->first_monitor; monitor_iter != NULL; monitor_iter = monitor_iter->next)
 					{
-						found_parent = 0;
-
-						if ((device_system->devices[device_index] != NULL)
-							&& (device_system->devices[device_index]->device != NULL))
+						if (device_system_monitor_add_item(monitor_iter, device, action) < 0)
 						{
-							if (strcmp(device_system->devices[device_index]->device->path, device->path) == 0)
-							{
-								found_device_type = dtmd_removable_media_type_stateless_device;
-								goto device_system_worker_function_device_found;
-							}
-
-							if (((device->media_type == dtmd_removable_media_type_device_partition)
-								|| ((device->media_type == dtmd_removable_media_type_unknown_or_persistent)
-									&& (device->path_parent != NULL)))
-								&& (strcmp(device_system->devices[device_index]->device->path, device->path_parent) == 0))
-							{
-								parent_index = device_index;
-								found_parent = 1;
-
-								if (device_system->devices[device_index]->partitions != NULL)
-								{
-									for (partition_index = 0; partition_index < device_system->devices[device_index]->partitions_count; ++partition_index)
-									{
-										if ((device_system->devices[device_index]->partitions[partition_index] != NULL)
-											&& (strcmp(device_system->devices[device_index]->partitions[partition_index]->path, device->path) == 0))
-										{
-											found_device_type = dtmd_removable_media_type_device_partition;
-											goto device_system_worker_function_device_found;
-										}
-									}
-								}
-							}
+							goto device_system_worker_function_error_3;
 						}
-					}
-
-					if (device->media_type != dtmd_removable_media_type_device_partition)
-					{
-						for (device_index = 0; device_index < device_system->stateful_devices_count; ++device_index)
-						{
-							if ((device_system->stateful_devices[device_index] != NULL)
-								&& (strcmp(device_system->stateful_devices[device_index]->path, device->path) == 0))
-							{
-								found_device_type = dtmd_removable_media_type_stateful_device;
-								goto device_system_worker_function_device_found;
-							}
-						}
-					}
-
-device_system_worker_function_device_found:
-
-					switch (action)
-					{
-					case dtmd_device_action_add:
-					case dtmd_device_action_online:
-						if (found_device_type == dtmd_removable_media_type_unknown_or_persistent)
-						{
-							if ((device->media_type != dtmd_removable_media_type_device_partition)
-								|| (found_parent))
-							{
-								for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
-								{
-									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device, action) < 0)
-									{
-										goto device_system_worker_function_error_3;
-									}
-								}
-
-								switch (device->media_type)
-								{
-								case dtmd_removable_media_type_stateless_device:
-									device_item = (dtmd_device_internal_t*) malloc(sizeof(dtmd_device_internal_t));
-									if (device_item == NULL)
-									{
-										goto device_system_worker_function_error_3;
-									}
-
-									device_item->device           = device;
-									device_item->partitions       = NULL;
-									device_item->partitions_count = 0;
-
-									tmp = realloc(device_system->devices, (device_system->devices_count + 1) * sizeof(dtmd_device_internal_t*));
-									if (tmp == NULL)
-									{
-										goto device_system_worker_function_error_4;
-									}
-
-									device_system->devices = (dtmd_device_internal_t**) tmp;
-									device_system->devices[device_system->devices_count] = device_item;
-									++(device_system->devices_count);
-									break;
-
-								case dtmd_removable_media_type_device_partition:
-									tmp = realloc(device_system->devices[parent_index]->partitions, (device_system->devices[parent_index]->partitions_count + 1) * sizeof(dtmd_info_t*));
-									if (tmp == NULL)
-									{
-										goto device_system_worker_function_error_3;
-									}
-
-									device_system->devices[parent_index]->partitions = (dtmd_info_t**) tmp;
-									device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count] = device;
-									++(device_system->devices[parent_index]->partitions_count);
-									break;
-
-								case dtmd_removable_media_type_stateful_device:
-									tmp = realloc(device_system->stateful_devices, (device_system->stateful_devices_count + 1) * sizeof(dtmd_info_t*));
-									if (tmp == NULL)
-									{
-										goto device_system_worker_function_error_3;
-									}
-
-									device_system->stateful_devices = (dtmd_info_t**) tmp;
-									device_system->stateful_devices[device_system->stateful_devices_count] = device;
-									++(device_system->stateful_devices_count);
-									break;
-								}
-							}
-						}
-						break;
-
-					case dtmd_device_action_remove:
-					case dtmd_device_action_offline:
-						if (found_device_type != dtmd_removable_media_type_unknown_or_persistent)
-						{
-							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
-							{
-								switch (found_device_type)
-								{
-								case dtmd_removable_media_type_stateless_device:
-									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
-									{
-										if (device_system->devices[device_index]->partitions[parent_index] != NULL)
-										{
-											if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->partitions[parent_index], action) < 0)
-											{
-												goto device_system_worker_function_error_3;
-											}
-										}
-									}
-
-									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[device_index]->device, action) < 0)
-									{
-										goto device_system_worker_function_error_3;
-									}
-									break;
-
-								case dtmd_removable_media_type_device_partition:
-									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->devices[parent_index]->partitions[partition_index], action) < 0)
-									{
-										goto device_system_worker_function_error_3;
-									}
-									break;
-
-								case dtmd_removable_media_type_stateful_device:
-									if (device_system_monitor_add_item(device_system->monitors[monitor_index], device_system->stateful_devices[device_index], action) < 0)
-									{
-										goto device_system_worker_function_error_3;
-									}
-									break;
-								}
-							}
-
-							switch (found_device_type)
-							{
-							case dtmd_removable_media_type_stateless_device:
-								if (device_system->devices[device_index]->partitions != NULL)
-								{
-									for (parent_index = 0; parent_index < device_system->devices[device_index]->partitions_count; ++parent_index)
-									{
-										if (device_system->devices[device_index]->partitions[parent_index] != NULL)
-										{
-											device_system_free_device(device_system->devices[device_index]->partitions[parent_index]);
-										}
-									}
-
-									free(device_system->devices[device_index]->partitions);
-								}
-
-								device_system_free_device(device_system->devices[device_index]->device);
-								free(device_system->devices[device_index]);
-
-								--(device_system->devices_count);
-
-								if (device_system->devices_count > 0)
-								{
-									device_system->devices[device_index] = device_system->devices[device_system->devices_count];
-
-									tmp = realloc(device_system->devices, device_system->devices_count * sizeof(dtmd_device_internal_t*));
-									if (tmp != NULL)
-									{
-										device_system->devices = (dtmd_device_internal_t**) tmp;
-									}
-									else
-									{
-										device_system->devices[device_system->devices_count] = NULL;
-									}
-								}
-								else
-								{
-									free(device_system->devices);
-									device_system->devices = NULL;
-								}
-								break;
-
-							case dtmd_removable_media_type_device_partition:
-								device_system_free_device(device_system->devices[parent_index]->partitions[partition_index]);
-
-								--(device_system->devices[parent_index]->partitions_count);
-
-								if (device_system->devices[parent_index]->partitions_count > 0)
-								{
-									device_system->devices[parent_index]->partitions[partition_index] = device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count];
-
-									tmp = realloc(device_system->devices[parent_index]->partitions, device_system->devices[parent_index]->partitions_count * sizeof(dtmd_info_t*));
-									if (tmp != NULL)
-									{
-										device_system->devices[parent_index]->partitions = (dtmd_info_t**) tmp;
-									}
-									else
-									{
-										device_system->devices[parent_index]->partitions[device_system->devices[parent_index]->partitions_count] = NULL;
-									}
-								}
-								else
-								{
-									free(device_system->devices[parent_index]->partitions);
-									device_system->devices[parent_index]->partitions = NULL;
-								}
-								break;
-
-							case dtmd_removable_media_type_stateful_device:
-								device_system_free_device(device_system->stateful_devices[device_index]);
-
-								--(device_system->stateful_devices_count);
-
-								if (device_system->stateful_devices_count > 0)
-								{
-									device_system->stateful_devices[device_index] = device_system->stateful_devices[device_system->stateful_devices_count];
-
-									tmp = realloc(device_system->stateful_devices, device_system->stateful_devices_count * sizeof(dtmd_info_t*));
-									if (tmp != NULL)
-									{
-										device_system->stateful_devices = (dtmd_info_t**) tmp;
-									}
-									else
-									{
-										device_system->stateful_devices[device_system->stateful_devices_count] = NULL;
-									}
-								}
-								else
-								{
-									free(device_system->stateful_devices);
-									device_system->stateful_devices = NULL;
-								}
-								break;
-							}
-						}
-
-						device_system_free_device(device);
-						break;
-
-					case dtmd_device_action_change:
-						if ((found_device_type != dtmd_removable_media_type_unknown_or_persistent)
-							&& (device->media_type == found_device_type)
-							&& ((device->media_type != dtmd_removable_media_type_device_partition)
-								|| (found_parent)))
-						{
-							for (monitor_index = 0; monitor_index < device_system->monitor_count; ++monitor_index)
-							{
-								if (device_system_monitor_add_item(device_system->monitors[monitor_index], device, action) < 0)
-								{
-									goto device_system_worker_function_error_3;
-								}
-							}
-
-							switch (device->media_type)
-							{
-							case dtmd_removable_media_type_stateless_device:
-								device_system_free_device(device_system->devices[device_index]->device);
-								device_system->devices[device_index]->device = device;
-								break;
-
-							case dtmd_removable_media_type_device_partition:
-								device_system_free_device(device_system->devices[parent_index]->partitions[partition_index]);
-								device_system->devices[parent_index]->partitions[partition_index] = device;
-								break;
-
-							case dtmd_removable_media_type_stateful_device:
-								device_system_free_device(device_system->stateful_devices[device_index]);
-								device_system->stateful_devices[device_index] = device;
-								break;
-							}
-						}
-						break;
-
-					case dtmd_device_action_unknown:
-					default:
-						device_system_free_device(device);
-						break;
 					}
 
 					pthread_mutex_unlock(&(device_system->control_mutex));
+
+					device_system_free_device(device);
 					break;
 
 				case dtmd_device_action_unknown:
@@ -3277,17 +2799,14 @@ device_system_worker_function_exit:
 
 	data = 2;
 
-	for (parent_index = 0; parent_index < device_system->monitor_count; ++parent_index)
+	for (monitor_iter = device_system->first_monitor; monitor_iter != NULL; monitor_iter = monitor_iter->next)
 	{
-		write(device_system->monitors[parent_index]->data_pipe[1], &data, 1);
+		write(monitor_iter->data_pipe[1], &data, 1);
 	}
 
 	pthread_mutex_unlock(&(device_system->control_mutex));
 
 	goto device_system_worker_function_terminate;
-
-device_system_worker_function_error_4:
-	free(device_item);
 
 device_system_worker_function_error_3:
 	device_system_free_device(device);
@@ -3303,9 +2822,9 @@ device_system_worker_function_error_1:
 device_system_worker_function_error_1_locked:
 	data = 0;
 
-	for (parent_index = 0; parent_index < device_system->monitor_count; ++parent_index)
+	for (monitor_iter = device_system->first_monitor; monitor_iter != NULL; monitor_iter = monitor_iter->next)
 	{
-		write(device_system->monitors[parent_index]->data_pipe[1], &data, 1);
+		write(monitor_iter->data_pipe[1], &data, 1);
 	}
 
 	pthread_mutex_unlock(&(device_system->control_mutex));
@@ -3327,14 +2846,10 @@ dtmd_device_system_t* device_system_init(void)
 		goto device_system_init_error_1;
 	}
 
-	device_system->devices                = NULL;
-	device_system->devices_count          = 0;
-	device_system->stateful_devices       = NULL;
-	device_system->stateful_devices_count = 0;
-	device_system->enumerations           = NULL;
-	device_system->enumeration_count      = 0;
-	device_system->monitors               = NULL;
-	device_system->monitor_count          = 0;
+	device_system->first_enumeration = NULL;
+	device_system->last_enumeration  = NULL;
+	device_system->first_monitor     = NULL;
+	device_system->last_monitor      = NULL;
 
 #if (defined OS_Linux)
 	device_system->events_fd = open_netlink_socket();
@@ -3363,11 +2878,6 @@ dtmd_device_system_t* device_system_init(void)
 	{
 		WRITE_LOG(LOG_ERR, "Pthread initialization failure");
 		goto device_system_init_error_4;
-	}
-
-	if (is_result_failure(device_system_init_fill_devices(device_system)))
-	{
-		goto device_system_init_error_5;
 	}
 
 	if (pipe(device_system->worker_control_pipe) < 0)
@@ -3403,7 +2913,6 @@ device_system_init_error_4:
 	pthread_mutexattr_destroy(&mutex_attr);
 
 device_system_init_error_3:
-	device_system_free_all_devices(device_system);
 	close(device_system->events_fd);
 
 device_system_init_error_2:
@@ -3415,16 +2924,42 @@ device_system_init_error_1:
 
 static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 {
-	uint32_t i;
+	dtmd_enumeration_item_t *cur;
+	dtmd_enumeration_item_t *next;
 
-	if (enumeration->devices_count > 0)
+	pthread_mutex_lock(&(enumeration->system->control_mutex));
+
+	if (enumeration->next)
 	{
-		for (i = 0; i < enumeration->devices_count; ++i)
-		{
-			device_system_free_device(enumeration->devices[i]);
-		}
+		enumeration->next->prev = enumeration->prev;
+	}
 
-		free(enumeration->devices);
+	if (enumeration->prev)
+	{
+		enumeration->prev->next = enumeration->next;
+	}
+
+	if (enumeration->system->first_enumeration == enumeration)
+	{
+		enumeration->system->first_enumeration = enumeration->next;
+	}
+
+	if (enumeration->system->last_enumeration == enumeration)
+	{
+		enumeration->system->last_enumeration = enumeration->prev;
+	}
+
+	pthread_mutex_unlock(&(enumeration->system->control_mutex));
+
+	next = enumeration->first;
+
+	while (next)
+	{
+		cur = next;
+		next = cur->next;
+
+		device_system_free_device(cur->item);
+		free(cur);
 	}
 
 	free(enumeration);
@@ -3433,6 +2968,30 @@ static void helper_free_enumeration(dtmd_device_enumeration_t *enumeration)
 static void helper_free_monitor(dtmd_device_monitor_t *monitor)
 {
 	dtmd_monitor_item_t *item, *delete_item;
+
+	pthread_mutex_lock(&(monitor->system->control_mutex));
+
+	if (monitor->next)
+	{
+		monitor->next->prev = monitor->prev;
+	}
+
+	if (monitor->prev)
+	{
+		monitor->prev->next = monitor->next;
+	}
+
+	if (monitor->system->first_monitor == monitor)
+	{
+		monitor->system->first_monitor = monitor->next;
+	}
+
+	if (monitor->system->last_monitor == monitor)
+	{
+		monitor->system->last_monitor = monitor->prev;
+	}
+
+	pthread_mutex_unlock(&(monitor->system->control_mutex));
 
 	item = monitor->first;
 
@@ -3452,7 +3011,6 @@ static void helper_free_monitor(dtmd_device_monitor_t *monitor)
 
 void device_system_deinit(dtmd_device_system_t *system)
 {
-	uint32_t i;
 	char data = 0;
 
 	if (system != NULL)
@@ -3461,36 +3019,18 @@ void device_system_deinit(dtmd_device_system_t *system)
 		pthread_join(system->worker_thread, NULL);
 		close(system->events_fd);
 
-		if (system->enumerations != NULL)
+		if (system->first_enumeration != NULL)
 		{
-			for (i = 0; i < (uint32_t) system->enumeration_count; ++i)
-			{
-				if (system->enumerations[i] != NULL)
-				{
-					helper_free_enumeration(system->enumerations[i]);
-				}
-			}
-
-			free(system->enumerations);
+			helper_free_enumeration(system->first_enumeration);
 		}
 
-		if (system->monitors != NULL)
+		while (system->first_monitor != NULL)
 		{
-			for (i = 0; i < (uint32_t) system->monitor_count; ++i)
-			{
-				if (system->monitors[i] != NULL)
-				{
-					helper_free_monitor(system->monitors[i]);
-				}
-			}
-
-			free(system->monitors);
+			helper_free_monitor(system->first_monitor);
 		}
 
 		close(system->worker_control_pipe[0]);
 		close(system->worker_control_pipe[1]);
-
-		device_system_free_all_devices(system);
 
 		pthread_mutex_destroy(&(system->control_mutex));
 
@@ -3501,118 +3041,61 @@ void device_system_deinit(dtmd_device_system_t *system)
 dtmd_device_enumeration_t* device_system_enumerate_devices(dtmd_device_system_t *system)
 {
 	dtmd_device_enumeration_t *enumeration;
-	void *tmp;
-	uint32_t devices_count;
-	uint32_t i, j, k;
 
 	if (system == NULL)
 	{
 		goto device_system_enumerate_devices_error_1;
 	}
 
-	if (pthread_mutex_lock(&(system->control_mutex)) != 0)
-	{
-		WRITE_LOG(LOG_ERR, "Failed to obtain mutex");
-		goto device_system_enumerate_devices_error_1;
-	}
-
-	devices_count = system->devices_count + system->stateful_devices_count;
-
-	for (i = 0; i < system->devices_count; ++i)
-	{
-		devices_count += system->devices[i]->partitions_count;
-	}
-
 	enumeration = (dtmd_device_enumeration_t*) malloc(sizeof(dtmd_device_enumeration_t));
 	if (enumeration == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
+		goto device_system_enumerate_devices_error_1;
+	}
+
+	enumeration->system  = system;
+	enumeration->first   = NULL;
+	enumeration->last    = NULL;
+	enumeration->current = NULL;
+	enumeration->next    = NULL;
+
+	if (is_result_failure(device_system_run_device_enumeration(enumeration)))
+	{
 		goto device_system_enumerate_devices_error_2;
 	}
 
-	enumeration->system         = system;
-	enumeration->devices_count  = devices_count;
-	enumeration->current_device = 0;
-	k = 0;
-
-	if (enumeration->devices_count > 0)
+	if (pthread_mutex_lock(&(system->control_mutex)) != 0)
 	{
-		enumeration->devices = (dtmd_info_t**) malloc(devices_count * sizeof(dtmd_info_t*));
-		if (enumeration->devices == NULL)
-		{
-			WRITE_LOG(LOG_ERR, "Memory allocation failure");
-			goto device_system_enumerate_devices_error_3;
-		}
-
-		for (i = 0 ; i < system->devices_count; ++i)
-		{
-			enumeration->devices[k] = device_system_copy_device(system->devices[i]->device);
-			if (enumeration->devices[k] == NULL)
-			{
-				goto device_system_enumerate_devices_error_4;
-			}
-
-			++k;
-
-			for (j = 0; j < system->devices[i]->partitions_count; ++j)
-			{
-				enumeration->devices[k] = device_system_copy_device(system->devices[i]->partitions[j]);
-				if (enumeration->devices[k] == NULL)
-				{
-					goto device_system_enumerate_devices_error_4;
-				}
-
-				++k;
-			}
-		}
-
-		for (i = 0; i < system->stateful_devices_count; ++i)
-		{
-			enumeration->devices[k] = device_system_copy_device(system->stateful_devices[i]);
-			if (enumeration->devices[k] == NULL)
-			{
-				goto device_system_enumerate_devices_error_4;
-			}
-
-			++k;
-		}
-	}
-	else
-	{
-		enumeration->devices = NULL;
+		WRITE_LOG(LOG_ERR, "Failed to obtain mutex");
+		goto device_system_enumerate_devices_error_2;
 	}
 
-	tmp = realloc(system->enumerations, (system->enumeration_count + 1) * sizeof(dtmd_device_enumeration_t*));
-	if (tmp == NULL)
+	enumeration->prev = system->last_enumeration;
+
+	if (system->first_enumeration == NULL)
 	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		goto device_system_enumerate_devices_error_4;
+		system->first_enumeration = enumeration;
 	}
 
-	system->enumerations = (dtmd_device_enumeration_t**) tmp;
-	system->enumerations[system->enumeration_count] = enumeration;
-	++(system->enumeration_count);
+	if (system->last_enumeration != NULL)
+	{
+		system->last_enumeration->next = enumeration;
+	}
+
+	system->last_enumeration = enumeration;
 
 	pthread_mutex_unlock(&(system->control_mutex));
 
 	return enumeration;
 
-device_system_enumerate_devices_error_4:
-	if (enumeration->devices_count > 0)
-	{
-		for (i = 0; i < k; ++i)
-		{
-			device_system_free_device(enumeration->devices[i]);
-		}
-
-		free(enumeration->devices);
-	}
-
+/*
 device_system_enumerate_devices_error_3:
-	free(enumeration);
+	pthread_mutex_unlock(&(system->control_mutex));
+*/
 
 device_system_enumerate_devices_error_2:
-	pthread_mutex_unlock(&(system->control_mutex));
+	helper_free_enumeration(enumeration);
 
 device_system_enumerate_devices_error_1:
 	return NULL;
@@ -3620,46 +3103,8 @@ device_system_enumerate_devices_error_1:
 
 void device_system_finish_enumerate_devices(dtmd_device_enumeration_t *enumeration)
 {
-	void *tmp;
-	uint32_t i;
-
 	if (enumeration != NULL)
 	{
-		if (enumeration->system != NULL)
-		{
-			for (i = 0; i < (uint32_t) enumeration->system->enumeration_count; ++i)
-			{
-				if (enumeration->system->enumerations[i] == enumeration)
-				{
-					if (enumeration->system->enumeration_count > 1)
-					{
-						if (i != (uint32_t)(enumeration->system->enumeration_count - 1))
-						{
-							enumeration->system->enumerations[i] = enumeration->system->enumerations[enumeration->system->enumeration_count - 1];
-						}
-
-						tmp = realloc(enumeration->system->enumerations, (enumeration->system->enumeration_count - 1) * sizeof(dtmd_device_enumeration_t*));
-						if (tmp != NULL)
-						{
-							enumeration->system->enumerations = (dtmd_device_enumeration_t**) tmp;
-						}
-						else
-						{
-							enumeration->system->enumerations[enumeration->system->enumeration_count - 1] = NULL;
-						}
-					}
-					else
-					{
-						free(enumeration->system->enumerations);
-						enumeration->system->enumerations = NULL;
-					}
-
-					--(enumeration->system->enumeration_count);
-					break;
-				}
-			}
-		}
-
 		helper_free_enumeration(enumeration);
 	}
 }
@@ -3674,10 +3119,10 @@ int device_system_next_enumerated_device(dtmd_device_enumeration_t *enumeration,
 	}
 #endif /* NDEBUG */
 
-	if (enumeration->current_device < enumeration->devices_count)
+	if (enumeration->current != NULL)
 	{
-		*device = enumeration->devices[enumeration->current_device];
-		++(enumeration->current_device);
+		*device = enumeration->current->item;
+		enumeration->current = enumeration->current->next;
 		return result_success;
 	}
 	else
@@ -3695,7 +3140,6 @@ void device_system_free_enumerated_device(dtmd_device_enumeration_t *enumeration
 dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *system)
 {
 	dtmd_device_monitor_t *monitor;
-	void *tmp;
 
 	if (system == NULL)
 	{
@@ -3710,9 +3154,9 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 	}
 
 	monitor->system = system;
-
-	monitor->first = NULL;
-	monitor->last  = NULL;
+	monitor->first  = NULL;
+	monitor->last   = NULL;
+	monitor->next   = NULL;
 
 	if (pipe(monitor->data_pipe) < 0)
 	{
@@ -3726,23 +3170,28 @@ dtmd_device_monitor_t* device_system_start_monitoring(dtmd_device_system_t *syst
 		goto device_system_start_monitoring_error_3;
 	}
 
-	tmp = realloc(system->monitors, (system->monitor_count + 1) * sizeof(dtmd_device_monitor_t*));
-	if (tmp == NULL)
+	monitor->prev = system->last_monitor;
+
+	if (system->first_monitor == NULL)
 	{
-		WRITE_LOG(LOG_ERR, "Memory allocation failure");
-		goto device_system_start_monitoring_error_4;
+		system->first_monitor = monitor;
 	}
 
-	system->monitors = (dtmd_device_monitor_t**) tmp;
-	system->monitors[system->monitor_count] = monitor;
-	++(system->monitor_count);
+	if (system->last_monitor != NULL)
+	{
+		system->last_monitor->next = monitor;
+	}
+
+	system->last_monitor = monitor;
 
 	pthread_mutex_unlock(&(system->control_mutex));
 
 	return monitor;
 
+/*
 device_system_start_monitoring_error_4:
 	pthread_mutex_unlock(&(system->control_mutex));
+*/
 
 device_system_start_monitoring_error_3:
 	close(monitor->data_pipe[0]);
@@ -3757,50 +3206,8 @@ device_system_start_monitoring_error_1:
 
 void device_system_stop_monitoring(dtmd_device_monitor_t *monitor)
 {
-	void *tmp;
-	uint32_t i;
-
 	if (monitor != NULL)
 	{
-		if (monitor->system != NULL)
-		{
-			pthread_mutex_lock(&(monitor->system->control_mutex));
-
-			for (i = 0; i < (uint32_t) monitor->system->monitor_count; ++i)
-			{
-				if (monitor->system->monitors[i] == monitor)
-				{
-					if (monitor->system->monitor_count > 1)
-					{
-						if (i != (uint32_t)(monitor->system->monitor_count - 1))
-						{
-							monitor->system->monitors[i] = monitor->system->monitors[monitor->system->monitor_count - 1];
-						}
-
-						tmp = realloc(monitor->system->monitors, (monitor->system->monitor_count - 1) * sizeof(dtmd_device_monitor_t*));
-						if (tmp != NULL)
-						{
-							monitor->system->monitors = (dtmd_device_monitor_t**) tmp;
-						}
-						else
-						{
-							monitor->system->monitors[monitor->system->monitor_count - 1] = NULL;
-						}
-					}
-					else
-					{
-						free(monitor->system->monitors);
-						monitor->system->monitors = NULL;
-					}
-
-					--(monitor->system->monitor_count);
-					break;
-				}
-			}
-
-			pthread_mutex_unlock(&(monitor->system->control_mutex));
-		}
-
 		helper_free_monitor(monitor);
 	}
 }

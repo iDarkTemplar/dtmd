@@ -512,8 +512,22 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 					switch (obtained_device->type)
 					{
 					case dtmd_removable_media_type_device_partition:
-					case dtmd_removable_media_type_stateful_device:
 						title = QObject::tr("Device attached");
+						message = QString::fromLocal8Bit(obtained_device->label.empty() ? obtained_device->path.c_str() : obtained_device->label.c_str());
+						break;
+
+					case dtmd_removable_media_type_stateful_device:
+						switch (obtained_device->state)
+						{
+						case dtmd_removable_media_state_ok:
+							title = QObject::tr("Device attached, state: available");
+							break;
+
+						default:
+							title = QObject::tr("Device attached, state: unavailable");
+							break;
+						}
+
 						message = QString::fromLocal8Bit(obtained_device->label.empty() ? obtained_device->path.c_str() : obtained_device->label.c_str());
 						break;
 					}
