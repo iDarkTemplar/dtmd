@@ -45,7 +45,6 @@ option(ENABLE_CXX "enable C++" ON)
 option(ENABLE_CONSOLE_CLIENT "enable console client" ON)
 
 if (OS_LINUX)
-	option(WITH_MTAB_WRITEABLE "use read-write mtab file" ON)
 	option(DISABLE_EXT_MOUNT "disable external mount")
 endif (OS_LINUX)
 
@@ -67,11 +66,7 @@ endif (ENABLE_SYSLOG)
 message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
 
 if (OS_LINUX)
-	if (WITH_MTAB_WRITEABLE)
-		add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
-	else (WITH_MTAB_WRITEABLE)
-		add_definitions(-DMTAB_READONLY)
-	endif (WITH_MTAB_WRITEABLE)
+	add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
 	if (DISABLE_EXT_MOUNT)
 		add_definitions(-DDISABLE_EXT_MOUNT)

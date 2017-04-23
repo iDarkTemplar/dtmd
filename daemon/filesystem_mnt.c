@@ -272,14 +272,15 @@ static int invoke_mount_internal(struct client *client_ptr,
 
 	if (result == 0)
 	{
-#if (!defined MTAB_READONLY)
-		result = add_to_mtab(path, mount_path, fstype, mount_full_opts);
-		if (is_result_failure(result))
+		if (is_result_successful(is_mtab_writable()))
 		{
-			// NOTE: failing to modify /etc/mtab is non-fatal error
-			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
+			result = add_to_mtab(path, mount_path, fstype, mount_full_opts);
+			if (is_result_failure(result))
+			{
+				// NOTE: failing to modify /etc/mtab is non-fatal error
+				WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file );
+			}
 		}
-#endif /* (!defined MTAB_READONLY) */
 
 		result = result_success;
 
@@ -830,14 +831,15 @@ static int invoke_unmount_internal(struct client *client_ptr, const char *path, 
 	}
 	else
 	{
-#if (!defined MTAB_READONLY)
-		result = remove_from_mtab(path, mnt_point, fstype);
-		if (is_result_failure(result))
+		if (is_result_successful(is_mtab_writable()))
 		{
-			// NOTE: failing to modify /etc/mtab is non-fatal error
-			WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file);
+			result = remove_from_mtab(path, mnt_point, fstype);
+			if (is_result_failure(result))
+			{
+				// NOTE: failing to modify /etc/mtab is non-fatal error
+				WRITE_LOG(LOG_WARNING, "Failed to modify " dtmd_internal_mtab_file);
+			}
 		}
-#endif /* (!defined MTAB_READONLY) */
 
 		WRITE_LOG_ARGS(LOG_INFO, "Unmounted device '%s' from path '%s'", path, mnt_point);
 		result = result_success;

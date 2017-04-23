@@ -407,7 +407,23 @@ int point_mount_count(const char *path, int max)
 #endif /* (defined OS_FreeBSD) */
 
 #if (defined OS_Linux)
-#if (!defined MTAB_READONLY)
+int is_mtab_writable(void)
+{
+	struct stat stats;
+
+	if (lstat(dtmd_internal_mtab_file, &stats) != 0)
+	{
+		return result_fail;
+	}
+
+	if (!S_ISREG(stats.st_mode))
+	{
+		return result_fail;
+	}
+
+	return result_success;
+}
+
 int add_to_mtab(const char *path, const char *mount_point, const char *type, const char *mount_opts)
 {
 	int result;
@@ -491,7 +507,7 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 		return result_fatal_error;
 	}
 
-	if (chmod(dtmd_internal_mtab_temporary, stats.st_mode) != 0)
+	if (chmod(dtmd_internal_mtab_temporary, stats.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) != 0)
 	{
 		WRITE_LOG_ARGS(LOG_ERR, "Failed changing file mode for file '%s'", dtmd_internal_mtab_temporary);
 		unlink(dtmd_internal_mtab_temporary);
@@ -514,5 +530,4 @@ int remove_from_mtab(const char *path, const char *mount_point, const char *type
 
 	return result_success;
 }
-#endif /* (!defined MTAB_READONLY) */
 #endif /* (defined OS_Linux) */

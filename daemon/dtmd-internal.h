@@ -27,14 +27,12 @@
 
 #define dtmd_internal_mounts_file "/proc/self/mounts"
 
-#if (!defined MTAB_READONLY)
 #ifndef MTAB_DIR
 #error MTAB_DIR is not defined
 #endif /* MTAB_DIR */
 
 #define dtmd_internal_mtab_file MTAB_DIR "/mtab"
 #define dtmd_internal_mtab_temporary MTAB_DIR "/.mtab.dtmd"
-#endif /* (!defined MTAB_READONLY) */
 
 #endif /* (defined OS_Linux) */
 
