@@ -2,9 +2,9 @@ project(Dark-Templar-Mount-Daemon)
 
 cmake_minimum_required( VERSION 3.0.2 )
 
-set(DTMD_VERSION_MAJOR 1)
-set(DTMD_VERSION_MINOR 10)
-set(DTMD_VERSION_PATCH 6)
+set(DTMD_VERSION_MAJOR 2)
+set(DTMD_VERSION_MINOR 0)
+set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
@@ -74,7 +74,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 if (OS_LINUX)
-	message(STATUS "set LINUX_UDEV to force enable udev backend or disable it and instead use linux kernel")
+	message(STATUS "set LINUX_UDEV to force enable udev backend or disable it and instead use linux userspace interfaces")
 endif (OS_LINUX)
 
 message(STATUS "set CLIENT_QT to force enable or disable Qt client")
@@ -170,9 +170,9 @@ set ( LINUX_UDEV_SOURCES daemon/modules/linux-udev/system_module.c )
 set ( LINUX_UDEV_HEADERS )
 set ( LINUX_UDEV_LIBS )
 
-set ( UNIX_KERNEL_SOURCES daemon/modules/unix-userspace/system_module.c )
-set ( UNIX_KERNEL_HEADERS )
-set ( UNIX_KERNEL_LIBS pthread )
+set ( UNIX_USERSPACE_SOURCES daemon/modules/unix-userspace/system_module.c )
+set ( UNIX_USERSPACE_HEADERS )
+set ( UNIX_USERSPACE_LIBS pthread )
 
 set ( MISC_LIBRARY_SOURCES library/dtmd-misc.c )
 set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
@@ -257,9 +257,9 @@ if (OS_FREEBSD OR (OS_LINUX AND (NOT BUILD_BACKEND_UDEV)))
 		include_directories( ${BLKID_INCLUDE_DIRS} )
 	endif (OS_LINUX AND (NOT BUILD_BACKEND_UDEV))
 
-	set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${UNIX_KERNEL_SOURCES} )
-	set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${UNIX_KERNEL_HEADERS} )
-	set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${UNIX_KERNEL_LIBS} )
+	set ( DAEMON_SOURCES ${DAEMON_SOURCES} ${UNIX_USERSPACE_SOURCES} )
+	set ( DAEMON_HEADERS ${DAEMON_HEADERS} ${UNIX_USERSPACE_HEADERS} )
+	set ( DAEMON_LIBS    ${DAEMON_LIBS}    ${UNIX_USERSPACE_LIBS} )
 
 	if (OS_LINUX AND (NOT BUILD_BACKEND_UDEV))
 		set ( DAEMON_LIBS ${DAEMON_LIBS} ${BLKID_LIBRARIES} )

@@ -8,14 +8,10 @@ and specify subset of allowed mount options instead of default ones from configu
 There is a console client and clients based on Qt-4 and Qt-5.
 
 Console client has following commands available:
-	enumerate
+	list_all
 		This command prints information about all currently detected removable devices
-	list_device path
+	list path
 		This command prints information about specific removable device if it's present
-	list_partition path
-		This command prints information about specific partition of removable device if it's present
-	list_stateful_device path
-		This command prints information about specific CD/DVD-ROM if it's present
 	mount device [ mount_options ]
 		This command allows to mount specified removable device and to use specific mount options
 		Mandatory options set in config file, or compiled-in defaults if mandatory options aren't set in config,
