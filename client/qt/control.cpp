@@ -62,6 +62,12 @@ Control::Control()
 	QObject::connect(this, SIGNAL(signalBuildMenu()),
 		this, SLOT(slotBuildMenu()), Qt::QueuedConnection);
 
+	QObject::connect(this, SIGNAL(signalDtmdConnected()),
+		this, SLOT(slotDtmdConnected()), Qt::QueuedConnection);
+
+	QObject::connect(this, SIGNAL(signalDtmdDisconnected()),
+		this, SLOT(slotDtmdDisconnected()), Qt::QueuedConnection);
+
 	QObject::connect(this, SIGNAL(signalExitSignalled(QString,QString)),
 		this, SLOT(slotExitSignalled(QString,QString)), Qt::QueuedConnection);
 
@@ -73,7 +79,7 @@ Control::Control()
 
 	m_tray.setIcon(m_icons_map.at(normal));
 
-	m_lib.reset(new dtmd::library(&Control::dtmd_callback, this));
+	m_lib.reset(new dtmd::library(&Control::dtmd_callback, &Control::dtmd_state_callback, this));
 
 	{
 		std::list<std::shared_ptr<dtmd::removable_media> > temp_devices;
@@ -81,11 +87,14 @@ Control::Control()
 		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
 		if (result != dtmd_ok)
 		{
-			std::stringstream errMsg;
-			errMsg << "Couldn't obtain list of current removable devices, error code " << result;
-			throw std::runtime_error(errMsg.str());
+			if (m_lib->isStateInvalid())
+			{
+				std::stringstream errMsg;
+				errMsg << "Couldn't obtain list of current removable devices, error code " << result;
+				throw std::runtime_error(errMsg.str());
+			}
 		}
-
+		else
 		{ // lock
 			QMutexLocker devices_locker(&m_devices_mutex);
 			m_devices = temp_devices;
@@ -374,50 +383,67 @@ void Control::dtmd_callback(const dtmd::library &library_instance, void *arg, co
 {
 	Control *ptr = (Control*) arg;
 
-	if (!cmd.isEmpty())
+	try
 	{
-		try
-		{
-			std::tuple<bool, QString, QString> result(false, QString(), QString());
+		std::tuple<bool, QString, QString> result(false, QString(), QString());
 
-			{ // lock
-				QMutexLocker devices_locker(&(ptr->m_devices_mutex));
+		{ // lock
+			QMutexLocker devices_locker(&(ptr->m_devices_mutex));
 
-				if (ptr->m_devices_initialized)
-				{
-					result = ptr->processCommand(cmd);
-				}
-				else
-				{
-					ptr->m_saved_commands.push_back(cmd);
-				}
-			} // unlock
-
-			if (std::get<0>(result))
+			if (ptr->m_devices_initialized)
 			{
-				ptr->triggerBuildMenu();
+				result = ptr->processCommand(cmd);
+			}
+			else
+			{
+				ptr->m_saved_commands.push_back(cmd);
+			}
+		} // unlock
 
-				const QString &title = std::get<1>(result);
-				const QString &message = std::get<2>(result);
+		if (std::get<0>(result))
+		{
+			ptr->triggerBuildMenu();
 
-				if ((!title.isEmpty()) || (!message.isEmpty()))
-				{
-					ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
-				}
+			const QString &title = std::get<1>(result);
+			const QString &message = std::get<2>(result);
+
+			if ((!title.isEmpty()) || (!message.isEmpty()))
+			{
+				ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
 			}
 		}
-		catch (const std::exception &e)
-		{
-			ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error") + QString("\n") + QObject::tr("Error message: ") + QString::fromLocal8Bit(e.what()));
-		}
-		catch (...)
-		{
-			ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error"));
-		}
 	}
-	else
+	catch (const std::exception &e)
 	{
+		ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error") + QString("\n") + QObject::tr("Error message: ") + QString::fromLocal8Bit(e.what()));
+	}
+	catch (...)
+	{
+		ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error"));
+	}
+}
+
+void Control::dtmd_state_callback(const dtmd::library &library_instance, void *arg, dtmd_state_t state)
+{
+	Control *ptr = (Control*) arg;
+
+	switch (state)
+	{
+	case dtmd_state_connected:
+		ptr->dtmdConnected();
+		break;
+
+	case dtmd_state_disconnected:
+		ptr->dtmdDisconnected();
+		break;
+
+	case dtmd_state_failure:
 		ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Daemon sent exit message"));
+		break;
+
+	default:
+		ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Got unknown state from daemon"));
+		break;
 	}
 }
 
@@ -676,6 +702,16 @@ void Control::exit()
 	QApplication::exit();
 }
 
+void Control::dtmdConnected()
+{
+	emit signalDtmdConnected();
+}
+
+void Control::dtmdDisconnected()
+{
+	emit signalDtmdDisconnected();
+}
+
 void Control::exitSignalled(QString title, QString message)
 {
 	emit signalExitSignalled(title, message);
@@ -690,6 +726,55 @@ void Control::slotShowMessage(app_state state, QString title, QString message, Q
 void Control::slotBuildMenu()
 {
 	BuildMenu();
+}
+
+void Control::slotDtmdConnected()
+{
+	{
+		std::list<std::shared_ptr<dtmd::removable_media> > temp_devices;
+
+		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
+		if (result != dtmd_ok)
+		{
+			if (m_lib->isStateInvalid())
+			{
+				std::stringstream errMsg;
+				errMsg << "Couldn't obtain list of current removable devices, error code " << result;
+				throw std::runtime_error(errMsg.str());
+			}
+		}
+		else
+		{ // lock
+			QMutexLocker devices_locker(&m_devices_mutex);
+			m_devices = temp_devices;
+			m_devices_initialized = true;
+
+			auto iter_end = m_saved_commands.end();
+			for (auto iter = m_saved_commands.begin(); iter != iter_end; ++iter)
+			{
+				processCommand(*iter);
+			}
+
+			m_saved_commands.clear();
+		} // unlock
+	}
+
+	BuildMenu();
+
+	this->showMessage(success, QObject::tr("Connected to DTMD daemon"), QString(), QSystemTrayIcon::Information, Control::defaultTimeout);
+}
+
+void Control::slotDtmdDisconnected()
+{
+	{ // lock
+		QMutexLocker devices_locker(&m_devices_mutex);
+		m_devices.clear();
+		m_devices_initialized = false;
+	} // unlock
+
+	BuildMenu();
+
+	this->showMessage(fail, QObject::tr("Disconnected from DTMD daemon"), QString(), QSystemTrayIcon::Information, Control::defaultTimeout);
 }
 
 void Control::slotExitSignalled(QString title, QString message)

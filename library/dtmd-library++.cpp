@@ -265,12 +265,13 @@ dtmd_removable_media_type_t removable_media::getValidType() const
 	return dtmd_removable_media_type_unknown_or_persistent;
 }
 
-library::library(callback cb, void *arg)
+library::library(callback cb, state_callback state_cb, void *arg)
 	: m_handle(NULL),
 	m_cb(cb),
+	m_state_cb(state_cb),
 	m_arg(arg)
 {
-	m_handle = dtmd_init(&library::local_callback, this, NULL);
+	m_handle = dtmd_init(&library::local_callback, &library::local_state_callback, this, NULL);
 	if (m_handle == NULL)
 	{
 		throw std::runtime_error("Couldn't initialize dtmd library");
@@ -516,7 +517,34 @@ void library::local_callback(dtmd_t *library_ptr, void *arg, const dt_command_t 
 	catch (...)
 	{
 		// signal failure
-		lib->m_cb(*lib, lib->m_arg, command());
+		try
+		{
+			lib->m_state_cb(*lib, lib->m_arg, dtmd_state_failure);
+		}
+		catch (...)
+		{
+		}
+	}
+}
+
+void library::local_state_callback(dtmd_t *library_ptr, void *arg, dtmd_state_t state)
+{
+	library *lib = (library*) arg;
+
+	try
+	{
+		lib->m_state_cb(*lib, lib->m_arg, state);
+	}
+	catch (...)
+	{
+		// signal failure
+		try
+		{
+			lib->m_state_cb(*lib, lib->m_arg, dtmd_state_failure);
+		}
+		catch (...)
+		{
+		}
 	}
 }
 

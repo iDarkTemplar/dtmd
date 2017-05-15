@@ -33,9 +33,25 @@
 #include <pthread.h>
 #include <semaphore.h>
 
+#if (defined OS_Linux)
+#include <sys/inotify.h>
+#include <limits.h>
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+#include <sys/event.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#endif /* (defined OS_FreeBSD) */
+
 #include <poll.h>
 #include <stdio.h>
 #include <time.h>
+
+#if (defined OS_Linux)
+#define dtmd_inotify_buffer_size (sizeof(struct inotify_event) + NAME_MAX + 1)
+#endif /* (defined OS_Linux) */
 
 #define dtmd_removable_media_internal_state_fields_are_linked  (1<<0)
 
@@ -58,11 +74,18 @@ typedef enum dtmd_internal_fill_type
 struct dtmd_library
 {
 	dtmd_callback_t callback;
+	dtmd_state_callback_t state_callback;
 	void *callback_arg;
 	pthread_t worker;
 	int pipes[2];
 	int feedback[2];
-	int socket_fd;
+	volatile int socket_fd;
+	int dir_fd;
+	int watch_fd;
+#if (defined OS_Linux)
+	char *watch_dir_name;
+	char *watch_file_name;
+#endif /* (defined OS_Linux) */
 	dtmd_result_t result_state;
 	dtmd_error_code_t error_code;
 	dtmd_library_state_t library_state;
@@ -71,6 +94,11 @@ struct dtmd_library
 
 	size_t cur_pos;
 	char buffer[dtmd_command_max_length + 1];
+
+#if (defined OS_Linux)
+	size_t inotify_buffer_used;
+	char inotify_buffer[dtmd_inotify_buffer_size];
+#endif /* (defined OS_Linux) */
 };
 
 typedef enum dtmd_helper_result
@@ -139,6 +167,8 @@ static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dt_command_t *cmd);
 static dtmd_result_t dtmd_helper_handle_callback_cmd(dtmd_t *handle, dt_command_t *cmd);
 static dtmd_result_t dtmd_helper_wait_for_input(int handle, int timeout);
 static int dtmd_helper_is_state_invalid(dtmd_result_t result);
+
+static int dtmd_try_connecting(dtmd_t *handle);
 
 static int dtmd_helper_is_helper_list_all_removable_devices_common(dt_command_t *cmd);
 static int dtmd_helper_is_helper_list_all_removable_devices_generic(dt_command_t *cmd);
@@ -217,14 +247,19 @@ static void dtmd_helper_exit_clear_list_supported_filesystem_options(void *state
 static void dtmd_helper_free_string_array(size_t count, const char **data);
 static int dtmd_helper_validate_string_array(size_t count, const char **data);
 
-dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
+dtmd_t* dtmd_init(dtmd_callback_t callback, dtmd_state_callback_t state_callback, void *arg, dtmd_result_t *result)
 {
 	dtmd_t *handle;
-	struct sockaddr_un sockaddr;
 	dtmd_result_t errorcode;
+	int rc;
+	char *watchdir;
+	char *watchdir_sep_ptr;
+#if (defined OS_FreeBSD)
+	struct kevent change_event;
+#endif /* (defined OS_FreeBSD) */
 	/* char data = 0; */
 
-	if (callback == NULL)
+	if ((callback == NULL) || (state_callback == NULL))
 	{
 		errorcode = dtmd_input_error;
 		goto dtmd_init_error_1;
@@ -237,53 +272,107 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
 		goto dtmd_init_error_1;
 	}
 
-	handle->callback      = callback;
-	handle->callback_arg  = arg;
-	handle->result_state  = dtmd_ok;
-	handle->library_state = dtmd_state_default;
-	handle->buffer[0]     = 0;
-	handle->cur_pos       = 0;
-	handle->error_code    = dtmd_error_code_unknown;
+	handle->callback       = callback;
+	handle->state_callback = state_callback;
+	handle->callback_arg   = arg;
+	handle->result_state   = dtmd_ok;
+	handle->library_state  = dtmd_state_default;
+	handle->buffer[0]      = 0;
+	handle->cur_pos        = 0;
+	handle->error_code     = dtmd_error_code_unknown;
 
-	if (sem_init(&(handle->caller_socket), 0, 0) == -1)
+#if (defined OS_Linux)
+	handle->inotify_buffer_used = 0;
+#endif /* (defined OS_Linux) */
+
+	watchdir = strdup(dtmd_daemon_socket_addr);
+	if (watchdir == NULL)
 	{
-		errorcode = dtmd_internal_initialization_error;
+		errorcode = dtmd_memory_error;
 		goto dtmd_init_error_2;
 	}
 
-	if (pipe(handle->feedback) == -1)
+	watchdir_sep_ptr = strrchr(watchdir, '/');
+	if (watchdir_sep_ptr == NULL)
 	{
 		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_3;
 	}
 
-	if (pipe(handle->pipes) == -1)
+	*watchdir_sep_ptr = 0;
+
+#if (defined OS_Linux)
+	handle->watch_dir_name = watchdir;
+	handle->watch_file_name = watchdir_sep_ptr + 1;
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_Linux)
+	handle->watch_fd = inotify_init1(IN_NONBLOCK);
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	handle->watch_fd = kqueue();
+#endif /* (defined OS_FreeBSD) */
+	if (handle->watch_fd < 0)
+	{
+		errorcode = dtmd_internal_initialization_error;
+		goto dtmd_init_error_3;
+	}
+
+#if (defined OS_Linux)
+	handle->dir_fd = inotify_add_watch(handle->watch_fd, handle->watch_dir_name, IN_CREATE | IN_DELETE_SELF | IN_MOVE_SELF | IN_MOVED_TO);
+	if (handle->dir_fd < 0)
+	{
+		errorcode = dtmd_internal_initialization_error;
+		goto dtmd_init_error_4;
+	}
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+	handle->dir_fd = open(watchdir, O_RDONLY);
+	if (handle->dir_fd < 0)
 	{
 		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_4;
 	}
 
-	handle->socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-	if (handle->socket_fd == -1)
+	EV_SET(&change_event, handle->dir_fd, EV_ADD | EV_ENABLE | EV_CLEAR, NOTE_DELETE | NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_LINK | NOTE_RENAME | NOTE_REVOKE, 0, NULL);
+	rc = kevent(handle->watch_fd, &change_event, 1, NULL, 0, NULL);
+	if (rc < 0)
+	{
+		errorcode = dtmd_internal_initialization_error;
+		goto dtmd_init_error_5;
+	}
+#endif /* (defined OS_FreeBSD) */
+
+	if (sem_init(&(handle->caller_socket), 0, 0) == -1)
 	{
 		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_5;
 	}
 
-	sockaddr.sun_family = AF_LOCAL;
-	memset(sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
-	strncpy(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
-
-	if (connect(handle->socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
+	if (pipe(handle->feedback) == -1)
 	{
-		errorcode = dtmd_daemon_not_responding_error;
+		errorcode = dtmd_internal_initialization_error;
 		goto dtmd_init_error_6;
+	}
+
+	if (pipe(handle->pipes) == -1)
+	{
+		errorcode = dtmd_internal_initialization_error;
+		goto dtmd_init_error_7;
+	}
+
+	rc = dtmd_try_connecting(handle);
+	if (rc < 0)
+	{
+		errorcode = dtmd_internal_initialization_error;
+		goto dtmd_init_error_8;
 	}
 
 	if ((pthread_create(&(handle->worker), NULL, &dtmd_worker_function, handle)) != 0)
 	{
 		errorcode = dtmd_internal_initialization_error;
-		goto dtmd_init_error_6;
+		goto dtmd_init_error_9;
 	}
 
 	if (result != NULL)
@@ -291,26 +380,43 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result)
 		*result = dtmd_ok;
 	}
 
+#if (defined OS_FreeBSD)
+	free(watchdir);
+#endif /* (defined OS_FreeBSD) */
 	return handle;
 /*
-dtmd_init_error_7:
+dtmd_init_error_10:
 	write(handle->pipes[1], &data, sizeof(char));
 	pthread_join(handle->worker, NULL);
 */
-dtmd_init_error_6:
+dtmd_init_error_9:
 	shutdown(handle->socket_fd, SHUT_RDWR);
 	close(handle->socket_fd);
 
-dtmd_init_error_5:
+dtmd_init_error_8:
 	close(handle->pipes[0]);
 	close(handle->pipes[1]);
 
-dtmd_init_error_4:
+dtmd_init_error_7:
 	close(handle->feedback[0]);
 	close(handle->feedback[1]);
 
-dtmd_init_error_3:
+dtmd_init_error_6:
 	sem_destroy(&(handle->caller_socket));
+
+dtmd_init_error_5:
+#if (defined OS_Linux)
+	inotify_rm_watch(handle->watch_fd, handle->dir_fd);
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	close(handle->dir_fd);
+#endif /* (defined OS_FreeBSD) */
+
+dtmd_init_error_4:
+	close(handle->watch_fd);
+
+dtmd_init_error_3:
+	free(watchdir);
 
 dtmd_init_error_2:
 	free(handle);
@@ -333,13 +439,31 @@ void dtmd_deinit(dtmd_t *handle)
 		write(handle->pipes[1], &data, sizeof(char));
 		pthread_join(handle->worker, NULL);
 
-		shutdown(handle->socket_fd, SHUT_RDWR);
-		close(handle->socket_fd);
+		if (handle->socket_fd >= 0)
+		{
+			shutdown(handle->socket_fd, SHUT_RDWR);
+			close(handle->socket_fd);
+		}
+
 		close(handle->pipes[0]);
 		close(handle->pipes[1]);
 		close(handle->feedback[0]);
 		close(handle->feedback[1]);
 		sem_destroy(&(handle->caller_socket));
+
+#if (defined OS_Linux)
+		inotify_rm_watch(handle->watch_fd, handle->dir_fd);
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+		close(handle->dir_fd);
+#endif /* (defined OS_FreeBSD) */
+
+		close(handle->watch_fd);
+
+#if (defined OS_Linux)
+		free(handle->watch_dir_name);
+#endif /* (defined OS_Linux) */
+
 		free(handle);
 	}
 }
@@ -347,17 +471,26 @@ void dtmd_deinit(dtmd_t *handle)
 static void* dtmd_worker_function(void *arg)
 {
 	dtmd_t *handle;
-	struct pollfd fds[2];
+	struct pollfd fds[3];
 	int rc;
 	dt_command_t *cmd;
 	char data;
 	dtmd_result_t res;
 	char *eol;
+#if (defined OS_Linux)
+	size_t idx;
+	struct inotify_event *event;
+#endif /* (defined OS_Linux) */
+#if (defined OS_FreeBSD)
+	struct kevent notify_event;
+	struct timespec waittime;
+#endif /* (defined OS_FreeBSD) */
 
 	handle = (dtmd_t*) arg;
 
 	fds[0].fd = handle->pipes[0];
-	fds[1].fd = handle->socket_fd;
+	fds[1].fd = handle->watch_fd;
+	fds[2].fd = handle->socket_fd;
 
 	for (;;)
 	{
@@ -391,8 +524,10 @@ static void* dtmd_worker_function(void *arg)
 		fds[0].revents = 0;
 		fds[1].events  = POLLIN;
 		fds[1].revents = 0;
+		fds[2].events  = POLLIN;
+		fds[2].revents = 0;
 
-		rc = poll(fds, 2, -1);
+		rc = poll(fds, ((handle->socket_fd >= 0) ? 3 : 2), -1);
 
 		if ((rc == -1)
 			|| (fds[0].revents & POLLERR)
@@ -405,7 +540,17 @@ static void* dtmd_worker_function(void *arg)
 			goto dtmd_worker_function_error;
 		}
 
-		if (fds[0].revents & POLLIN)
+		if ((handle->socket_fd >= 0)
+			&& ((fds[2].revents & POLLERR)
+				|| (fds[2].revents & POLLHUP)
+				|| (fds[2].revents & POLLNVAL)))
+		{
+			handle->state_callback(handle, handle->callback_arg, dtmd_state_disconnected);
+			shutdown(handle->socket_fd, SHUT_RDWR);
+			close(handle->socket_fd);
+			handle->socket_fd = -1;
+		}
+		else if (fds[0].revents & POLLIN)
 		{
 			rc = read(handle->pipes[0], &data, sizeof(char));
 
@@ -431,20 +576,127 @@ static void* dtmd_worker_function(void *arg)
 		}
 		else if (fds[1].revents & POLLIN)
 		{
-			rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
+#if (defined OS_Linux)
+			if (handle->inotify_buffer_used == dtmd_inotify_buffer_size)
+			{
+				goto dtmd_worker_function_error;
+			}
+
+			rc = read(handle->watch_fd, &(handle->inotify_buffer[handle->inotify_buffer_used]), dtmd_inotify_buffer_size - handle->inotify_buffer_used);
 			if (rc <= 0)
 			{
 				goto dtmd_worker_function_error;
 			}
 
-			handle->cur_pos += rc;
-			handle->buffer[handle->cur_pos] = 0;
+			handle->inotify_buffer_used += rc;
+			idx = 0;
+
+			while (idx < handle->inotify_buffer_used)
+			{
+				if (handle->inotify_buffer_used < idx + sizeof(struct inotify_event))
+				{
+					break;
+				}
+
+				event = (struct inotify_event*) &(handle->inotify_buffer[idx]);
+
+				if (handle->inotify_buffer_used < idx + sizeof(struct inotify_event) + event->len)
+				{
+					break;
+				}
+
+				if ((event->mask & IN_CREATE)
+					|| (event->mask & IN_MOVED_TO))
+				{
+					if (handle->socket_fd < 0)
+					{
+						if ((event->len > 0) && (strcmp(event->name, handle->watch_file_name) == 0))
+						{
+							rc = dtmd_try_connecting(handle);
+							if (rc < 0)
+							{
+								goto dtmd_worker_function_error;
+							}
+							else if (rc > 0)
+							{
+								fds[2].fd = handle->socket_fd;
+								handle->cur_pos = 0;
+								handle->buffer[handle->cur_pos] = 0;
+								handle->state_callback(handle, handle->callback_arg, dtmd_state_connected);
+							}
+						}
+					}
+				}
+
+				if ((event->mask & IN_DELETE_SELF)
+					|| (event->mask & IN_MOVE_SELF))
+				{
+					goto dtmd_worker_function_error;
+				}
+
+				idx += sizeof(struct inotify_event) + event->len;
+			}
+
+			handle->inotify_buffer_used -= idx;
+			memmove(handle->inotify_buffer, &(handle->inotify_buffer[idx]), handle->inotify_buffer_used);
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+			waittime.tv_sec = 0;
+			waittime.tv_nsec = 0;
+			rc = kevent(handle->watch_fd, NULL, 0, &notify_event, 1, &waittime);
+			if (rc <= 0)
+			{
+				goto dtmd_worker_function_error;
+			}
+
+			if (notify_event.fflags & (NOTE_DELETE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_LINK | NOTE_RENAME | NOTE_REVOKE))
+			{
+				goto dtmd_worker_function_error;
+			}
+
+			if (notify_event.fflags & NOTE_WRITE)
+			{
+				if (handle->socket_fd < 0)
+				{
+					rc = dtmd_try_connecting(handle);
+					if (rc < 0)
+					{
+						goto dtmd_worker_function_error;
+					}
+					else if (rc > 0)
+					{
+						fds[2].fd = handle->socket_fd;
+						handle->cur_pos = 0;
+						handle->buffer[handle->cur_pos] = 0;
+						handle->state_callback(handle, handle->callback_arg, dtmd_state_connected);
+					}
+				}
+			}
+#endif /* (defined OS_FreeBSD) */
+		}
+		else if ((handle->socket_fd >= 0)
+			&& (fds[2].revents & POLLIN))
+		{
+			rc = read(handle->socket_fd, &(handle->buffer[handle->cur_pos]), dtmd_command_max_length - handle->cur_pos);
+			if (rc > 0)
+			{
+				handle->cur_pos += rc;
+				handle->buffer[handle->cur_pos] = 0;
+			}
+			else
+			{
+				handle->state_callback(handle, handle->callback_arg, dtmd_state_disconnected);
+				shutdown(handle->socket_fd, SHUT_RDWR);
+				close(handle->socket_fd);
+				handle->socket_fd = -1;
+			}
 		}
 	}
 
 dtmd_worker_function_error:
 	// Signal about error
-	handle->callback(handle, handle->callback_arg, NULL);
+	handle->state_callback(handle, handle->callback_arg, dtmd_state_failure);
 
 dtmd_worker_function_exit:
 	// Signal about exit
@@ -1019,7 +1271,7 @@ static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dt_command_t *cmd)
 		break;
 	}
 
-	return dtmd_input_error;
+	return dtmd_fatal_io_error;
 }
 
 static dtmd_result_t dtmd_helper_handle_callback_cmd(dtmd_t *handle, dt_command_t *cmd)
@@ -1035,7 +1287,7 @@ static dtmd_result_t dtmd_helper_handle_callback_cmd(dtmd_t *handle, dt_command_
 	}
 	else
 	{
-		return dtmd_input_error;
+		return dtmd_fatal_io_error;
 	}
 }
 
@@ -1065,7 +1317,7 @@ static dtmd_result_t dtmd_helper_wait_for_input(int handle, int timeout)
 		}
 		else
 		{
-			return dtmd_invalid_state;
+			return dtmd_io_error;
 		}
 	}
 }
@@ -1077,11 +1329,38 @@ static int dtmd_helper_is_state_invalid(dtmd_result_t result)
 	case dtmd_ok:
 	case dtmd_timeout:
 	case dt_command_failed:
+	case dtmd_not_connected:
+	case dtmd_io_error:
 		return 0;
 
 	default:
 		return 1;
 	}
+}
+
+static int dtmd_try_connecting(dtmd_t *handle)
+{
+	struct sockaddr_un sockaddr;
+
+	handle->socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+	if (handle->socket_fd == -1)
+	{
+		return -1;
+	}
+
+	sockaddr.sun_family = AF_LOCAL;
+	memset(sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
+	strncpy(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
+
+	if (connect(handle->socket_fd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un)) == -1)
+	{
+		shutdown(handle->socket_fd, SHUT_RDWR);
+		close(handle->socket_fd);
+		handle->socket_fd = -1;
+		return 0;
+	}
+
+	return 1;
 }
 
 static int dtmd_helper_is_helper_list_all_removable_devices_common(dt_command_t *cmd)
@@ -1396,7 +1675,7 @@ static dtmd_result_t dtmd_helper_capture_socket(dtmd_t *handle, int timeout, str
 
 	if (data == 0)
 	{
-		return dtmd_invalid_state;
+		return dtmd_fatal_io_error;
 	}
 
 	return dtmd_ok;
@@ -1525,6 +1804,12 @@ dtmd_result_t dtmd_helper_generic_process(dtmd_t *handle, int timeout, void *par
 		{
 			goto dtmd_helper_generic_process_exit;
 		}
+	}
+
+	if (handle->socket_fd < 0)
+	{
+		handle->result_state = dtmd_not_connected;
+		goto dtmd_helper_generic_process_exit;
 	}
 
 	if (dprintf_func(handle, params) < 0)

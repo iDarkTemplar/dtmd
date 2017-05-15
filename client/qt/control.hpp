@@ -57,6 +57,7 @@ private:
 	QIcon iconFromSubtype(dtmd_removable_media_subtype_t type, bool is_mounted);
 
 	static void dtmd_callback(const dtmd::library &library_instance, void *arg, const dtmd::command &cmd);
+	static void dtmd_state_callback(const dtmd::library &library_instance, void *arg, dtmd_state_t state);
 
 	enum app_state
 	{
@@ -69,6 +70,8 @@ private:
 
 	void showMessage(app_state state, const QString &title, const QString &message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
 
+	void dtmdConnected();
+	void dtmdDisconnected();
 	void exitSignalled(QString title, QString message);
 
 	void setIconState(app_state state, int millisecondsTimeoutHint);
@@ -82,7 +85,7 @@ private:
 	QScopedPointer<dtmd::library> m_lib;
 	std::list<std::shared_ptr<dtmd::removable_media> > m_devices;
 	std::list<dtmd::command> m_saved_commands;
-	bool m_devices_initialized;
+	volatile bool m_devices_initialized;
 	QMutex m_devices_mutex;
 
 	std::map<app_state, QIcon> m_icons_map;
@@ -107,12 +110,16 @@ private slots:
 	void slotBuildMenu();
 
 	void exit();
+	void slotDtmdConnected();
+	void slotDtmdDisconnected();
 	void slotExitSignalled(QString title, QString message);
 
 signals:
 	void signalShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
 	void signalBuildMenu();
 
+	void signalDtmdConnected();
+	void signalDtmdDisconnected();
 	void signalExitSignalled(QString title, QString message);
 };
 

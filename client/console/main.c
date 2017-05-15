@@ -117,44 +117,60 @@ void client_callback(dtmd_t *library, void *arg, const dt_command_t *cmd)
 {
 	if (arg == (void*)1)
 	{
-		if (cmd != NULL)
+		if ((strcmp(cmd->cmd, dtmd_notification_removable_device_added) == 0) && (dtmd_is_notification_valid_removable_device(library, cmd)))
 		{
-			if ((strcmp(cmd->cmd, dtmd_notification_removable_device_added) == 0) && (dtmd_is_notification_valid_removable_device(library, cmd)))
-			{
-				print_first(first);
-				fprintf(stdout, "Device added\n");
-				helper_callback_print_device(library, cmd);
-			}
-			else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_removed) == 0) && (cmd->args_count == 1)
-				&& (cmd->args[0] != NULL))
-			{
-				print_first(first);
-				fprintf(stdout, "Device removed\nPath: %s\n", cmd->args[0]);
-			}
-			else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_changed) == 0) && (dtmd_is_notification_valid_removable_device(library, cmd)))
-			{
-				print_first(first);
-				fprintf(stdout, "Device changed\n");
-				helper_callback_print_device(library, cmd);
-			}
-			else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_mounted) == 0) && (cmd->args_count == 3)
-				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
-			{
-				print_first(first);
-				fprintf(stdout, "Device mounted\nPath: %s\nMount point: %s\nMount options: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
-			}
-			else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_unmounted) == 0) && (cmd->args_count == 2)
-				&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
-			{
-				print_first(first);
-				fprintf(stdout, "Device unmounted\nPath: %s\nMount point: %s\n", cmd->args[0], cmd->args[1]);
-			}
+			print_first(first);
+			fprintf(stdout, "Device added\n");
+			helper_callback_print_device(library, cmd);
 		}
-		else
+		else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_removed) == 0) && (cmd->args_count == 1)
+			&& (cmd->args[0] != NULL))
 		{
-			fprintf(stdout, "Got exit signal from daemon\n");
-			run = 0;
+			print_first(first);
+			fprintf(stdout, "Device removed\nPath: %s\n", cmd->args[0]);
 		}
+		else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_changed) == 0) && (dtmd_is_notification_valid_removable_device(library, cmd)))
+		{
+			print_first(first);
+			fprintf(stdout, "Device changed\n");
+			helper_callback_print_device(library, cmd);
+		}
+		else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_mounted) == 0) && (cmd->args_count == 3)
+			&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (cmd->args[2] != NULL))
+		{
+			print_first(first);
+			fprintf(stdout, "Device mounted\nPath: %s\nMount point: %s\nMount options: %s\n", cmd->args[0], cmd->args[1], cmd->args[2]);
+		}
+		else if ((strcmp(cmd->cmd, dtmd_notification_removable_device_unmounted) == 0) && (cmd->args_count == 2)
+			&& (cmd->args[0] != NULL) && (cmd->args[1] != NULL))
+		{
+			print_first(first);
+			fprintf(stdout, "Device unmounted\nPath: %s\nMount point: %s\n", cmd->args[0], cmd->args[1]);
+		}
+	}
+}
+
+void client_state_callback(dtmd_t *library, void *arg, dtmd_state_t state)
+{
+	switch (state)
+	{
+	case dtmd_state_connected:
+		fprintf(stdout, "Connected to dtmd daemon\n");
+		break;
+
+	case dtmd_state_disconnected:
+		fprintf(stdout, "Disconnected from dtmd daemon\n");
+		break;
+
+	case dtmd_state_failure:
+		fprintf(stdout, "Got exit signal from daemon\n");
+		run = 0;
+		break;
+
+	default:
+		fprintf(stdout, "Got unknown state from daemon\n");
+		run = 0;
+		break;
 	}
 }
 
@@ -242,7 +258,7 @@ int client_list_all_removable_devices(void)
 	size_t devices_count;
 	int printing_first_device = 1;
 
-	lib = dtmd_init(&client_callback, (void*)0, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
@@ -276,7 +292,7 @@ int client_list_removable_device(const char *path)
 	dtmd_removable_media_t *devices;
 	int printing_first_device = 1;
 
-	lib = dtmd_init(&client_callback, (void*)0, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
@@ -305,7 +321,7 @@ int client_mount(char *device, char *mount_opts)
 	dtmd_result_t result;
 	int func_result = 0;
 
-	lib = dtmd_init(&client_callback, (void*)0, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
@@ -334,7 +350,7 @@ int client_unmount(char *device)
 	dtmd_result_t result;
 	int func_result = 0;
 
-	lib = dtmd_init(&client_callback, (void*)0, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
@@ -364,7 +380,7 @@ int client_list_supported_filesystems(void)
 	size_t count, i;
 	const char **filesystems;
 
-	lib = dtmd_init(&client_callback, (void*)0, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
@@ -399,7 +415,7 @@ int client_list_supported_filesystem_options(const char *filesystem)
 	size_t count, i;
 	const char **options_list;
 
-	lib = dtmd_init(&client_callback, (void*)0, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
@@ -442,7 +458,7 @@ int client_monitor(void)
 		return -1;
 	}
 
-	lib = dtmd_init(&client_callback, (void*)1, &result);
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)1, &result);
 	if (lib == NULL)
 	{
 		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);

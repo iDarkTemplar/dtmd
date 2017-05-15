@@ -118,11 +118,12 @@ private:
 class library;
 
 typedef void (*callback)(const library &library_instance, void *arg, const command &cmd);
+typedef void (*state_callback)(const library &library_instance, void *arg, dtmd_state_t state);
 
 class library
 {
 public:
-	library(callback cb, void *arg);
+	library(callback cb, state_callback state_cb, void *arg);
 	virtual ~library();
 
 	dtmd_result_t list_all_removable_devices(int timeout, std::list<std::shared_ptr<removable_media> > &removable_devices_list);
@@ -146,9 +147,11 @@ private:
 	library& operator=(const library &other) = delete;
 
 	static void local_callback(dtmd_t *library_ptr, void *arg, const dt_command_t *cmd);
+	static void local_state_callback(dtmd_t *library_ptr, void *arg, dtmd_state_t state);
 
 	dtmd_t *m_handle;
 	callback m_cb;
+	state_callback m_state_cb;
 	void *m_arg;
 };
 

@@ -34,8 +34,16 @@ extern "C" {
 
 #define dtmd_library_timeout_infinite (-1)
 
+typedef enum dtmd_state
+{
+	dtmd_state_connected,
+	dtmd_state_disconnected,
+	dtmd_state_failure
+} dtmd_state_t;
+
 typedef struct dtmd_library dtmd_t;
 typedef void (*dtmd_callback_t)(dtmd_t *library, void *arg, const dt_command_t *cmd);
+typedef void (*dtmd_state_callback_t)(dtmd_t *library, void *arg, dtmd_state_t state);
 
 typedef enum dtmd_result
 {
@@ -43,16 +51,18 @@ typedef enum dtmd_result
 	// non-fatal errors
 	dt_command_failed = -1,
 	dtmd_timeout = -2,
+	dtmd_not_connected = -3,
+	dtmd_io_error = -4,
 	// fatal errors
-	dtmd_invalid_state = -3,
-	dtmd_library_not_initialized = -4,
-	dtmd_input_error = -5,
-	dtmd_io_error = -6,
-	dtmd_time_error = -7,
-	dtmd_memory_error = -8,
-	dtmd_internal_initialization_error = -9,
-	dtmd_daemon_not_responding_error = -10,
-	dtmd_label_decoding_error = -11
+	dtmd_invalid_state = -5,
+	dtmd_fatal_io_error = -6,
+	dtmd_library_not_initialized = -7,
+	dtmd_input_error = -8,
+	dtmd_time_error = -9,
+	dtmd_memory_error = -10,
+	dtmd_internal_initialization_error = -11,
+	dtmd_daemon_not_responding_error = -12,
+	dtmd_label_decoding_error = -13
 } dtmd_result_t;
 
 typedef enum dtmd_fill_type
@@ -61,7 +71,7 @@ typedef enum dtmd_fill_type
 	dtmd_fill_link = 1 // link fields in structure to fields in dt_commands, thus structure remains valid only while dt_command exists unmodified
 } dtmd_fill_type_t;
 
-dtmd_t* dtmd_init(dtmd_callback_t callback, void *arg, dtmd_result_t *result);
+dtmd_t* dtmd_init(dtmd_callback_t callback, dtmd_state_callback_t state_callback, void *arg, dtmd_result_t *result);
 void dtmd_deinit(dtmd_t *handle);
 
 // timeout is in milliseconds, negative for infinite
