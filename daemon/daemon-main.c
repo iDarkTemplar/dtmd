@@ -468,6 +468,13 @@ int main(int argc, char **argv)
 		goto exit_3;
 	}
 
+	if (listen(socketfd, backlog) == -1)
+	{
+		WRITE_LOG(LOG_ERR, "Error listening socket");
+		result = -1;
+		goto exit_4;
+	}
+
 	if (daemonize)
 	{
 		if (pipe(daemonpipe) != 0)
@@ -617,13 +624,6 @@ int main(int argc, char **argv)
 		openlog("dtmd", LOG_PID, LOG_DAEMON);
 	}
 #endif /* ENABLE_SYSLOG */
-
-	if (listen(socketfd, backlog) == -1)
-	{
-		WRITE_LOG(LOG_ERR, "Error listening socket");
-		result = -1;
-		goto exit_4_log;
-	}
 
 	dtmd_dev_system = device_system_init();
 	if (dtmd_dev_system == NULL)

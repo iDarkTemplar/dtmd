@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <errno.h>
 
 #if (defined OS_Linux)
 #include <sys/inotify.h>
@@ -157,6 +158,34 @@ typedef struct dtmd_helper_state_list_supported_filesystem_options
 	size_t result_count;
 	const char **result_list;
 } dtmd_helper_state_list_supported_filesystem_options_t;
+
+#if (defined OS_FreeBSD)
+int expected_nanosleep(int microseconds)
+{
+	struct timespec sleep_time, remaining_time;
+
+	sleep_time.tv_sec = microseconds / 1000000;
+	sleep_time.tv_nsec = (microseconds % 1000000) * 1000;
+
+	for (;;)
+	{
+		if (nanosleep(&sleep_time, &remaining_time) >= 0)
+		{
+			break;
+		}
+
+		if (errno != EINTR)
+		{
+			return -1;
+		}
+
+		sleep_time.tv_sec  = remaining_time.tv_sec;
+		sleep_time.tv_nsec = remaining_time.tv_nsec;
+	}
+
+	return 1;
+}
+#endif /* (defined OS_FreeBSD) */
 
 static void* dtmd_worker_function(void *arg);
 
@@ -335,7 +364,7 @@ dtmd_t* dtmd_init(dtmd_callback_t callback, dtmd_state_callback_t state_callback
 		goto dtmd_init_error_4;
 	}
 
-	EV_SET(&change_event, handle->dir_fd, EV_ADD | EV_ENABLE | EV_CLEAR, NOTE_DELETE | NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_LINK | NOTE_RENAME | NOTE_REVOKE, 0, NULL);
+	EV_SET(&change_event, handle->dir_fd, EVFILT_VNODE, EV_ADD | EV_ENABLE | EV_CLEAR, NOTE_DELETE | NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_LINK | NOTE_RENAME | NOTE_REVOKE, 0, NULL);
 	rc = kevent(handle->watch_fd, &change_event, 1, NULL, 0, NULL);
 	if (rc < 0)
 	{
@@ -528,6 +557,10 @@ static void* dtmd_worker_function(void *arg)
 		fds[2].revents = 0;
 
 		rc = poll(fds, ((handle->socket_fd >= 0) ? 3 : 2), -1);
+		if ((rc == -1) && (errno == EINTR))
+		{
+			continue;
+		}
 
 		if ((rc == -1)
 			|| (fds[0].revents & POLLERR)
@@ -659,6 +692,13 @@ static void* dtmd_worker_function(void *arg)
 			{
 				if (handle->socket_fd < 0)
 				{
+					/* NOTE: event may be received much faster than daemon actually starts to listen on socket. Make a minor delay to workaround that */
+					rc = expected_nanosleep(10);
+					if (rc < 0)
+					{
+						goto dtmd_worker_function_error;
+					}
+
 					rc = dtmd_try_connecting(handle);
 					if (rc < 0)
 					{
@@ -1308,7 +1348,7 @@ static dtmd_result_t dtmd_helper_wait_for_input(int handle, int timeout)
 		return dtmd_timeout;
 
 	case -1:
-		return dtmd_time_error;
+		return ((errno == EINTR) ? dtmd_io_error : dtmd_time_error);
 
 	default:
 		if (fd.revents & POLLIN)
