@@ -4,7 +4,7 @@ cmake_minimum_required( VERSION 3.0.2 )
 
 set(DTMD_VERSION_MAJOR 2)
 set(DTMD_VERSION_MINOR 0)
-set(DTMD_VERSION_PATCH 0)
+set(DTMD_VERSION_PATCH 1)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
@@ -117,7 +117,7 @@ if (UNIX)
 endif (UNIX)
 find_package (Threads REQUIRED)
 find_package (DtCommand REQUIRED)
-include_directories( ${DT_CMD_INCLUDE_DIRS} )
+include_directories( ${DTCOMMAND_INCLUDE_DIRS} )
 
 add_definitions(-D_FILE_OFFSET_BITS=64)
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
@@ -179,7 +179,7 @@ set ( MISC_LIBRARY_HEADERS library/dtmd-misc.h )
 
 set ( LIBRARY_SOURCES library/dtmd-library.c )
 set ( LIBRARY_HEADERS library/dtmd-library.h )
-set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} ${DT_CMD_LIBRARIES} )
+set ( LIBRARY_LIBS ${CMAKE_THREAD_LIBS_INIT} ${DTCOMMAND_LIBRARIES} )
 
 set ( LIBRARY_CXX_SOURCES library/dtmd-library++.cpp )
 set ( LIBRARY_CXX_HEADERS library/dtmd-library++.hpp )
@@ -191,7 +191,7 @@ endif (OS_LINUX)
 
 set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
 set ( DAEMON_HEADERS                      daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
-set ( DAEMON_LIBS ${DT_CMD_LIBRARIES} )
+set ( DAEMON_LIBS ${DTCOMMAND_LIBRARIES} )
 
 set ( DTMD_CONFIG_SOURCES tools/dtmd-config.c )
 set ( DTMD_CONFIG_HEADERS )
@@ -199,7 +199,7 @@ set ( DTMD_CONFIG_LIBS )
 
 set ( CONSOLE_CLIENT_SOURCES client/console/main.c )
 set ( CONSOLE_CLIENT_HEADERS )
-set ( CONSOLE_CLIENT_LIBS ${DT_CMD_LIBRARIES} )
+set ( CONSOLE_CLIENT_LIBS ${DTCOMMAND_LIBRARIES} )
 
 set ( QT_CLIENT_SOURCES client/qt/main.cpp client/qt/control.cpp client/qt/qcustomdeviceaction.cpp )
 set ( QT_CLIENT_QT_HEADERS                 client/qt/control.hpp client/qt/qcustomdeviceaction.hpp )
@@ -369,10 +369,13 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtmd.h" DESTINATION "${INCLUDE_INSTAL
 install(FILES "library/dtmd-misc.h"                DESTINATION "${INCLUDE_INSTALL_DIR}")
 install(FILES "library/dtmd-library.h"             DESTINATION "${INCLUDE_INSTALL_DIR}")
 install(FILES "daemon/dtmd.conf"                   DESTINATION "${CONFIG_DIR}")
+install(FILES "cmake/FindDtmdMisc.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
+install(FILES "cmake/FindDtmdLibrary.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
 
 if (ENABLE_CXX)
 	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${LIB_INSTALL_DIR} )
 	install(FILES "library/dtmd-library++.hpp" DESTINATION "${INCLUDE_INSTALL_DIR}")
+	install(FILES "cmake/FindDtmdLibrary++.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
 endif (ENABLE_CXX)
 
 if (BUILD_QT)
