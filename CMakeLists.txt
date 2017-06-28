@@ -3,7 +3,7 @@ project(Dark-Templar-Mount-Daemon)
 cmake_minimum_required( VERSION 3.0.2 )
 
 set(DTMD_VERSION_MAJOR 2)
-set(DTMD_VERSION_MINOR 1)
+set(DTMD_VERSION_MINOR 2)
 set(DTMD_VERSION_PATCH 0)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
@@ -74,6 +74,7 @@ if (OS_LINUX)
 endif (OS_LINUX)
 
 if (OS_LINUX)
+	option(LINUX_UDEV "use udev backend")
 	message(STATUS "set LINUX_UDEV to force enable udev backend or disable it and instead use linux userspace interfaces")
 endif (OS_LINUX)
 
