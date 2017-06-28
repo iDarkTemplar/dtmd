@@ -2012,8 +2012,18 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_all_removable_device
 			}
 			else
 			{
-				constructed_media->prev_node = NULL;
 				constructed_media->next_node = *root_ptr;
+
+				if (*root_ptr != NULL)
+				{
+					constructed_media->prev_node = (*root_ptr)->prev_node;
+					(*root_ptr)->prev_node = constructed_media;
+				}
+				else
+				{
+					constructed_media->prev_node = NULL;
+				}
+
 				*root_ptr = constructed_media;
 			}
 		}
@@ -2149,8 +2159,18 @@ inline static dtmd_helper_result_t dtmd_helper_process_list_removable_device_imp
 			}
 			else
 			{
-				constructed_media->prev_node = NULL;
 				constructed_media->next_node = *root_ptr;
+
+				if (*root_ptr != NULL)
+				{
+					constructed_media->prev_node = (*root_ptr)->prev_node;
+					(*root_ptr)->prev_node = constructed_media;
+				}
+				else
+				{
+					constructed_media->prev_node = NULL;
+				}
+
 				*root_ptr = constructed_media;
 			}
 		}

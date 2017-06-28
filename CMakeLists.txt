@@ -338,12 +338,15 @@ ENABLE_TESTING()
 set (TEST_SOURCES_decode_label daemon/label.c tests/decode_label_test.c tests/dt_tests.h)
 set (TEST_LIBS_decode_label )
 
+set (TEST_SOURCES_lists daemon/lists.c tests/lists.c tests/dt_tests.h daemon/label.c daemon/label.h daemon/return_codes.h)
+set (TEST_LIBS_lists dtmd-misc)
+
 if (OS_LINUX)
 	set (TEST_SOURCES_filesystem_opts daemon/filesystem_opts.c tests/filesystem_opts_test.c tests/dt_tests.h)
 	set (TEST_LIBS_filesystem_opts dtmd-misc)
 endif (OS_LINUX)
 
-set (ALL_TESTS decode_label)
+set (ALL_TESTS decode_label lists)
 
 if (OS_LINUX)
 	set (ALL_TESTS ${ALL_TESTS} filesystem_opts)

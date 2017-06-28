@@ -249,8 +249,18 @@ int add_media(const char *parent_path,
 	}
 	else
 	{
-		constructed_media->prev_node = NULL;
 		constructed_media->next_node = *root_ptr;
+
+		if (*root_ptr != NULL)
+		{
+			constructed_media->prev_node = (*root_ptr)->prev_node;
+			(*root_ptr)->prev_node = constructed_media;
+		}
+		else
+		{
+			constructed_media->prev_node = NULL;
+		}
+
 		*root_ptr = constructed_media;
 	}
 
