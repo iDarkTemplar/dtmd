@@ -270,37 +270,37 @@ void Control::buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::r
 		QMenu *menu = root_menu.addMenu(iconFromSubtype(device_ptr->subtype, is_mounted),
 			QString::fromLocal8Bit(device_ptr->label.empty() ? device_ptr->path.c_str() : device_ptr->label.c_str()));
 
-		QScopedPointer<QCustomDeviceAction> action;
-		action.reset(new QCustomDeviceAction(QObject::tr("Open device"),
+		QCustomDeviceAction *action;
+		action = new QCustomDeviceAction(QObject::tr("Open device"),
 			menu,
-			device_ptr->path));
+			device_ptr->path);
 
-		QObject::connect(action.data(), SIGNAL(triggered(const std::string &)),
+		QObject::connect(action, SIGNAL(triggered(const std::string &)),
 			this, SLOT(triggeredOpen(const std::string &)), Qt::DirectConnection);
 
-		menu->addAction(action.take());
+		menu->addAction(action);
 
 		if (is_mounted)
 		{
-			action.reset(new QCustomDeviceAction(QObject::tr("Unmount device"),
+			action = new QCustomDeviceAction(QObject::tr("Unmount device"),
 				menu,
-				device_ptr->path));
+				device_ptr->path);
 
-			QObject::connect(action.data(), SIGNAL(triggered(const std::string &)),
+			QObject::connect(action, SIGNAL(triggered(const std::string &)),
 				this, SLOT(triggeredUnmount(const std::string &)), Qt::DirectConnection);
 
-			menu->addAction(action.take());
+			menu->addAction(action);
 		}
 		else
 		{
-			action.reset(new QCustomDeviceAction(QObject::tr("Mount device"),
+			action = new QCustomDeviceAction(QObject::tr("Mount device"),
 				menu,
-				device_ptr->path));
+				device_ptr->path);
 
-			QObject::connect(action.data(), SIGNAL(triggered(const std::string &)),
+			QObject::connect(action, SIGNAL(triggered(const std::string &)),
 				this, SLOT(triggeredMount(const std::string &)), Qt::DirectConnection);
 
-			menu->addAction(action.take());
+			menu->addAction(action);
 		}
 	}
 
