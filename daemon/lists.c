@@ -392,6 +392,8 @@ int change_media(const char *parent_path,
 		return result_fail;
 	}
 
+	media_ptr->state = state;
+
 	if ((media_ptr->fstype != NULL)
 		&& (((fstype != NULL) && (strcmp(media_ptr->fstype, fstype) != 0))
 			|| (fstype == NULL)))
