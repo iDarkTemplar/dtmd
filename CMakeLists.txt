@@ -4,7 +4,7 @@ cmake_minimum_required( VERSION 3.0.2 )
 
 set(DTMD_VERSION_MAJOR 2)
 set(DTMD_VERSION_MINOR 3)
-set(DTMD_VERSION_PATCH 0)
+set(DTMD_VERSION_PATCH 1)
 set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
@@ -373,8 +373,8 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtmd.h" DESTINATION "${INCLUDE_INSTAL
 install(FILES "library/dtmd-misc.h"                DESTINATION "${INCLUDE_INSTALL_DIR}")
 install(FILES "library/dtmd-library.h"             DESTINATION "${INCLUDE_INSTALL_DIR}")
 install(FILES "daemon/dtmd.conf"                   DESTINATION "${CONFIG_DIR}")
-install(FILES "cmake/FindDtmdMisc.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
-install(FILES "cmake/FindDtmdLibrary.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
+install(FILES "cmake/FindDtmdMisc.cmake"           DESTINATION "${CMAKE_ROOT}/Modules" )
+install(FILES "cmake/FindDtmdLibrary.cmake"        DESTINATION "${CMAKE_ROOT}/Modules" )
 
 if (ENABLE_CXX)
 	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${LIB_INSTALL_DIR} )

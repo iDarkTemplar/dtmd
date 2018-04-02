@@ -181,9 +181,9 @@ static int invoke_mount_external(struct client *client_ptr,
 	strcat(mount_cmd, fstype);
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, path);
-	strcat(mount_cmd, " \"");
+	strcat(mount_cmd, " '");
 	strcat(mount_cmd, mount_path);
-	strcat(mount_cmd, "\"");
+	strcat(mount_cmd, "'");
 
 	// create flags and string
 	if (string_full_len > 0)
@@ -360,9 +360,9 @@ static int invoke_mount_external(struct client *client_ptr,
 
 	strcat(mount_cmd, " ");
 	strcat(mount_cmd, path);
-	strcat(mount_cmd, " \"");
+	strcat(mount_cmd, " '");
 	strcat(mount_cmd, mount_path);
-	strcat(mount_cmd, "\"");
+	strcat(mount_cmd, "'");
 
 	result = system(mount_cmd);
 

@@ -39,7 +39,7 @@
 	\xdd – Hexadecimal representation
 */
 
-#define allowed_extra_chars_list " ."
+#define allowed_extra_chars_list " "
 
 int compare_labels(const char *decoded_label, const char *encoded_label)
 {
