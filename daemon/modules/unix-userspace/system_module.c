@@ -850,9 +850,17 @@ static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enume
 				{
 				case result_success: // ok
 					result = helper_read_device_partitions(enumeration, device, dirent_device->d_name);
-					if (is_result_failure(result))
+					switch (result)
 					{
+					case result_success: // ok
+						break;
+
+					case result_fail: // ok
+						break;
+
+					default: // error
 						goto device_system_run_device_enumeration_error_plain_1;
+						//break;
 					}
 					break;
 
@@ -1080,9 +1088,17 @@ static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enume
 												{
 												case result_success: // ok
 													result = helper_read_device_partitions(enumeration, device, dirent_usb_target_device->d_name);
-													if (is_result_failure(result))
+													switch (result)
 													{
+													case result_success: // ok
+														break;
+
+													case result_fail: // ok
+														break;
+
+													default: // error
 														goto device_system_run_device_enumeration_error_usb_2;
+														//break;
 													}
 													break;
 
@@ -1236,9 +1252,17 @@ static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enume
 						{
 						case result_success: // ok
 							result = helper_read_device_partitions(enumeration, device, dirent_mmc_device->d_name);
-							if (is_result_failure(result))
+							switch (result)
 							{
+							case result_success: // ok
+								break;
+
+							case result_fail: // ok
+								break;
+
+							default: // error
 								goto device_system_run_device_enumeration_error_mmc_2;
+								//break;
 							}
 							break;
 
@@ -1772,9 +1796,17 @@ static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enume
 					{
 					case result_success: // ok
 						result = helper_read_device_partitions(enumeration, device, device_name);
-						if (is_result_failure(result))
+						switch (result)
 						{
+						case result_success: // ok
+							break;
+
+						case result_fail: // ok
+							break;
+
+						default: // error
 							goto device_system_run_device_enumeration_error_4;
+							//break;
 						}
 						break;
 
