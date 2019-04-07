@@ -68,14 +68,7 @@ private:
 		fail
 	};
 
-	void showMessage(app_state state, const QString &title, const QString &message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
-
-	void dtmdConnected();
-	void dtmdDisconnected();
-	void exitSignalled(QString title, QString message);
-
 	void setIconState(app_state state, int millisecondsTimeoutHint);
-	void triggerBuildMenu();
 
 	std::tuple<bool, QString, QString> processCommand(const dtmd::command &cmd);
 
@@ -103,9 +96,6 @@ private:
 	QIcon m_icon_mounted_sd_card;
 
 private slots:
-	void tray_activated(QSystemTrayIcon::ActivationReason reason);
-	void tray_messageClicked();
-
 	void slotShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
 	void slotBuildMenu();
 
@@ -115,12 +105,12 @@ private slots:
 	void slotExitSignalled(QString title, QString message);
 
 signals:
-	void signalShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
-	void signalBuildMenu();
+	void showMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint);
+	void triggerBuildMenu();
 
-	void signalDtmdConnected();
-	void signalDtmdDisconnected();
-	void signalExitSignalled(QString title, QString message);
+	void dtmdConnected();
+	void dtmdDisconnected();
+	void exitSignalled(QString title, QString message);
 };
 
 #endif /* QT_CONTROL_HPP */

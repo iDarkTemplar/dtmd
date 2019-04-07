@@ -55,26 +55,20 @@ Control::Control()
 	qRegisterMetaType<QSystemTrayIcon::ActivationReason>("QSystemTrayIcon::ActivationReason");
 	qRegisterMetaType<std::string>("std::string");
 
-	QObject::connect(this, SIGNAL(signalShowMessage(app_state,QString,QString,QSystemTrayIcon::MessageIcon,int)),
-		this, SLOT(slotShowMessage(app_state,QString,QString,QSystemTrayIcon::MessageIcon,int)), Qt::QueuedConnection);
+	QObject::connect(this, &Control::showMessage,
+		this, &Control::slotShowMessage, Qt::QueuedConnection);
 
-	QObject::connect(this, SIGNAL(signalBuildMenu()),
-		this, SLOT(slotBuildMenu()), Qt::QueuedConnection);
+	QObject::connect(this, &Control::triggerBuildMenu,
+		this, &Control::slotBuildMenu, Qt::QueuedConnection);
 
-	QObject::connect(this, SIGNAL(signalDtmdConnected()),
-		this, SLOT(slotDtmdConnected()), Qt::QueuedConnection);
+	QObject::connect(this, &Control::dtmdConnected,
+		this, &Control::slotDtmdConnected, Qt::QueuedConnection);
 
-	QObject::connect(this, SIGNAL(signalDtmdDisconnected()),
-		this, SLOT(slotDtmdDisconnected()), Qt::QueuedConnection);
+	QObject::connect(this, &Control::dtmdDisconnected,
+		this, &Control::slotDtmdDisconnected, Qt::QueuedConnection);
 
-	QObject::connect(this, SIGNAL(signalExitSignalled(QString,QString)),
-		this, SLOT(slotExitSignalled(QString,QString)), Qt::QueuedConnection);
-
-	QObject::connect(&m_tray, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
-		this, SLOT(tray_activated(QSystemTrayIcon::ActivationReason)), Qt::QueuedConnection);
-
-	QObject::connect(&m_tray, SIGNAL(messageClicked()),
-		this, SLOT(tray_messageClicked()), Qt::QueuedConnection);
+	QObject::connect(this,&Control::exitSignalled,
+		this, &Control::slotExitSignalled, Qt::QueuedConnection);
 
 	m_tray.setIcon(m_icons_map.at(normal));
 
@@ -402,24 +396,24 @@ void Control::dtmd_callback(const dtmd::library &library_instance, void *arg, co
 
 		if (std::get<0>(result))
 		{
-			ptr->triggerBuildMenu();
+			emit ptr->triggerBuildMenu();
 
 			const QString &title = std::get<1>(result);
 			const QString &message = std::get<2>(result);
 
 			if ((!title.isEmpty()) || (!message.isEmpty()))
 			{
-				ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
+				emit ptr->showMessage(notify, title, message, QSystemTrayIcon::Information, Control::defaultTimeout);
 			}
 		}
 	}
 	catch (const std::exception &e)
 	{
-		ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error") + QString("\n") + QObject::tr("Error message: ") + QString::fromLocal8Bit(e.what()));
+		emit ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error") + QString("\n") + QObject::tr("Error message: ") + QString::fromLocal8Bit(e.what()));
 	}
 	catch (...)
 	{
-		ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error"));
+		emit ptr->exitSignalled(QObject::tr("Fatal error"), QObject::tr("Runtime error"));
 	}
 }
 
@@ -430,27 +424,21 @@ void Control::dtmd_state_callback(const dtmd::library &library_instance, void *a
 	switch (state)
 	{
 	case dtmd_state_connected:
-		ptr->dtmdConnected();
+		emit ptr->dtmdConnected();
 		break;
 
 	case dtmd_state_disconnected:
-		ptr->dtmdDisconnected();
+		emit ptr->dtmdDisconnected();
 		break;
 
 	case dtmd_state_failure:
-		ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Daemon sent exit message"));
+		emit ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Daemon sent exit message"));
 		break;
 
 	default:
-		ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Got unknown state from daemon"));
+		emit ptr->exitSignalled(QObject::tr("Exiting"), QObject::tr("Got unknown state from daemon"));
 		break;
 	}
-}
-
-void Control::showMessage(app_state state, const QString &title,
-	const QString &message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint)
-{
-	emit signalShowMessage(state, title, message, icon, millisecondsTimeoutHint);
 }
 
 void Control::setIconState(app_state state, int millisecondsTimeoutHint)
@@ -466,11 +454,6 @@ void Control::setIconState(app_state state, int millisecondsTimeoutHint)
 		QTimer::singleShot(millisecondsTimeoutHint, this, SLOT(change_state_icon()));
 	}
 } // unlock
-
-void Control::triggerBuildMenu()
-{
-	emit signalBuildMenu();
-}
 
 std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &cmd)
 {
@@ -648,34 +631,9 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 	return std::make_tuple(modified, title, message);
 }
 
-void Control::tray_activated(QSystemTrayIcon::ActivationReason reason)
-{
-	// TODO: implement
-}
-
-void Control::tray_messageClicked()
-{
-	// TODO: implement
-}
-
 void Control::exit()
 {
 	QApplication::exit();
-}
-
-void Control::dtmdConnected()
-{
-	emit signalDtmdConnected();
-}
-
-void Control::dtmdDisconnected()
-{
-	emit signalDtmdDisconnected();
-}
-
-void Control::exitSignalled(QString title, QString message)
-{
-	emit signalExitSignalled(title, message);
 }
 
 void Control::slotShowMessage(app_state state, QString title, QString message, QSystemTrayIcon::MessageIcon icon, int millisecondsTimeoutHint)
