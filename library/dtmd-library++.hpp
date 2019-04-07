@@ -27,12 +27,22 @@
 
 #include <string>
 #include <vector>
-#include <list>
+#include <set>
 #include <memory>
 
 namespace dtmd {
 
 const int timeout_infinite = dtmd_library_timeout_infinite;
+
+template <typename T>
+struct shared_ptr_value_less: std::binary_function<std::shared_ptr<T>, std::shared_ptr<T>, bool>
+{
+	bool operator() (const std::shared_ptr<T> &left, const std::shared_ptr<T> &right) const;
+};
+
+class removable_media;
+
+typedef std::set<std::shared_ptr<removable_media>, shared_ptr_value_less<removable_media> > removable_media_container;
 
 class command
 {
@@ -108,7 +118,7 @@ public:
 	std::string mnt_opts;
 
 	std::weak_ptr<removable_media> parent;
-	std::list<std::shared_ptr<removable_media> > children;
+	removable_media_container children;
 
 private:
 	removable_media(const removable_media &other) = delete;
@@ -126,8 +136,8 @@ public:
 	library(callback cb, state_callback state_cb, void *arg);
 	virtual ~library();
 
-	dtmd_result_t list_all_removable_devices(int timeout, std::list<std::shared_ptr<removable_media> > &removable_devices_list);
-	dtmd_result_t list_removable_device(int timeout, const std::string &removable_device_path, std::list<std::shared_ptr<removable_media> > &removable_devices_list);
+	dtmd_result_t list_all_removable_devices(int timeout, removable_media_container &removable_devices_list);
+	dtmd_result_t list_removable_device(int timeout, const std::string &removable_device_path, removable_media_container &removable_devices_list);
 	dtmd_result_t mount(int timeout, const std::string &path);
 	dtmd_result_t mount(int timeout, const std::string &path, const std::string &mount_options);
 	dtmd_result_t unmount(int timeout, const std::string &path);
@@ -155,7 +165,7 @@ private:
 	void *m_arg;
 };
 
-std::shared_ptr<removable_media> find_removable_media(const std::string &path, const std::list<std::shared_ptr<removable_media> > &root);
+std::shared_ptr<removable_media> find_removable_media(const std::string &path, const removable_media_container &root);
 std::shared_ptr<removable_media> find_removable_media(const std::string &path, const std::shared_ptr<removable_media> &root);
 
 } // namespace dtmd

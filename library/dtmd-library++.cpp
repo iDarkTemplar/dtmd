@@ -24,6 +24,18 @@
 
 namespace dtmd {
 
+template <typename T>
+bool shared_ptr_value_less<T>::operator() (const std::shared_ptr<T> &left, const std::shared_ptr<T> &right) const
+{
+	if ((!left) || (!right))
+	{
+		// left may be less than right only if right is present
+		return static_cast<bool>(right);
+	}
+
+	return ((*left) < (*right));
+}
+
 command::command()
 {
 }
@@ -174,7 +186,7 @@ void removable_media::fillFromRemovableMedia(const dtmd_removable_media_t *raw_r
 		{
 			auto child = removable_media::createFromRemovableMedia(iter);
 			child->parent = this->shared_from_this();
-			children.push_back(child);
+			children.insert(child);
 		}
 	}
 }
@@ -286,7 +298,7 @@ library::~library()
 	}
 }
 
-dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::shared_ptr<removable_media> > &removable_devices_list)
+dtmd_result_t library::list_all_removable_devices(int timeout, removable_media_container &removable_devices_list)
 {
 	dtmd_result_t result;
 	dtmd_removable_media_t *returned_removable_device;
@@ -301,7 +313,7 @@ dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::sh
 			for (dtmd_removable_media_t *removable_devices_iter = returned_removable_device; removable_devices_iter != NULL; removable_devices_iter = removable_devices_iter->next_node)
 			{
 				auto item = removable_media::createFromRemovableMedia(removable_devices_iter);
-				removable_devices_list.push_back(item);
+				removable_devices_list.insert(item);
 			}
 
 			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
@@ -316,7 +328,7 @@ dtmd_result_t library::list_all_removable_devices(int timeout, std::list<std::sh
 	return result;
 }
 
-dtmd_result_t library::list_removable_device(int timeout, const std::string &removable_device_path, std::list<std::shared_ptr<removable_media> > &removable_devices_list)
+dtmd_result_t library::list_removable_device(int timeout, const std::string &removable_device_path, removable_media_container &removable_devices_list)
 {
 	dtmd_result_t result;
 	dtmd_removable_media_t *returned_removable_device;
@@ -331,7 +343,7 @@ dtmd_result_t library::list_removable_device(int timeout, const std::string &rem
 			for (dtmd_removable_media_t *removable_devices_iter = returned_removable_device; removable_devices_iter != NULL; removable_devices_iter = removable_devices_iter->next_node)
 			{
 				auto item = removable_media::createFromRemovableMedia(removable_devices_iter);
-				removable_devices_list.push_back(item);
+				removable_devices_list.insert(item);
 			}
 
 			dtmd_free_removable_devices(this->m_handle, returned_removable_device);
@@ -548,7 +560,7 @@ void library::local_state_callback(dtmd_t *library_ptr, void *arg, dtmd_state_t 
 	}
 }
 
-std::shared_ptr<removable_media> find_removable_media(const std::string &path, const std::list<std::shared_ptr<removable_media> > &root)
+std::shared_ptr<removable_media> find_removable_media(const std::string &path, const removable_media_container &root)
 {
 	std::shared_ptr<removable_media> result;
 

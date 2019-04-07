@@ -83,7 +83,7 @@ private:
 
 	QSystemTrayIcon m_tray;
 	QScopedPointer<dtmd::library> m_lib;
-	std::list<std::shared_ptr<dtmd::removable_media> > m_devices;
+	dtmd::removable_media_container m_devices;
 	std::list<dtmd::command> m_saved_commands;
 	volatile bool m_devices_initialized;
 	QMutex m_devices_mutex;

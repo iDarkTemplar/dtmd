@@ -82,7 +82,7 @@ Control::Control()
 	m_lib.reset(new dtmd::library(&Control::dtmd_callback, &Control::dtmd_state_callback, this));
 
 	{
-		std::list<std::shared_ptr<dtmd::removable_media> > temp_devices;
+		dtmd::removable_media_container temp_devices;
 
 		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
 		if (result != dtmd_ok)
@@ -158,12 +158,12 @@ void Control::triggeredOpen(const std::string &device_name)
 			return;
 		}
 
-		std::list<std::shared_ptr<dtmd::removable_media> > temp;
+		dtmd::removable_media_container temp;
 
 		result = m_lib->list_removable_device(defaultTimeout, media_ptr->path, temp);
-		if ((result == dtmd_ok) && (temp.size() == 1) && (media_ptr->path == temp.front()->path))
+		if ((result == dtmd_ok) && (temp.size() == 1) && (media_ptr->path == (*temp.begin())->path))
 		{
-			mount_point = QString::fromLocal8Bit(temp.front()->mnt_point.c_str());
+			mount_point = QString::fromLocal8Bit((*temp.begin())->mnt_point.c_str());
 		}
 		else
 		{
@@ -326,7 +326,6 @@ void Control::BuildMenu()
 	} // unlock
 
 	// TODO: cache menu
-	// TODO: build menu
 
 	if (!new_menu->isEmpty())
 	{
@@ -492,20 +491,7 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 			{
 				if (cmd.args[0] == dtmd_root_device_path)
 				{
-					auto iter_end = m_devices.end();
-					auto iter = m_devices.begin();
-
-					while (iter != iter_end)
-					{
-						if (obtained_device->path < (*iter)->path)
-						{
-							break;
-						}
-
-						++iter;
-					}
-
-					m_devices.insert(iter, obtained_device);
+					m_devices.insert(obtained_device);
 					modified = true;
 				}
 				else
@@ -514,21 +500,7 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 					if (device_ptr)
 					{
 						obtained_device->parent = device_ptr;
-
-						auto iter_end = device_ptr->children.end();
-						auto iter = device_ptr->children.begin();
-
-						while (iter != iter_end)
-						{
-							if (obtained_device->path < (*iter)->path)
-							{
-								break;
-							}
-
-							++iter;
-						}
-
-						device_ptr->children.insert(iter, obtained_device);
+						device_ptr->children.insert(obtained_device);
 						modified = true;
 					}
 				}
@@ -571,29 +543,17 @@ std::tuple<bool, QString, QString> Control::processCommand(const dtmd::command &
 			auto parent = device_ptr->parent.lock();
 			if (parent)
 			{
-				auto iter_end = parent->children.end();
-				for (auto iter = parent->children.begin(); iter != iter_end; ++iter)
+				if (parent->children.erase(device_ptr) > 0)
 				{
-					if ((*iter)->path == device_ptr->path)
-					{
-						parent->children.erase(iter);
-						modified = true;
-						break;
-					}
+					modified = true;
 				}
 			}
 			else
 			{
 				// check root devices
-				auto iter_end = m_devices.end();
-				for (auto iter = m_devices.begin(); iter != iter_end; ++iter)
+				if (m_devices.erase(device_ptr) > 0)
 				{
-					if ((*iter)->path == device_ptr->path)
-					{
-						m_devices.erase(iter);
-						modified = true;
-						break;
-					}
+					modified = true;
 				}
 			}
 
@@ -731,7 +691,7 @@ void Control::slotBuildMenu()
 void Control::slotDtmdConnected()
 {
 	{
-		std::list<std::shared_ptr<dtmd::removable_media> > temp_devices;
+		dtmd::removable_media_container temp_devices;
 
 		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
 		if (result != dtmd_ok)
