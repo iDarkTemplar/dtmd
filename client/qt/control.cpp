@@ -26,13 +26,12 @@
 #include <QTimer>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QAction>
 
 #include <stdexcept>
 #include <sstream>
 
 #include <stddef.h>
-
-#include "client/qt/qcustomdeviceaction.hpp"
 
 const int Control::defaultTimeout = 5000;
 
@@ -270,35 +269,37 @@ void Control::buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::r
 		QMenu *menu = root_menu.addMenu(iconFromSubtype(device_ptr->subtype, is_mounted),
 			QString::fromLocal8Bit(device_ptr->label.empty() ? device_ptr->path.c_str() : device_ptr->label.c_str()));
 
-		QCustomDeviceAction *action;
-		action = new QCustomDeviceAction(QObject::tr("Open device"),
-			menu,
-			device_ptr->path);
+		std::string path = device_ptr->path;
 
-		QObject::connect(action, SIGNAL(triggered(const std::string &)),
-			this, SLOT(triggeredOpen(const std::string &)), Qt::DirectConnection);
+		QAction *action;
+		action = new QAction(QObject::tr("Open device"),
+			menu);
+
+		QObject::connect(action, &QAction::triggered,
+			this, [this, path] () { this->triggeredOpen(path); },
+			Qt::DirectConnection);
 
 		menu->addAction(action);
 
 		if (is_mounted)
 		{
-			action = new QCustomDeviceAction(QObject::tr("Unmount device"),
-				menu,
-				device_ptr->path);
+			action = new QAction(QObject::tr("Unmount device"),
+				menu);
 
-			QObject::connect(action, SIGNAL(triggered(const std::string &)),
-				this, SLOT(triggeredUnmount(const std::string &)), Qt::DirectConnection);
+			QObject::connect(action, &QAction::triggered,
+				this, [this, path] () { this->triggeredUnmount(path); },
+				Qt::DirectConnection);
 
 			menu->addAction(action);
 		}
 		else
 		{
-			action = new QCustomDeviceAction(QObject::tr("Mount device"),
-				menu,
-				device_ptr->path);
+			action = new QAction(QObject::tr("Mount device"),
+				menu);
 
-			QObject::connect(action, SIGNAL(triggered(const std::string &)),
-				this, SLOT(triggeredMount(const std::string &)), Qt::DirectConnection);
+			QObject::connect(action, &QAction::triggered,
+				this, [this, path] () { this->triggeredMount(path); },
+				Qt::DirectConnection);
 
 			menu->addAction(action);
 		}

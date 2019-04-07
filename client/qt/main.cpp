@@ -70,11 +70,7 @@ int main(int argc, char **argv)
 	QApplication app(argc, argv);
 	QScopedPointer<Control> control;
 
-#if QT_VERSION >= 0x050000
 	QTextCodec::setCodecForLocale(
-#else
-	QTextCodec::setCodecForTr(
-#endif
 		QTextCodec::codecForName("UTF-8")
 	);
 
