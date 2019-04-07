@@ -1604,7 +1604,6 @@ static int validate_is_octal_number(const char *option, int option_len)
 }
 
 #if (defined OS_Linux)
-/* TODO: a lot of similar text checks, generalize them */
 static int validate_vfat_is_shortname(const char *option, int option_len)
 {
 	if ((option_len == 5)
