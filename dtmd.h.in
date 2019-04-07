@@ -128,7 +128,7 @@ typedef struct dtmd_removable_media
 /* parameters: path */
 
 #define dtmd_notification_removable_device_changed "removable_device_changed"
-/* same parameters as for 'add_removable_device' */
+/* same parameters as for 'dtmd_notification_removable_device_added' */
 /* any parameter may change, including type, except for parent_path and path */
 
 #define dtmd_notification_removable_device_mounted "removable_device_mounted"
@@ -146,7 +146,7 @@ typedef struct dtmd_removable_media
  *	returns full tree of devices, similar to list_removable_device("/")
  *
  *	returns:
- *		device: format same as for 'add_removable_device' parameters format
+ *		device: format same as for 'dtmd_notification_removable_device_added' parameters format
  *
  *		or "failed" on fail
  */
@@ -159,7 +159,7 @@ typedef struct dtmd_removable_media
  *	returns subtree of removable devices
  *
  *	returns:
- *		device: format same as for 'add_removable_device' parameters format
+ *		device: format same as for 'dtmd_notification_removable_device_added' parameters format
  *
  *		or "failed" on fail
  */

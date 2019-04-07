@@ -183,7 +183,7 @@ void printUsage(char *app)
 		"\t\tmount device [ mount_options ]\n"
 		"\t\tunmount device\n"
 		"\t\tls_fs\n"
-		"\t\tls_fs_opts [ filesystem ]\n"
+		"\t\tls_fs_opts filesystem\n"
 		"\t\tmonitor\n", app);
 }
 
