@@ -74,34 +74,7 @@ Control::Control()
 
 	m_lib.reset(new dtmd::library(&Control::dtmd_callback, &Control::dtmd_state_callback, this));
 
-	{
-		dtmd::removable_media_container temp_devices;
-
-		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
-		if (result != dtmd_ok)
-		{
-			if (m_lib->isStateInvalid())
-			{
-				std::stringstream errMsg;
-				errMsg << "Couldn't obtain list of current removable devices, error code " << result;
-				throw std::runtime_error(errMsg.str());
-			}
-		}
-		else
-		{ // lock
-			QMutexLocker devices_locker(&m_devices_mutex);
-			m_devices = temp_devices;
-			m_devices_initialized = true;
-
-			auto iter_end = m_saved_commands.end();
-			for (auto iter = m_saved_commands.begin(); iter != iter_end; ++iter)
-			{
-				processCommand(*iter);
-			}
-
-			m_saved_commands.clear();
-		} // unlock
-	}
+	populate_devices();
 
 	BuildMenu();
 
@@ -229,6 +202,36 @@ void Control::triggeredUnmount(const std::string &device_name)
 	{
 		setIconState(fail, Control::defaultTimeout);
 	}
+}
+
+void Control::populate_devices()
+{
+	dtmd::removable_media_container temp_devices;
+
+	dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
+	if (result != dtmd_ok)
+	{
+		if (m_lib->isStateInvalid())
+		{
+			std::stringstream errMsg;
+			errMsg << "Couldn't obtain list of current removable devices, error code " << result;
+			throw std::runtime_error(errMsg.str());
+		}
+	}
+	else
+	{ // lock
+		QMutexLocker devices_locker(&m_devices_mutex);
+		m_devices = temp_devices;
+		m_devices_initialized = true;
+
+		auto iter_end = m_saved_commands.end();
+		for (auto iter = m_saved_commands.begin(); iter != iter_end; ++iter)
+		{
+			processCommand(*iter);
+		}
+
+		m_saved_commands.clear();
+	} // unlock
 }
 
 void Control::buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::removable_media> &device_ptr)
@@ -649,34 +652,7 @@ void Control::slotBuildMenu()
 
 void Control::slotDtmdConnected()
 {
-	{
-		dtmd::removable_media_container temp_devices;
-
-		dtmd_result_t result = m_lib->list_all_removable_devices(defaultTimeout, temp_devices);
-		if (result != dtmd_ok)
-		{
-			if (m_lib->isStateInvalid())
-			{
-				std::stringstream errMsg;
-				errMsg << "Couldn't obtain list of current removable devices, error code " << result;
-				throw std::runtime_error(errMsg.str());
-			}
-		}
-		else
-		{ // lock
-			QMutexLocker devices_locker(&m_devices_mutex);
-			m_devices = temp_devices;
-			m_devices_initialized = true;
-
-			auto iter_end = m_saved_commands.end();
-			for (auto iter = m_saved_commands.begin(); iter != iter_end; ++iter)
-			{
-				processCommand(*iter);
-			}
-
-			m_saved_commands.clear();
-		} // unlock
-	}
+	populate_devices();
 
 	BuildMenu();
 

@@ -51,6 +51,8 @@ public slots:
 private:
 	Q_DISABLE_COPY(Control)
 
+	void populate_devices();
+
 	void buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::removable_media> &device_ptr);
 	void BuildMenu();
 
