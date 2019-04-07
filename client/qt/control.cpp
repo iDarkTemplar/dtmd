@@ -327,7 +327,7 @@ void Control::BuildMenu()
 		new_menu->addSeparator();
 	}
 
-	new_menu->addAction(QObject::tr("Exit"), this, SLOT(exit()));
+	new_menu->addAction(QObject::tr("Exit"), this, &Control::exit);
 
 	m_tray.setContextMenu(new_menu.data());
 	m_menu.reset(new_menu.take());
@@ -451,7 +451,7 @@ void Control::setIconState(app_state state, int millisecondsTimeoutHint)
 		m_state_queue.push_back(state);
 		m_tray.setIcon(m_icons_map.at(state));
 
-		QTimer::singleShot(millisecondsTimeoutHint, this, SLOT(change_state_icon()));
+		QTimer::singleShot(millisecondsTimeoutHint, this, &Control::change_state_icon);
 	}
 } // unlock
 
