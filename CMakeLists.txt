@@ -1,22 +1,8 @@
-project(Dark-Templar-Mount-Daemon)
+cmake_minimum_required( VERSION 3.12.0 )
 
-cmake_minimum_required( VERSION 3.0.2 )
-
-set(DTMD_VERSION_MAJOR 2)
-set(DTMD_VERSION_MINOR 3)
-set(DTMD_VERSION_PATCH 2)
-set(DTMD_VERSION "${DTMD_VERSION_MAJOR}.${DTMD_VERSION_MINOR}.${DTMD_VERSION_PATCH}")
-
-set(CPACK_PACKAGE_VERSION_MAJOR ${DTMD_VERSION_MAJOR})
-set(CPACK_PACKAGE_VERSION_MINOR ${DTMD_VERSION_MINOR})
-set(CPACK_PACKAGE_VERSION_PATCH ${DTMD_VERSION_PATCH})
-set(CPACK_GENERATOR "TBZ2")
-set(CPACK_SOURCE_GENERATOR "TBZ2")
-set(CPACK_SOURCE_IGNORE_FILES
-	".git;build;CMakeLists.txt.user;CMakeLists.txt.user.*;ignore;TODO;cppcheck-linux.sh")
-set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${DTMD_VERSION}")
-# MUST be after CPACK_* variables.
-include(CPack)
+project(Dark-Templar-Mount-Daemon
+	VERSION 2.3.2
+	LANGUAGES C CXX)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
 	set (OS_LINUX true)
@@ -43,6 +29,7 @@ option(ENABLE_SYSLOG "enable installation of desktop entry files" ON)
 option(ENABLE_LIBVERSION "enable libraries versioning" ON)
 option(ENABLE_CXX "enable C++" ON)
 option(ENABLE_CONSOLE_CLIENT "enable console client" ON)
+option(ENABLE_QT_CLIENT "enable qt-based client" ON)
 
 if (OS_LINUX)
 	option(DISABLE_EXT_MOUNT "disable external mount")
@@ -63,8 +50,6 @@ if (ENABLE_SYSLOG)
 	add_definitions(-DENABLE_SYSLOG)
 endif (ENABLE_SYSLOG)
 
-message(STATUS "System: ${CMAKE_SYSTEM_NAME}" )
-
 if (OS_LINUX)
 	add_definitions(-DMTAB_DIR=\"${MTAB_DIR}\")
 
@@ -78,7 +63,6 @@ if (OS_LINUX)
 	message(STATUS "set LINUX_UDEV to force enable udev backend or disable it and instead use linux userspace interfaces")
 endif (OS_LINUX)
 
-message(STATUS "set CLIENT_QT to force enable or disable Qt client")
 message(STATUS "To change pid file path use -DPIDFILE_PATH=path")
 message(STATUS "To change socket path use -DSOCKET_PATH=path")
 
@@ -103,15 +87,14 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (DEFINED CLIENT_QT)
-	if ((${CLIENT_QT} EQUAL 4) OR (${CLIENT_QT} EQUAL 5))
-		if (NOT ${ENABLE_CXX})
-			message(FATAL_ERROR "Qt Client requires c++ library being enabled")
-		endif (NOT ${ENABLE_CXX})
-	endif ((${CLIENT_QT} EQUAL 4) OR (${CLIENT_QT} EQUAL 5))
-endif (DEFINED CLIENT_QT)
+if (ENABLE_QT_CLIENT)
+	if (NOT ${ENABLE_CXX})
+		message(FATAL_ERROR "Qt client requires c++ library being enabled")
+	endif (NOT ${ENABLE_CXX})
+endif (ENABLE_QT_CLIENT)
 
 if (UNIX)
 	set( CMAKE_THREAD_PREFER_PTHREAD 1 )
@@ -125,45 +108,9 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR} )
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/library )
 include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
 
-set (BUILD_QT FALSE)
-
-if (DEFINED CLIENT_QT)
-	if (${CLIENT_QT} EQUAL 4)
-		find_package(Qt4 REQUIRED COMPONENTS QtCore QtGui)
-		set (BUILD_QT TRUE)
-	endif (${CLIENT_QT} EQUAL 4)
-
-	if (${CLIENT_QT} EQUAL 5)
-		find_package(Qt5Core REQUIRED)
-		find_package(Qt5Gui REQUIRED)
-		find_package(Qt5Widgets REQUIRED)
-		set (BUILD_QT TRUE)
-	endif (${CLIENT_QT} EQUAL 5)
-else (DEFINED CLIENT_QT)
-	if (${ENABLE_CXX})
-		find_package(Qt5Core)
-		find_package(Qt5Gui)
-		find_package(Qt5Widgets)
-
-		if ((DEFINED Qt5Core_FOUND) AND (DEFINED Qt5Gui_FOUND) AND (DEFINED Qt5Widgets_FOUND))
-			if ((${Qt5Core_FOUND} EQUAL 1) AND (${Qt5Gui_FOUND} EQUAL 1) AND (${Qt5Widgets_FOUND} EQUAL 1))
-				set (BUILD_QT TRUE)
-				set (CLIENT_QT 5)
-			endif ((${Qt5Core_FOUND} EQUAL 1) AND (${Qt5Gui_FOUND} EQUAL 1) AND (${Qt5Widgets_FOUND} EQUAL 1))
-		endif ((DEFINED Qt5Core_FOUND) AND (DEFINED Qt5Gui_FOUND) AND (DEFINED Qt5Widgets_FOUND))
-
-		if (NOT ${BUILD_QT})
-			find_package(Qt4 COMPONENTS QtCore QtGui)
-
-			if ((DEFINED QT_QTCORE_FOUND) AND (DEFINED QT_QTGUI_FOUND))
-				if ((${QT_QTCORE_FOUND} EQUAL 1) AND (${QT_QTGUI_FOUND} EQUAL 1))
-					set (BUILD_QT TRUE)
-					set (CLIENT_QT 4)
-				endif ((${QT_QTCORE_FOUND} EQUAL 1) AND (${QT_QTGUI_FOUND} EQUAL 1))
-			endif ((DEFINED QT_QTCORE_FOUND) AND (DEFINED QT_QTGUI_FOUND))
-		endif (NOT ${BUILD_QT})
-	endif (${ENABLE_CXX})
-endif (DEFINED CLIENT_QT)
+if (ENABLE_QT_CLIENT)
+	find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
+endif (ENABLE_QT_CLIENT)
 
 CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/dtmd.h.in ${CMAKE_CURRENT_BINARY_DIR}/dtmd.h @ONLY )
 
@@ -275,13 +222,13 @@ endif (OS_FREEBSD OR (OS_LINUX AND (NOT BUILD_BACKEND_UDEV)))
 
 add_library( dtmd-misc SHARED ${MISC_LIBRARY_SOURCES} ${MISC_LIBRARY_HEADERS} )
 if (ENABLE_LIBVERSION)
-	set_target_properties( dtmd-misc PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+	set_target_properties( dtmd-misc PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR} )
 endif (ENABLE_LIBVERSION)
 target_link_libraries( dtmd-misc )
 
 add_library( dtmd-library SHARED ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} )
 if (ENABLE_LIBVERSION)
-	set_target_properties( dtmd-library PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+	set_target_properties( dtmd-library PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR} )
 endif (ENABLE_LIBVERSION)
 target_link_libraries( dtmd-library ${LIBRARY_LIBS} dtmd-misc )
 
@@ -299,40 +246,20 @@ endif (ENABLE_CONSOLE_CLIENT)
 if (ENABLE_CXX)
 	add_library( dtmd-library++ SHARED ${LIBRARY_CXX_SOURCES} ${LIBRARY_CXX_HEADERS} )
 	if (ENABLE_LIBVERSION)
-		set_target_properties( dtmd-library++ PROPERTIES VERSION ${DTMD_VERSION} SOVERSION ${DTMD_VERSION_MAJOR} )
+		set_target_properties( dtmd-library++ PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR} )
 	endif (ENABLE_LIBVERSION)
 	target_link_libraries( dtmd-library++ ${LIBRARY_CXX_LIBS} dtmd-library dtmd-misc )
 endif (ENABLE_CXX)
 
-if (BUILD_QT)
-	if (${CLIENT_QT} EQUAL 4)
-		QT4_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
-		QT4_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
-		QT4_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
-		set(DTMD_QT_LIBRARIES ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY})
-	endif (${CLIENT_QT} EQUAL 4)
-
-	if (${CLIENT_QT} EQUAL 5)
-		QT5_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
-		QT5_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
-		QT5_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
-		set(DTMD_QT_LIBRARIES ${Qt5Core_LIBRARIES} ${Qt5Gui_LIBRARIES} ${Qt5Widgets_LIBRARIES})
-	endif (${CLIENT_QT} EQUAL 5)
-
-	message(STATUS "Using Qt version ${CLIENT_QT}")
+if (ENABLE_QT_CLIENT)
+	QT5_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
+	QT5_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
+	QT5_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
 
 	add_executable (dtmd-qt ${QT_CLIENT_SOURCES} ${QT_CLIENT_QT_HEADERS} ${QT_CLIENT_HEADERS} ${QT_CLIENT_MOC_SOURCES} ${QT_CLIENT_UI_SOURCES} ${QT_CLIENT_RESOURCES})
-
-	if (${CLIENT_QT} EQUAL 4)
-		target_include_directories(dtmd-qt PRIVATE ${QT_INCLUDE_DIR} ${QT_QTCORE_INCLUDE_DIR} ${QT_QTGUI_INCLUDE_DIR})
-	endif (${CLIENT_QT} EQUAL 4)
-
-	if (${CLIENT_QT} EQUAL 5)
-		target_include_directories(dtmd-qt PRIVATE ${Qt5Core_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS})
-	endif (${CLIENT_QT} EQUAL 5)
-
-	target_link_libraries (dtmd-qt dtmd-library++ ${QT_CLIENT_LIBS} ${DTMD_QT_LIBRARIES} )
-endif (BUILD_QT)
+	target_include_directories(dtmd-qt PRIVATE ${Qt5Core_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS})
+	target_link_libraries (dtmd-qt dtmd-library++ ${QT_CLIENT_LIBS} ${Qt5Core_LIBRARIES} ${Qt5Gui_LIBRARIES} ${Qt5Widgets_LIBRARIES} )
+endif (ENABLE_QT_CLIENT)
 
 ENABLE_TESTING()
 
@@ -382,7 +309,7 @@ if (ENABLE_CXX)
 	install(FILES "cmake/FindDtmdLibrary++.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
 endif (ENABLE_CXX)
 
-if (BUILD_QT)
+if (ENABLE_QT_CLIENT)
 	install(TARGETS dtmd-qt      RUNTIME DESTINATION ${BIN_INSTALL_DIR})
 	install(FILES ${QT_IMAGES} DESTINATION "${DATA_PREFIX}/dtmd" )
-endif (BUILD_QT)
+endif (ENABLE_QT_CLIENT)
