@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -89,9 +89,13 @@ static void device_system_free_device(dtmd_info_t *device)
 static void device_system_fill_device(struct udev_device *dev, const char *path, dtmd_info_t *device_info)
 {
 	const char *state;
+	struct udev_device *parent_device;
+
+	parent_device = udev_device_get_parent_with_subsystem_devtype(dev, "usb", "usb_device");
 
 	device_info->path          = path;
 	device_info->media_subtype = get_device_subtype(dev);
+	device_info->sysfs_path    = ((parent_device != NULL) ? udev_device_get_syspath(parent_device) : NULL);
 	device_info->private_data  = dev;
 
 	if (device_info->media_subtype == dtmd_removable_media_subtype_cdrom)
@@ -153,6 +157,7 @@ static void device_system_fill_partition(struct udev_device *dev, const char *pa
 	device_info->media_type   = dtmd_removable_media_type_device_partition;
 	device_info->state        = dtmd_removable_media_state_unknown;
 	device_info->path         = path;
+	device_info->sysfs_path   = NULL;
 	device_info->fstype       = udev_device_get_property_value(dev, "ID_FS_TYPE");
 	device_info->label        = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
 	device_info->private_data = dev;

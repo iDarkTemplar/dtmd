@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -45,6 +45,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <poll.h>
+#include <fcntl.h>
 
 #if (defined OS_Linux)
 #include <linux/netlink.h>
@@ -63,6 +64,8 @@
 #define scsi_type_direct_access "0"
 #define scsi_type_cd_dvd "5"
 #define scsi_type_sd_card "SD"
+
+#define file_read_buffer 4096
 
 #define NETLINK_STRING_ACTION "ACTION="
 #define NETLINK_STRING_SUBSYSTEM "SUBSYSTEM="
@@ -418,6 +421,13 @@ static void device_system_free_device(dtmd_info_t *device)
 			free((char*) device->path_parent);
 		}
 
+#if (defined OS_Linux)
+		if (device->sysfs_path != NULL)
+		{
+			free((char*) device->sysfs_path);
+		}
+#endif /* (defined OS_Linux) */
+
 		free(device);
 	}
 }
@@ -461,7 +471,143 @@ static int open_netlink_socket(void)
 	return fd;
 }
 
-static int helper_read_device(const char *name, const char *device_name, int check_removable, dtmd_info_t **device)
+static int file_check_line(const char *path, const char *line)
+{
+	char buffer[file_read_buffer + 1];
+	size_t buffer_used = 0;
+	int line_start = 1;
+	ssize_t read_size;
+	char *char_ptr;
+	int fd;
+	int result = result_fail;
+
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
+	{
+		return result_fail;
+	}
+
+	read_size = read(fd, buffer + buffer_used, file_read_buffer - buffer_used);
+	while (read_size > 0)
+	{
+		buffer_used += read_size;
+		buffer[buffer_used] = 0;
+
+		while ((char_ptr = strchr(buffer, '\n')) != NULL)
+		{
+			if (line_start)
+			{
+				if ((char_ptr - buffer == strlen(line)) && (strncmp(buffer, line, strlen(line)) == 0))
+				{
+					result = result_success;
+					goto file_check_line_exit;
+				}
+			}
+
+			buffer_used -= (char_ptr + 1 - buffer);
+			memmove(buffer, char_ptr + 1, buffer_used + 1);
+			line_start = 1;
+		}
+
+		if (buffer_used == file_read_buffer)
+		{
+			line_start = 0;
+			buffer_used = 0;
+		}
+
+		read_size = read(fd, buffer + buffer_used, file_read_buffer - buffer_used);
+	}
+
+file_check_line_exit:
+	close(fd);
+	return result;
+}
+
+static char*  helper_get_usb_parent_syspath(const char *path)
+{
+	char file_name[PATH_MAX + 1];
+	char link_buffer[PATH_MAX + 1];
+	char *result;
+	size_t curlen = 0;
+	ssize_t link_buffer_size;
+	struct stat stat_entry;
+	int intresult;
+
+	result = realpath(path, file_name);
+	if (result == NULL)
+	{
+		WRITE_LOG_ARGS(LOG_ERR, "Failed to resolve real path: %s", path);
+		return NULL;
+	}
+
+	curlen = strlen(file_name);
+
+	if (file_name[curlen - 1] != '/')
+	{
+		if (curlen + strlen("/") > PATH_MAX)
+		{
+			WRITE_LOG_ARGS(LOG_ERR, "Path is too long: %s", file_name);
+			return NULL;
+		}
+
+		strcat(file_name, "/");
+		++curlen;
+	}
+
+	if (curlen + strlen("subsystem") > PATH_MAX)
+	{
+		WRITE_LOG_ARGS(LOG_ERR, "Path is too long: %s", file_name);
+		return NULL;
+	}
+
+	while ((curlen > strlen(block_sys_dir "/")) && (strncmp(file_name, block_sys_dir "/", strlen(block_sys_dir "/")) == 0))
+	{
+		strcpy(file_name + curlen, "subsystem");
+
+		intresult = lstat(file_name, &stat_entry);
+		if (intresult == 0)
+		{
+			link_buffer_size = readlink(file_name, link_buffer, sizeof(link_buffer) - 1);
+			if ((link_buffer_size > strlen("/usb")) && (strncmp(&link_buffer[link_buffer_size - strlen("/usb")], "/usb", strlen("/usb")) == 0))
+			{
+				strcpy(file_name + curlen, "uevent");
+
+				intresult = file_check_line(file_name, "DEVTYPE=usb_device");
+				if (is_result_successful(intresult))
+				{
+					file_name[curlen - 1] = 0;
+
+					result = strdup(file_name);
+					if (result == NULL)
+					{
+						WRITE_LOG(LOG_ERR, "Memory allocation failure");
+					}
+
+					return result;
+				}
+				else if (is_result_fatal_error(intresult))
+				{
+					return NULL;
+				}
+			}
+		}
+
+		file_name[curlen - 1] = 0;
+		result = strrchr(file_name, '/');
+
+		if (result == NULL)
+		{
+			break;
+		}
+
+		result[1] = 0;
+		curlen = strlen(file_name);
+	}
+
+	return NULL;
+}
+
+static int helper_read_device(char *name, const char *device_name, int check_removable, dtmd_info_t **device)
 {
 	char *device_type;
 	struct stat stat_entry;
@@ -471,7 +617,7 @@ static int helper_read_device(const char *name, const char *device_name, int che
 	dtmd_info_t *device_info;
 	dtmd_removable_media_subtype_t media_subtype;
 
-	start_string = (char *) name + strlen(name);
+	start_string = name + strlen(name);
 
 	strcpy(start_string, filename_dev);
 
@@ -543,6 +689,9 @@ static int helper_read_device(const char *name, const char *device_name, int che
 	{
 	case dtmd_removable_media_subtype_removable_disk:
 	case dtmd_removable_media_subtype_sd_card:
+		start_string[0] = 0;
+		device_info->sysfs_path	= helper_get_usb_parent_syspath(name);
+
 		device_info->media_type = dtmd_removable_media_type_stateless_device;
 		device_info->fstype     = NULL;
 		device_info->label      = NULL;
@@ -552,6 +701,7 @@ static int helper_read_device(const char *name, const char *device_name, int che
 
 	case dtmd_removable_media_subtype_cdrom:
 		device_info->media_type = dtmd_removable_media_type_stateful_device;
+		device_info->sysfs_path = NULL;
 
 		result = helper_blkid_read_data_from_partition(device_info->path, &(device_info->fstype), &(device_info->label));
 		switch (result)
@@ -716,6 +866,7 @@ static int helper_read_device_partitions(dtmd_device_enumeration_t *enumeration,
 			goto helper_read_device_partitions_error_4;
 		}
 
+		device_info->sysfs_path    = NULL;
 		device_info->media_type    = dtmd_removable_media_type_device_partition;
 		device_info->media_subtype = device->media_subtype;
 		device_info->state         = dtmd_removable_media_state_unknown;
@@ -2072,10 +2223,15 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 						device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
 						break;
 					}
+
+					strcpy(file_name, block_sys_dir);
+					strcat(file_name, devpath);
+					device_info->sysfs_path = helper_get_usb_parent_syspath(file_name);
 				}
 				else
 				{
 					device_info->media_type = dtmd_removable_media_type_device_partition;
+					device_info->sysfs_path = NULL;
 				}
 			}
 			else
@@ -2084,6 +2240,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 				{
 					device_info->media_subtype = dtmd_removable_media_subtype_unknown_or_persistent;
 					device_info->media_type = dtmd_removable_media_type_unknown_or_persistent;
+					device_info->sysfs_path = NULL;
 				}
 				else
 				{
@@ -2108,6 +2265,7 @@ static int device_system_monitor_receive_device(int fd, dtmd_info_t **device, dt
 			}
 
 			device_info->media_subtype = dtmd_removable_media_subtype_unknown_or_persistent;
+			device_info->sysfs_path = NULL;
 			break;
 		}
 

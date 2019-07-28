@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -34,6 +34,11 @@ typedef struct dtmd_info
 	const char *path;
 	dtmd_removable_media_type_t media_type;
 	dtmd_removable_media_subtype_t media_subtype;
+
+#if (defined OS_Linux)
+	/* common for all removable devices. Points directly to usb subsystem parent */
+	const char *sysfs_path;
+#endif /* (defined OS_Linux) */
 
 	/* common for partition and non-empty cdroms */
 	const char *fstype;
