@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -671,6 +671,9 @@ int main(int argc, char **argv)
 			if (is_result_fatal_error(add_media(
 				dtmd_dev_device->path_parent,
 				dtmd_dev_device->path,
+#if (defined OS_Linux)
+				dtmd_dev_device->sysfs_path,
+#endif /* (defined OS_Linux) */
 				dtmd_dev_device->media_type,
 				dtmd_dev_device->media_subtype,
 				dtmd_dev_device->state,
@@ -821,6 +824,9 @@ int main(int argc, char **argv)
 						rc = add_media(
 							dtmd_dev_device->path_parent,
 							dtmd_dev_device->path,
+#if (defined OS_Linux)
+							dtmd_dev_device->sysfs_path,
+#endif /* (defined OS_Linux) */
 							dtmd_dev_device->media_type,
 							dtmd_dev_device->media_subtype,
 							dtmd_dev_device->state,
@@ -850,6 +856,9 @@ int main(int argc, char **argv)
 						rc = change_media(
 							dtmd_dev_device->path_parent,
 							dtmd_dev_device->path,
+#if (defined OS_Linux)
+							dtmd_dev_device->sysfs_path,
+#endif /* (defined OS_Linux) */
 							dtmd_dev_device->media_type,
 							dtmd_dev_device->media_subtype,
 							dtmd_dev_device->state,

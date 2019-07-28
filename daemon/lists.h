@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -39,6 +39,16 @@ struct client
 	struct client *prev_node;
 };
 
+typedef struct dtmd_removable_media_private
+{
+	dtmd_removable_media_t parent;
+
+#if (defined OS_Linux)
+	char *sysfs_path;
+#endif /* (defined OS_Linux) */
+	int mount_counter;
+} dtmd_removable_media_private_t;
+
 extern dtmd_removable_media_t *removable_media_root;
 
 extern struct client *client_root;
@@ -46,6 +56,9 @@ extern size_t clients_count;
 
 int add_media(const char *parent_path,
 	const char *path,
+#if (defined OS_Linux)
+	const char *sysfs_path,
+#endif /* (defined OS_Linux) */
 	dtmd_removable_media_type_t media_type,
 	dtmd_removable_media_subtype_t media_subtype,
 	dtmd_removable_media_state_t state,
@@ -58,6 +71,9 @@ int remove_media(const char *path);
 
 int change_media(const char *parent_path,
 	const char *path,
+#if (defined OS_Linux)
+	const char *sysfs_path,
+#endif /* (defined OS_Linux) */
 	dtmd_removable_media_type_t media_type,
 	dtmd_removable_media_subtype_t media_subtype,
 	dtmd_removable_media_state_t state,

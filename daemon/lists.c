@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -39,6 +39,7 @@ static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 {
 	dtmd_removable_media_t *cur;
 	dtmd_removable_media_t *next;
+	dtmd_removable_media_private_t *private_data;
 
 	// first unlink node
 	if (media_ptr->parent != NULL)
@@ -100,11 +101,23 @@ static void remove_media_helper(dtmd_removable_media_t *media_ptr)
 		free(media_ptr->mnt_opts);
 	}
 
-	free(media_ptr);
+	private_data = (dtmd_removable_media_private_t*) (media_ptr->private_data);
+
+#if (defined OS_Linux)
+	if (private_data->sysfs_path != NULL)
+	{
+		free(private_data->sysfs_path);
+	}
+#endif /* (defined OS_Linux) */
+
+	free(private_data);
 }
 
 int add_media(const char *parent_path,
 	const char *path,
+#if (defined OS_Linux)
+	const char *sysfs_path,
+#endif /* (defined OS_Linux) */
 	dtmd_removable_media_type_t media_type,
 	dtmd_removable_media_subtype_t media_subtype,
 	dtmd_removable_media_state_t state,
@@ -116,6 +129,7 @@ int add_media(const char *parent_path,
 	int is_parent_path = 0;
 	dtmd_removable_media_t *media_ptr = NULL;
 	dtmd_removable_media_t *constructed_media;
+	dtmd_removable_media_private_t *constructed_media_private;
 	dtmd_removable_media_t *last_ptr = NULL;
 	dtmd_removable_media_t **root_ptr = NULL;
 
@@ -133,12 +147,15 @@ int add_media(const char *parent_path,
 		}
 	}
 
-	constructed_media = (dtmd_removable_media_t*) malloc(sizeof(dtmd_removable_media_t));
-	if (constructed_media == NULL)
+	constructed_media_private = (dtmd_removable_media_private_t*) malloc(sizeof(dtmd_removable_media_private_t));
+	if (constructed_media_private == NULL)
 	{
 		WRITE_LOG(LOG_ERR, "Memory allocation failure");
 		goto add_media_error_1;
 	}
+
+	constructed_media = &(constructed_media_private->parent);
+	constructed_media->private_data = constructed_media_private;
 
 	constructed_media->path = strdup(path);
 	if (constructed_media->path == NULL)
@@ -181,7 +198,7 @@ int add_media(const char *parent_path,
 
 	if (mnt_point != NULL)
 	{
-		constructed_media->private_data = (void*) 1;
+		constructed_media_private->mount_counter = 1;
 
 		constructed_media->mnt_point = strdup(mnt_point);
 		if (constructed_media->mnt_point == NULL)
@@ -192,7 +209,7 @@ int add_media(const char *parent_path,
 	}
 	else
 	{
-		constructed_media->private_data = (void*) 0;
+		constructed_media_private->mount_counter = 0;
 		constructed_media->mnt_point = NULL;
 	}
 
@@ -209,6 +226,22 @@ int add_media(const char *parent_path,
 	{
 		constructed_media->mnt_opts = NULL;
 	}
+
+#if (defined OS_Linux)
+	if (sysfs_path != NULL)
+	{
+		constructed_media_private->sysfs_path = strdup(sysfs_path);
+		if (constructed_media_private->sysfs_path == NULL)
+		{
+			WRITE_LOG(LOG_ERR, "Memory allocation failure");
+			goto add_media_error_7;
+		}
+	}
+	else
+	{
+		constructed_media_private->sysfs_path = NULL;
+	}
+#endif /* (defined OS_Linux) */
 
 	constructed_media->children_list = NULL;
 
@@ -276,13 +309,21 @@ int add_media(const char *parent_path,
 
 	return result_success;
 
+#if (defined OS_Linux)
 /*
+add_media_error_8:
+	if (constructed_media_private->sysfs_path != NULL)
+	{
+		free(constructed_media_private->sysfs_path);
+	}
+*/
+
 add_media_error_7:
 	if (constructed_media->mnt_opts != NULL)
 	{
 		free(constructed_media->mnt_opts);
 	}
-*/
+#endif /* (defined OS_Linux) */
 
 add_media_error_6:
 	if (constructed_media->mnt_point != NULL)
@@ -306,7 +347,7 @@ add_media_error_3:
 	free(constructed_media->path);
 
 add_media_error_2:
-	free(constructed_media);
+	free(constructed_media_private);
 
 add_media_error_1:
 	return result_fatal_error;
@@ -335,6 +376,9 @@ int remove_media(const char *path)
 
 int change_media(const char *parent_path,
 	const char *path,
+#if (defined OS_Linux)
+	const char *sysfs_path,
+#endif /* (defined OS_Linux) */
 	dtmd_removable_media_type_t media_type,
 	dtmd_removable_media_subtype_t media_subtype,
 	dtmd_removable_media_state_t state,
@@ -344,6 +388,7 @@ int change_media(const char *parent_path,
 	const char *mnt_opts)
 {
 	dtmd_removable_media_t *media_ptr;
+	dtmd_removable_media_private_t *private_ptr;
 
 	media_ptr = dtmd_find_media(path, removable_media_root);
 	if (media_ptr == NULL)
@@ -363,6 +408,27 @@ int change_media(const char *parent_path,
 
 		return result_bug;
 	}
+
+	private_ptr = (dtmd_removable_media_private_t*) (media_ptr->private_data);
+
+#if (defined OS_Linux)
+	/* Check sysfs path, it must not change */
+	if (!(((sysfs_path == NULL) && (private_ptr->sysfs_path == NULL))
+		|| ((sysfs_path != NULL) && (private_ptr->sysfs_path != NULL) && (strcmp(sysfs_path, private_ptr->sysfs_path) == 0))))
+	{
+		WRITE_LOG_ARGS(LOG_ERR,
+			"Sysfs path for device \"%s\" changed from %s%s%s to %s%s%s",
+			path,
+			((private_ptr->sysfs_path != NULL) ? ("\"") : ("")),
+			((private_ptr->sysfs_path != NULL) ? (private_ptr->sysfs_path) : ("nil")),
+			((private_ptr->sysfs_path != NULL) ? ("\"") : ("")),
+			((sysfs_path != NULL) ? ("\"") : ("")),
+			((sysfs_path != NULL) ? (sysfs_path) : ("nil")),
+			((sysfs_path != NULL) ? ("\"") : ("")));
+
+		return result_bug;
+	}
+#endif /* (defined OS_Linux) */
 
 	if ((media_ptr->type == media_type)
 		&& (media_ptr->subtype == media_subtype)
@@ -438,7 +504,7 @@ int change_media(const char *parent_path,
 
 		free(media_ptr->mnt_point);
 		media_ptr->mnt_point = NULL;
-		media_ptr->private_data = (void*) 0;
+		private_ptr->mount_counter = 0;
 	}
 
 	if ((media_ptr->mnt_point == NULL) && (mnt_point != NULL))
@@ -450,7 +516,7 @@ int change_media(const char *parent_path,
 			return result_fatal_error;
 		}
 
-		media_ptr->private_data = (void*) 1;
+		private_ptr->mount_counter = 1;
 
 		if (mnt_opts != NULL)
 		{

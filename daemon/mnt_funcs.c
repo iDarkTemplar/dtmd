@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -103,22 +103,27 @@ int close_mount_monitoring(int monitorfd)
 static void mark_each_device_recursive(dtmd_removable_media_t *media_ptr)
 {
 	dtmd_removable_media_t *iter_media_ptr;
+	dtmd_removable_media_private_t *private_ptr;
 
 	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
 		mark_each_device_recursive(iter_media_ptr);
 	}
 
-	media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) << 1);
+	private_ptr = (dtmd_removable_media_private_t*) (media_ptr->private_data);
+	private_ptr->mount_counter = (private_ptr->mount_counter) << 1;
 }
 
 static void process_changes_recursive(dtmd_removable_media_t *media_ptr)
 {
 	dtmd_removable_media_t *iter_media_ptr;
+	dtmd_removable_media_private_t *private_ptr;
 
-	if (!(((size_t) media_ptr->private_data) & is_mounted_now))
+	private_ptr = (dtmd_removable_media_private_t*) (media_ptr->private_data);
+
+	if (!(private_ptr->mount_counter & is_mounted_now))
 	{
-		if (((size_t) media_ptr->private_data) & is_mounted_last)
+		if (private_ptr->mount_counter & is_mounted_last)
 		{
 			notify_removable_device_unmounted(media_ptr->path, media_ptr->mnt_point);
 
@@ -136,7 +141,7 @@ static void process_changes_recursive(dtmd_removable_media_t *media_ptr)
 		}
 	}
 
-	media_ptr->private_data = (void*) (((size_t) media_ptr->private_data) & is_mounted_now);
+	private_ptr->mount_counter = private_ptr->mount_counter & is_mounted_now;
 
 	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
 	{
@@ -150,6 +155,7 @@ int check_mount_changes(void)
 	FILE *mntfile;
 	struct mntent *ent;
 	dtmd_removable_media_t *iter_media_ptr;
+	dtmd_removable_media_private_t *private_ptr;
 
 	mntfile = setmntent(dtmd_internal_mounts_file, "r");
 	if (mntfile == NULL)
@@ -168,14 +174,16 @@ int check_mount_changes(void)
 		iter_media_ptr = dtmd_find_media(ent->mnt_fsname, removable_media_root);
 		if (iter_media_ptr != NULL)
 		{
+			private_ptr = (dtmd_removable_media_private_t*) (iter_media_ptr->private_data);
+
 			// skip devices mounted multiple times
-			if (!(((size_t) iter_media_ptr->private_data) & is_processed))
+			if (!(private_ptr->mount_counter & is_processed))
 			{
-				iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_processed);
+				private_ptr->mount_counter = private_ptr->mount_counter | is_processed;
 
 				if ((ent->mnt_dir != NULL) && (ent->mnt_opts != NULL))
 				{
-					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_mounted_now);
+					private_ptr->mount_counter = private_ptr->mount_counter | is_mounted_now;
 
 					if ((iter_media_ptr->mnt_point == NULL) || (strcmp(iter_media_ptr->mnt_point, ent->mnt_dir) != 0))
 					{
@@ -212,7 +220,7 @@ int check_mount_changes(void)
 				}
 				else
 				{
-					iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) & ~is_mounted_now);
+					private_ptr->mount_counter = private_ptr->mount_counter & ~is_mounted_now;
 				}
 			}
 		}
@@ -275,6 +283,7 @@ int check_mount_changes(int mountfd)
 	struct statfs *mounts;
 	char *options;
 	dtmd_removable_media_t *iter_media_ptr;
+	dtmd_removable_media_private_t *private_ptr;
 
 	// TODO: merge it with Linux version?
 
@@ -316,10 +325,12 @@ int check_mount_changes(int mountfd)
 		iter_media_ptr = dtmd_find_media(mounts[current].f_mntfromname, removable_media_root);
 		if (iter_media_ptr != NULL)
 		{
+			private_ptr = (dtmd_removable_media_private_t*) (iter_media_ptr->private_data);
+
 			// skip devices mounted multiple times
-			if (!(((size_t) iter_media_ptr->private_data) & is_processed))
+			if (!(private_ptr->mount_counter & is_processed))
 			{
-				iter_media_ptr->private_data = (void*) (((size_t) iter_media_ptr->private_data) | is_processed | is_mounted_now);
+				private_ptr->mount_counter = private_ptr->mount_counter | is_processed | is_mounted_now;
 
 				options = convert_option_flags_to_string(mounts[current].f_flags);
 				if (options == NULL)

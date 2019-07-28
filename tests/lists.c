@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2017-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -26,6 +26,14 @@
 
 int use_syslog = 0;
 int daemonize = 1;
+
+#if (defined OS_Linux)
+#define sysfs_arg(N) (N),
+#endif /* (defined OS_Linux) */
+
+#if (defined OS_FreeBSD)
+#define sysfs_arg(N)
+#endif /* (defined OS_FreeBSD) */
 
 void notify_removable_device_added(const char *parent_path,
 	const char *path,
@@ -72,40 +80,40 @@ int main(int argc, char **argv)
 
 	// media structures memory test (use with valgrind)
 
-	test_compare(is_result_successful(add_media("/","/dev/sdd", dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/","/dev/sdd", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
 
 	test_compare(is_result_successful(remove_media("/dev/sdd3")));
 	test_compare(is_result_successful(remove_media("/dev/sdd2")));
 	test_compare(is_result_successful(remove_media("/dev/sdd1")));
 	test_compare(is_result_successful(remove_media("/dev/sdd")));
 
-	test_compare(is_result_successful(add_media("/","/dev/sdd", dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/","/dev/sdd", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1",sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
 
 	test_compare(is_result_successful(remove_media("/dev/sdd3")));
 	test_compare(is_result_successful(remove_media("/dev/sdd2")));
 	test_compare(is_result_successful(remove_media("/dev/sdd1")));
 	test_compare(is_result_successful(remove_media("/dev/sdd")));
 
-	test_compare(is_result_successful(add_media("/","/dev/sdd", dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/","/dev/sdd", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
 
 	test_compare(is_result_successful(remove_media("/dev/sdd1")));
 	test_compare(is_result_successful(remove_media("/dev/sdd2")));
 	test_compare(is_result_successful(remove_media("/dev/sdd3")));
 	test_compare(is_result_successful(remove_media("/dev/sdd")));
 
-	test_compare(is_result_successful(add_media("/","/dev/sdd", dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
-	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/","/dev/sdd", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_subtype_removable_disk, dtmd_removable_media_state_unknown, NULL, NULL, NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd1", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd2", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive2", NULL, NULL)));
+	test_compare(is_result_successful(add_media("/dev/sdd","/dev/sdd3", sysfs_arg(NULL) dtmd_removable_media_type_stateless_device, dtmd_removable_media_type_device_partition, dtmd_removable_media_state_unknown, "dummy", "drive1", NULL, NULL)));
 
 	test_compare(is_result_successful(remove_media("/dev/sdd1")));
 	test_compare(is_result_successful(remove_media("/dev/sdd2")));
