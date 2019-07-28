@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -23,18 +23,6 @@
 #include <stdexcept>
 
 namespace dtmd {
-
-template <typename T>
-bool shared_ptr_value_less<T>::operator() (const std::shared_ptr<T> &left, const std::shared_ptr<T> &right) const
-{
-	if ((!left) || (!right))
-	{
-		// left may be less than right only if right is present
-		return static_cast<bool>(right);
-	}
-
-	return ((*left) < (*right));
-}
 
 command::command()
 {

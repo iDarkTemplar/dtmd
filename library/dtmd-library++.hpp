@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -37,7 +37,17 @@ const int timeout_infinite = dtmd_library_timeout_infinite;
 template <typename T>
 struct shared_ptr_value_less: std::binary_function<std::shared_ptr<T>, std::shared_ptr<T>, bool>
 {
-	bool operator() (const std::shared_ptr<T> &left, const std::shared_ptr<T> &right) const;
+	bool operator() (const std::shared_ptr<T> &left, const std::shared_ptr<T> &right) const
+	{
+		if ((!left) || (!right))
+		{
+			// left may be less than right only if right is present
+			return static_cast<bool>(right);
+		}
+
+		return ((*left) < (*right));
+	}
+
 };
 
 class removable_media;
