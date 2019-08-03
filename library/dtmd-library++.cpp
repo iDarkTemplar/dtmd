@@ -433,6 +433,13 @@ dtmd_result_t library::list_supported_filesystem_options(int timeout, const std:
 	return result;
 }
 
+#if (defined OS_Linux)
+dtmd_result_t library::poweroff(int timeout, const std::string &removable_device_path)
+{
+	return dtmd_poweroff(this->m_handle, timeout, removable_device_path.c_str());
+}
+#endif /* (defined OS_Linux) */
+
 dtmd_result_t library::fill_removable_device_from_notification(const command &cmd, std::shared_ptr<removable_media> &removable_device) const
 {
 	dtmd_result_t result;

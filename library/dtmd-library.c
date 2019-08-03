@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -130,6 +130,13 @@ typedef struct dtmd_helper_params_list_supported_filesystem_options
 	const char *filesystem;
 } dtmd_helper_params_list_supported_filesystem_options_t;
 
+#if (defined OS_Linux)
+typedef struct dtmd_helper_params_poweroff
+{
+	const char *device_path;
+} dtmd_helper_params_poweroff_t;
+#endif /* (defined OS_Linux) */
+
 typedef struct dtmd_helper_state_list_all_removable_devices
 {
 	int got_started;
@@ -227,6 +234,13 @@ static int dtmd_helper_is_helper_list_supported_filesystem_options_generic(dt_co
 static int dtmd_helper_is_helper_list_supported_filesystem_options_failed(dt_command_t *cmd);
 static int dtmd_helper_is_helper_list_supported_filesystem_options_parameters_match(dt_command_t *cmd, const char *filesystem);
 
+#if (defined OS_Linux)
+static int dtmd_helper_is_helper_poweroff_common(dt_command_t *cmd);
+static int dtmd_helper_is_helper_poweroff_generic(dt_command_t *cmd);
+static int dtmd_helper_is_helper_poweroff_failed(dt_command_t *cmd);
+static int dtmd_helper_is_helper_poweroff_parameters_match(dt_command_t *cmd, const char *device_path);
+#endif /* (defined OS_Linux) */
+
 static int dtmd_helper_cmd_check_removable_device_common(const dt_command_t *cmd);
 static int dtmd_helper_cmd_check_removable_device(const dt_command_t *cmd);
 static int dtmd_helper_cmd_check_supported_filesystems(const dt_command_t *cmd);
@@ -246,6 +260,9 @@ static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_list_supported_filesystems(dtmd_t *handle, void *args);
 static int dtmd_helper_dprintf_list_supported_filesystem_options(dtmd_t *handle, void *args);
+#if (defined OS_Linux)
+static int dtmd_helper_dprintf_poweroff(dtmd_t *handle, void *args);
+#endif /* (defined OS_Linux) */
 
 typedef int (*dtmd_helper_dprintf_func_t)(dtmd_t *handle, void *args);
 typedef dtmd_helper_result_t (*dtmd_helper_process_func_t)(dtmd_t *handle, dt_command_t *cmd, void *params, void *state);
@@ -260,6 +277,9 @@ static dtmd_helper_result_t dtmd_helper_process_mount(dtmd_t *handle, dt_command
 static dtmd_helper_result_t dtmd_helper_process_unmount(dtmd_t *handle, dt_command_t *cmd, void *params, void *state);
 static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystems(dtmd_t *handle, dt_command_t *cmd, void *params, void *state);
 static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystem_options(dtmd_t *handle, dt_command_t *cmd, void *params, void *state);
+#if (defined OS_Linux)
+static dtmd_helper_result_t dtmd_helper_process_poweroff(dtmd_t *handle, dt_command_t *cmd, void *params, void *state);
+#endif /* (defined OS_Linux) */
 
 static int dtmd_helper_exit_list_all_removable_devices(dtmd_t *handle, void *state);
 static void dtmd_helper_exit_clear_list_all_removable_devices(void *state);
@@ -944,6 +964,34 @@ dtmd_result_t dtmd_list_supported_filesystem_options(dtmd_t *handle, int timeout
 	return res;
 }
 
+#if (defined OS_Linux)
+dtmd_result_t dtmd_poweroff(dtmd_t *handle, int timeout, const char *path)
+{
+	dtmd_helper_params_poweroff_t params;
+
+	if (handle == NULL)
+	{
+		return dtmd_library_not_initialized;
+	}
+
+	if ((path == NULL) || (*path == 0))
+	{
+		return dtmd_input_error;
+	}
+
+	params.device_path = path;
+
+	return dtmd_helper_generic_process(handle,
+		timeout,
+		&params,
+		NULL,
+		&dtmd_helper_dprintf_poweroff,
+		&dtmd_helper_process_poweroff,
+		NULL,
+		NULL);
+}
+#endif /* (defined OS_Linux) */
+
 static int dtmd_helper_fill_data(char **where, char **from, dtmd_internal_fill_type_t internal_fill_type)
 {
 	switch (internal_fill_type)
@@ -1515,6 +1563,28 @@ static int dtmd_helper_is_helper_list_supported_filesystem_options_parameters_ma
 	return (strcmp(cmd->args[1], filesystem) == 0);
 }
 
+#if (defined OS_Linux)
+static int dtmd_helper_is_helper_poweroff_common(dt_command_t *cmd)
+{
+	return (cmd->args[0] != NULL) && (cmd->args[1] != NULL) && (strcmp(cmd->args[0], dtmd_command_poweroff) == 0);
+}
+
+static int dtmd_helper_is_helper_poweroff_generic(dt_command_t *cmd)
+{
+	return (cmd->args_count == 2) && dtmd_helper_is_helper_poweroff_common(cmd);
+}
+
+static int dtmd_helper_is_helper_poweroff_failed(dt_command_t *cmd)
+{
+	return (cmd->args_count == 3) && (cmd->args[2] != NULL) && dtmd_helper_is_helper_poweroff_common(cmd);
+}
+
+static int dtmd_helper_is_helper_poweroff_parameters_match(dt_command_t *cmd, const char *device_path)
+{
+	return (strcmp(cmd->args[1], device_path) == 0);
+}
+#endif /* (defined OS_Linux) */
+
 static int dtmd_helper_cmd_check_removable_device_common(const dt_command_t *cmd)
 {
 	dtmd_removable_media_type_t type;
@@ -1816,6 +1886,18 @@ static int dtmd_helper_dprintf_list_supported_filesystem_options(dtmd_t *handle,
 {
 	return dtmd_helper_dprintf_list_supported_filesystem_options_implementation(handle, (dtmd_helper_params_list_supported_filesystem_options_t*) args);
 }
+
+#if (defined OS_Linux)
+inline static int dtmd_helper_dprintf_poweroff_implementation(dtmd_t *handle, dtmd_helper_params_poweroff_t *args)
+{
+	return dprintf(handle->socket_fd, dtmd_command_poweroff "(\"%s\")\n", args->device_path);
+}
+
+static int dtmd_helper_dprintf_poweroff(dtmd_t *handle, void *args)
+{
+	return dtmd_helper_dprintf_poweroff_implementation(handle, (dtmd_helper_params_poweroff_t*) args);
+}
+#endif /* (defined OS_Linux) */
 
 dtmd_result_t dtmd_helper_generic_process(dtmd_t *handle, int timeout, void *params, void *state, dtmd_helper_dprintf_func_t dprintf_func, dtmd_helper_process_func_t process_func, dtmd_helper_exit_func_t exit_func, dtmd_helper_exit_clear_func_t exit_clear_func)
 {
@@ -2473,6 +2555,54 @@ static dtmd_helper_result_t dtmd_helper_process_list_supported_filesystem_option
 {
 	return dtmd_helper_process_list_supported_filesystem_options_implementation(handle, cmd, (dtmd_helper_params_list_supported_filesystem_options_t*) params, (dtmd_helper_state_list_supported_filesystem_options_t*) state);
 }
+
+#if (defined OS_Linux)
+inline static dtmd_helper_result_t dtmd_helper_process_poweroff_implementation(dtmd_t *handle, dt_command_t *cmd, dtmd_helper_params_poweroff_t *params, void *state)
+{
+	dtmd_result_t res;
+
+	if (handle->library_state == dtmd_state_default)
+	{
+		if ((strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
+			&& (dtmd_helper_is_helper_poweroff_generic(cmd))
+			&& (dtmd_helper_is_helper_poweroff_parameters_match(cmd, params->device_path)))
+		{
+			handle->result_state = dtmd_ok;
+			return dtmd_helper_result_exit;
+		}
+		else if ((strcmp(cmd->cmd, dtmd_response_failed) == 0)
+			&& (dtmd_helper_is_helper_poweroff_failed(cmd))
+			&& (dtmd_helper_is_helper_poweroff_parameters_match(cmd, params->device_path)))
+		{
+			handle->result_state = dt_command_failed;
+			handle->error_code = dtmd_string_to_error_code(cmd->args[cmd->args_count - 1]);
+			return dtmd_helper_result_exit;
+		}
+	}
+
+	res = dtmd_helper_handle_cmd(handle, cmd);
+	if (res != dtmd_ok)
+	{
+		handle->result_state = res;
+
+		if (dtmd_helper_is_state_invalid(res))
+		{
+			return dtmd_helper_result_error;
+		}
+		else
+		{
+			return dtmd_helper_result_exit;
+		}
+	}
+
+	return dtmd_helper_result_ok;
+}
+
+static dtmd_helper_result_t dtmd_helper_process_poweroff(dtmd_t *handle, dt_command_t *cmd, void *params, void *state)
+{
+	return dtmd_helper_process_poweroff_implementation(handle, cmd, (dtmd_helper_params_poweroff_t*) params, state);
+}
+#endif /* (defined OS_Linux) */
 
 inline static int dtmd_helper_exit_list_all_removable_devices_implementation(dtmd_t *handle, dtmd_helper_state_list_all_removable_devices_t *state)
 {

@@ -154,6 +154,10 @@ public:
 	dtmd_result_t list_supported_filesystems(int timeout, std::vector<std::string> &supported_filesystems_list);
 	dtmd_result_t list_supported_filesystem_options(int timeout, const std::string &filesystem, std::vector<std::string> &supported_filesystem_options_list);
 
+#if (defined OS_Linux)
+	dtmd_result_t poweroff(int timeout, const std::string &removable_device_path);
+#endif /* (defined OS_Linux) */
+
 	dtmd_result_t fill_removable_device_from_notification(const command &cmd, std::shared_ptr<removable_media> &removable_device) const;
 
 	bool isStateInvalid() const;
