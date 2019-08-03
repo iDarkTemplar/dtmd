@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -184,6 +184,9 @@ void printUsage(char *app)
 		"\t\tunmount device\n"
 		"\t\tls_fs\n"
 		"\t\tls_fs_opts filesystem\n"
+#if (defined OS_Linux)
+		"\t\tpoweroff device\n"
+#endif /* (defined OS_Linux) */
 		"\t\tmonitor\n", app);
 }
 
@@ -443,6 +446,37 @@ int client_list_supported_filesystem_options(const char *filesystem)
 	return 0;
 }
 
+#if (defined OS_Linux)
+int client_poweroff(const char *device)
+{
+	dtmd_t *lib;
+	dtmd_result_t result;
+	int func_result = 0;
+
+	lib = dtmd_init(&client_callback, &client_state_callback, (void*)0, &result);
+	if (lib == NULL)
+	{
+		fprintf(stderr, "Couldn't initialize dtmd-library, error code: %d\n", result);
+		return -1;
+	}
+
+	result = dtmd_poweroff(lib, dtmd_library_timeout_infinite, device);
+	if (result == dtmd_ok)
+	{
+		fprintf(stdout, "Poweroff successful!\n");
+	}
+	else
+	{
+		fprintf(stdout, "Poweroff failed, error code %d, details: %s\n", result, dtmd_error_code_to_string(dtmd_get_code_of_command_fail(lib)));
+		func_result = -1;
+	}
+
+	dtmd_deinit(lib);
+
+	return func_result;
+}
+#endif /* (defined OS_Linux) */
+
 int client_monitor(void)
 {
 	dtmd_t *lib;
@@ -501,6 +535,12 @@ int main(int argc, char **argv)
 	{
 		return client_list_supported_filesystem_options(argv[2]);
 	}
+#if (defined OS_Linux)
+	else if ((argc == 3) && (strcmp(argv[1], "poweroff") == 0))
+	{
+		return client_poweroff(argv[2]);
+	}
+#endif /* (defined OS_Linux) */
 	else if ((argc == 2) && (strcmp(argv[1], "monitor") == 0))
 	{
 		return client_monitor();
