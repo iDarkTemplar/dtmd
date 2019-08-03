@@ -4,8 +4,9 @@ It detects CD/DVD-ROMs and currently attached removable media,
 monitors their changes and reports them to clients.
 It also allows to mount/unmount detected removable media
 and specify subset of allowed mount options instead of default ones from configuration file.
+Starting with version 2.4.0 it allows to poweroff devices.
 
-There is a console client and clients based on Qt-4 and Qt-5.
+There is a console client and Qt5-based gui client.
 
 Console client has following commands available:
 	list_all
@@ -22,6 +23,8 @@ Console client has following commands available:
 		This command prints list of filesystem daemon allows to mount
 	ls_fs_opts [ filesystem ]
 		This command prints options which may be used in mount command for specific filesystem
+	poweroff device
+		This command powers off device. Currently only implemented and available on Linux.
 	monitor
 		This command puts client into monitor mode similar to udev monitor, but only printing information about
 		removable devices and their state changes
