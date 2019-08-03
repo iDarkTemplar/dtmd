@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -26,6 +26,7 @@
 
 #include "daemon/filesystem_mnt.h"
 #include "daemon/filesystem_opts.h"
+#include "daemon/poweroff.h"
 #include "daemon/return_codes.h"
 
 #include <dtmd.h>
@@ -180,6 +181,27 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 	else if ((strcmp(cmd->cmd, dtmd_command_list_supported_filesystem_options) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
 	{
 		return invoke_list_supported_filesystem_options(client_ptr, cmd->args[0]);
+	}
+	else if ((strcmp(cmd->cmd, dtmd_command_poweroff) == 0) && (cmd->args_count == 1) && (cmd->args[0] != NULL))
+	{
+		rc = invoke_poweroff(client_ptr, cmd->args[0], &error_code);
+
+		if (is_result_successful(rc))
+		{
+			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(\"" dtmd_command_poweroff "\", \"%s\")\n", cmd->args[0]) < 0)
+			{
+				return result_client_error;
+			}
+		}
+		else
+		{
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_poweroff "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
+			{
+				return result_client_error;
+			}
+		}
+
+		return rc;
 	}
 	else
 	{

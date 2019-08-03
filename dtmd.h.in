@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -201,6 +201,17 @@ typedef struct dtmd_removable_media
  *		list of filesystem option names
  *
  *		or "failed" on fail
+ */
+
+#define dtmd_command_poweroff "poweroff"
+/*
+ *	input:
+ *		"removable device path"
+ *
+ *	powers off removable device if it's supported
+ *
+ *	returns:
+ *		"succeeded" or "failed"
  */
 
 #define dtmd_response_started "started"

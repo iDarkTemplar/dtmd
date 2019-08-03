@@ -137,8 +137,8 @@ if (OS_LINUX)
 	set ( LIBRARY_LIBS ${LIBRARY_LIBS} rt )
 endif (OS_LINUX)
 
-set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c )
-set ( DAEMON_HEADERS                      daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
+set ( DAEMON_SOURCES daemon/daemon-main.c daemon/actions.c daemon/filesystem_mnt.c daemon/filesystem_opts.c daemon/label.c daemon/lists.c daemon/mnt_funcs.c daemon/config_file.c daemon/poweroff.c )
+set ( DAEMON_HEADERS                      daemon/actions.h daemon/filesystem_mnt.h daemon/filesystem_opts.h daemon/label.h daemon/lists.h daemon/mnt_funcs.h daemon/config_file.h daemon/poweroff.h daemon/dtmd-internal.h daemon/system_module.h daemon/log.h daemon/return_codes.h )
 set ( DAEMON_LIBS ${DTCOMMAND_LIBRARIES} )
 
 set ( DTMD_CONFIG_SOURCES tools/dtmd-config.c )
