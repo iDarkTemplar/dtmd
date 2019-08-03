@@ -232,6 +232,28 @@ static int poweroff(const char *device_name, const char *sysfs_path, dtmd_error_
 
 	close(device_fd);
 
+	WRITE_LOG_ARGS(LOG_INFO, "Powered off device '%s'", device_name);
+
+	return result_success;
+}
+
+static int poweroff_check_if_device_is_not_mounted(dtmd_removable_media_t *media_ptr)
+{
+	dtmd_removable_media_t *iter_media_ptr;
+
+	if (media_ptr->mnt_point != NULL)
+	{
+		return result_fail;
+	}
+
+	for (iter_media_ptr = media_ptr->children_list; iter_media_ptr != NULL; iter_media_ptr = iter_media_ptr->next_node)
+	{
+		if (is_result_failure(poweroff_check_if_device_is_not_mounted(iter_media_ptr)))
+		{
+			return result_fail;
+		}
+	}
+
 	return result_success;
 }
 
@@ -263,6 +285,19 @@ int invoke_poweroff(struct client *client_ptr, const char *path, dtmd_error_code
 		if (error_code != NULL)
 		{
 			*error_code = dtmd_error_code_generic_error;
+		}
+
+		goto invoke_poweroff_error_1;
+	}
+
+	result = poweroff_check_if_device_is_not_mounted(media_ptr);
+	if (is_result_failure(result))
+	{
+		WRITE_LOG_ARGS(LOG_WARNING, "Failed to poweroff device '%s': device is busy", path);
+
+		if (error_code != NULL)
+		{
+			*error_code = dtmd_error_code_mount_point_busy;
 		}
 
 		goto invoke_poweroff_error_1;
