@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -47,6 +47,10 @@ public slots:
 	void triggeredOpen(const std::string &device_name);
 	void triggeredMount(const std::string &device_name);
 	void triggeredUnmount(const std::string &device_name);
+
+#if (defined OS_Linux)
+	void triggeredPoweroff(const std::string &device_name);
+#endif /* (defined OS_Linux) */
 
 private:
 	Q_DISABLE_COPY(Control)

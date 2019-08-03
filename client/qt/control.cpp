@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -204,6 +204,40 @@ void Control::triggeredUnmount(const std::string &device_name)
 	}
 }
 
+#if (defined OS_Linux)
+void Control::triggeredPoweroff(const std::string &device_name)
+{
+	std::shared_ptr<dtmd::removable_media> media_ptr = dtmd::find_removable_media(device_name, m_devices);
+	if (!media_ptr)
+	{
+		return;
+	}
+
+	while (media_ptr && (media_ptr->type != dtmd_removable_media_type_stateless_device))
+	{
+		media_ptr = media_ptr->parent.lock();
+	}
+
+	if (!media_ptr)
+	{
+		setIconState(fail, Control::defaultTimeout);
+		return;
+	}
+
+	setIconState(working, Control::defaultTimeout);
+	dtmd_result_t result = m_lib->poweroff(defaultTimeout, media_ptr->path);
+
+	if (result == dtmd_ok)
+	{
+		setIconState(success, Control::defaultTimeout);
+	}
+	else
+	{
+		setIconState(fail, Control::defaultTimeout);
+	}
+}
+#endif /* (defined OS_Linux) */
+
 void Control::populate_devices()
 {
 	dtmd::removable_media_container temp_devices;
@@ -299,6 +333,19 @@ void Control::buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::r
 				Qt::DirectConnection);
 
 			menu->addAction(action);
+
+#if (defined OS_Linux)
+			menu->addSeparator();
+
+			action = new QAction(QObject::tr("Poweroff device"),
+				menu);
+
+			QObject::connect(action, &QAction::triggered,
+				this, [this, path] () { this->triggeredPoweroff(path); },
+				Qt::DirectConnection);
+
+			menu->addAction(action);
+#endif /* (defined OS_Linux) */
 		}
 	}
 
