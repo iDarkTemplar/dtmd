@@ -195,12 +195,12 @@ static const struct dtmd_mount_option_list iso9660_allow_list[] =
 
 static const struct dtmd_mount_option udf_allow[] =
 {
-	{ "iocharset", 0, NULL },
-	{ "umask=",    1, &validate_is_access_mode },
-	{ "undelete",  0, NULL },
-	{ "unhide",    0, NULL },
-	{ "nostrict",  0, NULL },
-	{ NULL,        0, NULL }
+	{ "iocharset=", 1, &validate_is_string },
+	{ "umask=",     1, &validate_is_access_mode },
+	{ "undelete",   0, NULL },
+	{ "unhide",     0, NULL },
+	{ "nostrict",   0, NULL },
+	{ NULL,         0, NULL }
 };
 
 static const struct dtmd_mount_option_list udf_allow_list[] =
@@ -255,7 +255,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		udf_allow_list,
 		"uid=",
 		"gid=",
-		"ro,nodev,nosuid,iocharset,umask=0077",
+		"ro,nodev,nosuid,iocharset=utf8,umask=0077",
 		"nodev,nosuid"
 	},
 	{

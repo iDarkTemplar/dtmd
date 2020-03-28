@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	char *filesystem_opts_vfat = "flush,utf8=1,shortname=mixed,umask=0000,dmask=0000,fmask=0000,codepage=cp1251,iocharset=utf8,showexec,blocksize=4096,allow_utime=1,check=s";
 	char *filesystem_opts_ntfs_3g = "umask=0000,dmask=0000,fmask=0000,iocharset=utf-8,windows_names,allow_other";
 	char *filesystem_opts_iso9660 = "norock,nojoliet,iocharset=utf-8,mode=0000,utf8,block=1024";
-	char *filesystem_opts_udf = "iocharset,umask=0000,undelete";
+	char *filesystem_opts_udf = "iocharset=utf8,umask=0000,undelete";
 
 	char *default_opts1 = "exec,atime,nodiratime,ro,sync,dirsync";
 	char *default_opts2 = "exec,noexec,nodev,nosuid,atime,noatime,ro,rw";
@@ -127,8 +127,8 @@ int main(int argc, char **argv)
 	test_compare_comment_deinit(fsopts_generate_string(&fsopts_list, &len_full, NULL, 0, &len, NULL, 0, &flags) == result_success, "Test 4: udf", free_options_list(&fsopts_list));
 	free_options_list(&fsopts_list);
 
-	test_compare_comment(len_full == 29, "Test 4: udf");
-	test_compare_comment(len == 29, "Test 4: udf");
+	test_compare_comment(len_full == 34, "Test 4: udf");
+	test_compare_comment(len == 34, "Test 4: udf");
 	test_compare_comment(flags == 0, "Test 4: udf");
 
 	// Test 5: default options set 1
