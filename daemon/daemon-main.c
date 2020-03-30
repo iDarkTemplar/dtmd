@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2020 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -32,6 +32,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/file.h>
 
 #include <dtmd.h>
 #include "daemon/dtmd-internal.h"
@@ -164,31 +165,6 @@ int redirectStdio(void)
 	close(fd2);
 
 	return result_success;
-}
-
-void check_lock_file(void)
-{
-	FILE *lockpidfile;
-	int lockpid;
-
-	lockpidfile = fopen(dtmd_daemon_lock, "r");
-	if (lockpidfile != NULL)
-	{
-		if (fscanf(lockpidfile, "%10d\n", &lockpid) == 1)
-		{
-			if (kill(lockpid, 0) == -1)
-			{
-				fclose(lockpidfile);
-				lockpidfile = NULL;
-				unlink(dtmd_daemon_lock);
-			}
-		}
-
-		if (lockpidfile != NULL)
-		{
-			fclose(lockpidfile);
-		}
-	}
 }
 
 void remove_empty_dirs(const char *dirname)
@@ -411,7 +387,7 @@ int main(int argc, char **argv)
 
 	if (chdir("/") == -1)
 	{
-		fprintf(stderr, "Error changing directory to /\n");
+		fprintf(stderr, "Failed to change directory to /\n");
 		result = -1;
 		goto exit_1;
 	}
@@ -440,7 +416,7 @@ int main(int argc, char **argv)
 	socketfd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (socketfd == -1)
 	{
-		fprintf(stderr, "Error opening socket\n");
+		fprintf(stderr, "Failed to open socket\n");
 		result = -1;
 		goto exit_1;
 	}
@@ -449,28 +425,34 @@ int main(int argc, char **argv)
 	memset(sockaddr.sun_path, 0, sizeof(sockaddr.sun_path));
 	strncat(sockaddr.sun_path, dtmd_daemon_socket_addr, sizeof(sockaddr.sun_path) - 1);
 
-	check_lock_file();
-
-	lockfd = open(dtmd_daemon_lock, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+	lockfd = open(dtmd_daemon_lock, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	if (lockfd == -1)
 	{
-		fprintf(stderr, "Error obtaining lock file\n");
+		fprintf(stderr, "Failed to create lockfile\n");
 		result = -1;
 		goto exit_2;
+	}
+
+	rc = flock(lockfd, LOCK_EX | LOCK_NB);
+	if (rc < 0)
+	{
+		fprintf(stderr, "Failed to lock lockfile\n");
+		result = -1;
+		goto exit_3;
 	}
 
 	unlink(sockaddr.sun_path);
 	rc = bind(socketfd, (struct sockaddr*) &sockaddr, sizeof(struct sockaddr_un));
 	if (rc == -1)
 	{
-		fprintf(stderr, "Error binding socket\n");
+		fprintf(stderr, "Failed to bind socket\n");
 		result = -1;
 		goto exit_3;
 	}
 
 	if (listen(socketfd, backlog) == -1)
 	{
-		WRITE_LOG(LOG_ERR, "Error listening socket");
+		WRITE_LOG(LOG_ERR, "Failed to listen to socket");
 		result = -1;
 		goto exit_4;
 	}
@@ -479,7 +461,7 @@ int main(int argc, char **argv)
 	{
 		if (pipe(daemonpipe) != 0)
 		{
-			fprintf(stderr, "Error creating pipes\n");
+			fprintf(stderr, "Failed to create pipes\n");
 			result = -1;
 			goto exit_4;
 		}
@@ -487,7 +469,7 @@ int main(int argc, char **argv)
 		child = fork();
 		if (child == -1)
 		{
-			fprintf(stderr, "Error forking\n");
+			fprintf(stderr, "Failed to fork\n");
 
 			close(daemonpipe[0]);
 			close(daemonpipe[1]);
@@ -558,7 +540,7 @@ int main(int argc, char **argv)
 	{
 		if (!daemonize)
 		{
-			fprintf(stderr, "Error unblocking signal handlers\n");
+			fprintf(stderr, "Failed to unblock signal handlers\n");
 		}
 
 		result = -1;
@@ -569,7 +551,7 @@ int main(int argc, char **argv)
 	{
 		if (!daemonize)
 		{
-			fprintf(stderr, "Error setting signal handlers\n");
+			fprintf(stderr, "Failed to set signal handlers\n");
 		}
 
 		result = -1;
@@ -581,7 +563,7 @@ int main(int argc, char **argv)
 	{
 		if (!daemonize)
 		{
-			fprintf(stderr, "Error writing process pid to lockfile\n");
+			fprintf(stderr, "Failed to write process pid to lockfile\n");
 		}
 
 		result = -1;
@@ -596,7 +578,7 @@ int main(int argc, char **argv)
 	{
 		if (!daemonize)
 		{
-			fprintf(stderr, "Error synchronizing lockfile\n");
+			fprintf(stderr, "Failed to synchronize lockfile\n");
 		}
 
 		result = -1;
@@ -649,7 +631,7 @@ int main(int argc, char **argv)
 	mountfd = init_mount_monitoring();
 	if (mountfd < 0)
 	{
-		WRITE_LOG(LOG_ERR, "Error opening mount monitor descriptor");
+		WRITE_LOG(LOG_ERR, "Failed to open mount monitor descriptor");
 		result = -1;
 		goto exit_6;
 	}
@@ -1057,16 +1039,16 @@ exit_4_pipe:
 	}
 
 exit_4:
-	close(socketfd);
 	unlink(sockaddr.sun_path);
+	close(socketfd);
 
-	close(lockfd);
 	unlink(dtmd_daemon_lock);
+	close(lockfd);
 	goto exit_1;
 
 exit_3:
-	close(lockfd);
 	unlink(dtmd_daemon_lock);
+	close(lockfd);
 
 exit_2:
 	close(socketfd);

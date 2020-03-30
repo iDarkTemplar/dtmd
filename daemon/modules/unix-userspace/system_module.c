@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2020 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -1867,7 +1867,7 @@ static int device_system_run_device_enumeration(dtmd_device_enumeration_t *enume
 	{
 		if (ioctl(fd, CAMIOCOMMAND, &ccb) < 0)
 		{
-			WRITE_LOG(LOG_WARNING, "Error sending CAMIOCOMMAND ioctl");
+			WRITE_LOG(LOG_WARNING, "Failed to send CAMIOCOMMAND ioctl");
 			result = result_fatal_error;
 			break;
 		}

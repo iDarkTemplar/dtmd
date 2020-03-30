@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2020 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -61,7 +61,7 @@ int init_mount_monitoring(void)
 	mountfd = open(dtmd_internal_mounts_file, O_RDONLY);
 	if (mountfd < 0)
 	{
-		WRITE_LOG(LOG_ERR, "Error opening mounts file descriptor");
+		WRITE_LOG(LOG_ERR, "Failed to open mounts file descriptor");
 	}
 
 	return mountfd;
@@ -78,7 +78,7 @@ int init_mount_monitoring(void)
 	queuefd = kqueue();
 	if (queuefd < 0)
 	{
-		WRITE_LOG(LOG_ERR, "Error opening kqueue");
+		WRITE_LOG(LOG_ERR, "Failed to open kqueue");
 		return queuefd;
 	}
 
@@ -86,7 +86,7 @@ int init_mount_monitoring(void)
 	rc = kevent(queuefd, &evt, 1, NULL, 0, NULL);
 	if (rc < 0)
 	{
-		WRITE_LOG(LOG_ERR, "Error adding mount/unmount notification event to kqueue");
+		WRITE_LOG(LOG_ERR, "Failed to add mount/unmount notification event to kqueue");
 		close(queuefd);
 		return rc;
 	}
