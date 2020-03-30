@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2020 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -23,6 +23,8 @@
 #endif /* (defined OS_FreeBSD) */
 
 #include <dtmd-library.h>
+
+#include "library/dt-print-helpers.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -1841,7 +1843,7 @@ static int dtmd_helper_dprintf_list_all_removable_devices(dtmd_t *handle, void *
 
 inline static int dtmd_helper_dprintf_list_removable_device_implementation(dtmd_t *handle, dtmd_helper_params_list_removable_device_t *args)
 {
-	return dprintf(handle->socket_fd, dtmd_command_list_removable_device "(\"%s\")\n", args->device_path);
+	return dprintf(handle->socket_fd, dtmd_command_list_removable_device "(%zu %s)\n", strlen(args->device_path), args->device_path);
 }
 
 static int dtmd_helper_dprintf_list_removable_device(dtmd_t *handle, void *args)
@@ -1851,10 +1853,9 @@ static int dtmd_helper_dprintf_list_removable_device(dtmd_t *handle, void *args)
 
 inline static int dtmd_helper_dprintf_mount_implementation(dtmd_t *handle, dtmd_helper_params_mount_t *args)
 {
-	return dprintf(handle->socket_fd, dtmd_command_mount "(\"%s\", %s%s%s)\n", args->path,
-		(args->mount_options != NULL) ? ("\"") : (""),
-		(args->mount_options != NULL) ? (args->mount_options) : ("nil"),
-		(args->mount_options != NULL) ? ("\"") : (""));
+	return dprintf(handle->socket_fd, dtmd_command_mount "(%zu %s, %d%s%s)\n",
+		strlen(args->path), args->path,
+		dt_helper_print_with_all_checks(args->mount_options));
 }
 
 static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args)
@@ -1864,7 +1865,7 @@ static int dtmd_helper_dprintf_mount(dtmd_t *handle, void *args)
 
 inline static int dtmd_helper_dprintf_unmount_implementation(dtmd_t *handle, dtmd_helper_params_unmount_t *args)
 {
-	return dprintf(handle->socket_fd, dtmd_command_unmount "(\"%s\")\n", args->path);
+	return dprintf(handle->socket_fd, dtmd_command_unmount "(%zu %s)\n", strlen(args->path), args->path);
 }
 
 static int dtmd_helper_dprintf_unmount(dtmd_t *handle, void *args)
@@ -1879,7 +1880,7 @@ static int dtmd_helper_dprintf_list_supported_filesystems(dtmd_t *handle, void *
 
 inline static int dtmd_helper_dprintf_list_supported_filesystem_options_implementation(dtmd_t *handle, dtmd_helper_params_list_supported_filesystem_options_t *args)
 {
-	return dprintf(handle->socket_fd, dtmd_command_list_supported_filesystem_options "(\"%s\")\n", args->filesystem);
+	return dprintf(handle->socket_fd, dtmd_command_list_supported_filesystem_options "(%zu %s)\n", strlen(args->filesystem), args->filesystem);
 }
 
 static int dtmd_helper_dprintf_list_supported_filesystem_options(dtmd_t *handle, void *args)
@@ -1890,7 +1891,7 @@ static int dtmd_helper_dprintf_list_supported_filesystem_options(dtmd_t *handle,
 #if (defined OS_Linux)
 inline static int dtmd_helper_dprintf_poweroff_implementation(dtmd_t *handle, dtmd_helper_params_poweroff_t *args)
 {
-	return dprintf(handle->socket_fd, dtmd_command_poweroff "(\"%s\")\n", args->device_path);
+	return dprintf(handle->socket_fd, dtmd_command_poweroff "(%zu %s)\n", strlen(args->device_path), args->device_path);
 }
 
 static int dtmd_helper_dprintf_poweroff(dtmd_t *handle, void *args)

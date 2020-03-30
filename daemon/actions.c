@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2020 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -28,6 +28,7 @@
 #include "daemon/filesystem_opts.h"
 #include "daemon/poweroff.h"
 #include "daemon/return_codes.h"
+#include "library/dt-print-helpers.h"
 
 #include <dtmd.h>
 
@@ -59,7 +60,8 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 
 	if ((strcmp(cmd->cmd, dtmd_command_list_all_removable_devices) == 0) && (cmd->args_count == 0))
 	{
-		if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_all_removable_devices "\")\n") < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_started "(%zu " dtmd_command_list_all_removable_devices ")\n",
+			strlen(dtmd_command_list_all_removable_devices)) < 0)
 		{
 			return result_client_error;
 		}
@@ -70,7 +72,8 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 			return rc;
 		}
 
-		if (dprintf(client_ptr->clientfd, dtmd_response_finished "(\"" dtmd_command_list_all_removable_devices "\")\n") < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_finished "(%zu " dtmd_command_list_all_removable_devices ")\n",
+			strlen(dtmd_command_list_all_removable_devices)) < 0)
 		{
 			return result_client_error;
 		}
@@ -88,7 +91,10 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 			media_ptr = dtmd_find_media(cmd->args[0], removable_media_root);
 			if (media_ptr == NULL)
 			{
-				if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_removable_device "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device)) < 0)
+				if (dprintf(client_ptr->clientfd, dtmd_response_failed "(%zu " dtmd_command_list_removable_device ", %d%s%s, %d%s%s)\n",
+					strlen(dtmd_command_list_removable_device),
+					dt_helper_print_with_all_checks(cmd->args[0]),
+					dt_helper_print_with_all_checks(dtmd_error_code_to_string(dtmd_error_code_no_such_removable_device))) < 0)
 				{
 					return result_client_error;
 				}
@@ -97,7 +103,9 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 			}
 		}
 
-		if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_started "(%zu " dtmd_command_list_removable_device ", %d%s%s)\n",
+			strlen(dtmd_command_list_removable_device),
+			dt_helper_print_with_all_checks(cmd->args[0])) < 0)
 		{
 			return result_client_error;
 		}
@@ -116,7 +124,9 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 			return rc;
 		}
 
-		if (dprintf(client_ptr->clientfd, dtmd_response_finished "(\"" dtmd_command_list_removable_device "\", \"%s\")\n", cmd->args[0]) < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_finished "(%zu " dtmd_command_list_removable_device ", %d%s%s)\n",
+			strlen(dtmd_command_list_removable_device),
+			dt_helper_print_with_all_checks(cmd->args[0])) < 0)
 		{
 			return result_client_error;
 		}
@@ -129,23 +139,21 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 
 		if (is_result_successful(rc))
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(\"" dtmd_command_mount "\", \"%s\", %s%s%s)\n",
-				cmd->args[0],
-				((cmd->args[1] != NULL) ? ("\"") : ("")),
-				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
-				((cmd->args[1] != NULL) ? ("\"") : (""))) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(%zu " dtmd_command_mount ", %d%s%s, %d%s%s)\n",
+				strlen(dtmd_command_mount),
+				dt_helper_print_with_all_checks(cmd->args[0]),
+				dt_helper_print_with_all_checks(cmd->args[1])) < 0)
 			{
 				return result_client_error;
 			}
 		}
 		else
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_mount "\", \"%s\", %s%s%s, \"%s\")\n",
-				cmd->args[0],
-				((cmd->args[1] != NULL) ? ("\"") : ("")),
-				((cmd->args[1] != NULL) ? (cmd->args[1]) : ("nil")),
-				((cmd->args[1] != NULL) ? ("\"") : ("")),
-				dtmd_error_code_to_string(error_code)) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(%zu " dtmd_command_mount ", %d%s%s, %d%s%s, %d%s%s)\n",
+				strlen(dtmd_command_mount),
+				dt_helper_print_with_all_checks(cmd->args[0]),
+				dt_helper_print_with_all_checks(cmd->args[1]),
+				dt_helper_print_with_all_checks(dtmd_error_code_to_string(error_code))) < 0)
 			{
 				return result_client_error;
 			}
@@ -159,14 +167,19 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 
 		if (is_result_successful(rc))
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(\"" dtmd_command_unmount "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(%zu " dtmd_command_unmount ", %d%s%s)\n",
+				strlen(dtmd_command_unmount),
+				dt_helper_print_with_all_checks(cmd->args[0])) < 0)
 			{
 				return result_client_error;
 			}
 		}
 		else
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_unmount "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(%zu " dtmd_command_unmount ", %d%s%s, %d%s%s)\n",
+				strlen(dtmd_command_unmount),
+				dt_helper_print_with_all_checks(cmd->args[0]),
+				dt_helper_print_with_all_checks(dtmd_error_code_to_string(error_code))) < 0)
 			{
 				return result_client_error;
 			}
@@ -188,14 +201,19 @@ int invoke_command(struct client *client_ptr, dt_command_t *cmd)
 
 		if (is_result_successful(rc))
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(\"" dtmd_command_poweroff "\", \"%s\")\n", cmd->args[0]) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_succeeded "(%zu " dtmd_command_poweroff ", %d%s%s)\n",
+				strlen(dtmd_command_poweroff),
+				dt_helper_print_with_all_checks(cmd->args[0])) < 0)
 			{
 				return result_client_error;
 			}
 		}
 		else
 		{
-			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_poweroff "\", \"%s\", \"%s\")\n", cmd->args[0], dtmd_error_code_to_string(error_code)) < 0)
+			if (dprintf(client_ptr->clientfd, dtmd_response_failed "(%zu " dtmd_command_poweroff ", %d%s%s, %d%s%s)\n",
+				strlen(dtmd_command_poweroff),
+				dt_helper_print_with_all_checks(cmd->args[0]),
+				dt_helper_print_with_all_checks(dtmd_error_code_to_string(error_code))) < 0)
 			{
 				return result_client_error;
 			}
@@ -243,7 +261,7 @@ void notify_removable_device_removed(const char *path)
 
 	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
 	{
-		dprintf(cur_client->clientfd, dtmd_notification_removable_device_removed "(\"%s\")\n", path);
+		dprintf(cur_client->clientfd, dtmd_notification_removable_device_removed "(%zu %s)\n", strlen(path), path);
 	}
 }
 
@@ -281,7 +299,10 @@ void notify_removable_device_mounted(const char *path, const char *mount_point, 
 
 	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
 	{
-		dprintf(cur_client->clientfd, dtmd_notification_removable_device_mounted "(\"%s\", \"%s\", \"%s\")\n", path, mount_point, mount_options);
+		dprintf(cur_client->clientfd, dtmd_notification_removable_device_mounted "(%zu %s, %zu %s, %d%s%s)\n",
+			strlen(path), path,
+			strlen(mount_point), mount_point,
+			dt_helper_print_with_all_checks(mount_options));
 	}
 }
 
@@ -291,7 +312,9 @@ void notify_removable_device_unmounted(const char *path, const char *mount_point
 
 	for (cur_client = client_root; cur_client != NULL; cur_client = cur_client->next_node)
 	{
-		dprintf(cur_client->clientfd, dtmd_notification_removable_device_unmounted "(\"%s\", \"%s\")\n", path, mount_point);
+		dprintf(cur_client->clientfd, dtmd_notification_removable_device_unmounted "(%zu %s, %zu %s)\n",
+			strlen(path), path,
+			strlen(mount_point), mount_point);
 	}
 }
 
@@ -312,60 +335,44 @@ static int print_removable_device_common(const char *action,
 	switch (media_type)
 	{
 	case dtmd_removable_media_type_device_partition:
-		if (dprintf(client_ptr->clientfd, "%s(\"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s, %s%s%s, %s%s%s)\n",
+		if (dprintf(client_ptr->clientfd, "%s(%d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s)\n",
 			action,
-			parent_path,
-			path,
-			dtmd_device_type_to_string(media_type),
-			((fstype != NULL) ? ("\"") : ("")),
-			((fstype != NULL) ? (fstype) : ("nil")),
-			((fstype != NULL) ? ("\"") : ("")),
-			((label != NULL) ? ("\"") : ("")),
-			((label != NULL) ? (label) : ("nil")),
-			((label != NULL) ? ("\"") : ("")),
-			((mnt_point != NULL) ? ("\"") : ("")),
-			((mnt_point != NULL) ? (mnt_point) : ("nil")),
-			((mnt_point != NULL) ? ("\"") : ("")),
-			((mnt_opts != NULL) ? ("\"") : ("")),
-			((mnt_opts != NULL) ? (mnt_opts) : ("nil")),
-			((mnt_opts != NULL) ? ("\"") : (""))) < 0)
+			dt_helper_print_with_all_checks(parent_path),
+			dt_helper_print_with_all_checks(path),
+			dt_helper_print_with_all_checks(dtmd_device_type_to_string(media_type)),
+			dt_helper_print_with_all_checks(fstype),
+			dt_helper_print_with_all_checks(label),
+			dt_helper_print_with_all_checks(mnt_point),
+			dt_helper_print_with_all_checks(mnt_opts)) < 0)
 		{
 			rc = result_client_error;
 		}
 		break;
 
 	case dtmd_removable_media_type_stateless_device:
-		if (dprintf(client_ptr->clientfd, "%s(\"%s\", \"%s\", \"%s\", \"%s\")\n",
+		if (dprintf(client_ptr->clientfd, "%s(%d%s%s, %d%s%s, %d%s%s, %d%s%s)\n",
 			action,
-			parent_path,
-			path,
-			dtmd_device_type_to_string(media_type),
-			dtmd_device_subtype_to_string(media_subtype)) < 0)
+			dt_helper_print_with_all_checks(parent_path),
+			dt_helper_print_with_all_checks(path),
+			dt_helper_print_with_all_checks(dtmd_device_type_to_string(media_type)),
+			dt_helper_print_with_all_checks(dtmd_device_subtype_to_string(media_subtype))) < 0)
 		{
 			rc = result_client_error;
 		}
 		break;
 
 	case dtmd_removable_media_type_stateful_device:
-		if (dprintf(client_ptr->clientfd, "%s(\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", %s%s%s, %s%s%s, %s%s%s, %s%s%s)\n",
+		if (dprintf(client_ptr->clientfd, "%s(%d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s, %d%s%s)\n",
 			action,
-			parent_path,
-			path,
-			dtmd_device_type_to_string(media_type),
-			dtmd_device_subtype_to_string(media_subtype),
-			dtmd_device_state_to_string(state),
-			((fstype != NULL) ? ("\"") : ("")),
-			((fstype != NULL) ? (fstype) : ("nil")),
-			((fstype != NULL) ? ("\"") : ("")),
-			((label != NULL) ? ("\"") : ("")),
-			((label != NULL) ? (label) : ("nil")),
-			((label != NULL) ? ("\"") : ("")),
-			((mnt_point != NULL) ? ("\"") : ("")),
-			((mnt_point != NULL) ? (mnt_point) : ("nil")),
-			((mnt_point != NULL) ? ("\"") : ("")),
-			((mnt_opts != NULL) ? ("\"") : ("")),
-			((mnt_opts != NULL) ? (mnt_opts) : ("nil")),
-			((mnt_opts != NULL) ? ("\"") : (""))) < 0)
+			dt_helper_print_with_all_checks(parent_path),
+			dt_helper_print_with_all_checks(path),
+			dt_helper_print_with_all_checks(dtmd_device_type_to_string(media_type)),
+			dt_helper_print_with_all_checks(dtmd_device_subtype_to_string(media_subtype)),
+			dt_helper_print_with_all_checks(dtmd_device_state_to_string(state)),
+			dt_helper_print_with_all_checks(fstype),
+			dt_helper_print_with_all_checks(label),
+			dt_helper_print_with_all_checks(mnt_point),
+			dt_helper_print_with_all_checks(mnt_opts)) < 0)
 		{
 			rc = result_client_error;
 		}

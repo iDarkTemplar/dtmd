@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 i.Dark_Templar <darktemplar@dark-templar-archives.net>
+ * Copyright (C) 2016-2020 i.Dark_Templar <darktemplar@dark-templar-archives.net>
  *
  * This file is part of DTMD, Dark Templar Mount Daemon.
  *
@@ -27,6 +27,8 @@
 #include "daemon/lists.h"
 #include "daemon/log.h"
 #include "daemon/return_codes.h"
+
+#include "library/dt-print-helpers.h"
 
 #include <dtmd-misc.h>
 
@@ -1361,7 +1363,7 @@ int invoke_list_supported_filesystems(struct client *client_ptr)
 	const struct dtmd_filesystem_options *fsopts = filesystem_mount_options;
 	int first = 1;
 
-	if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystems "\")\n" dtmd_response_argument_supported_filesystems_lists "(") < 0)
+	if (dprintf(client_ptr->clientfd, dtmd_response_started "(%zu " dtmd_command_list_supported_filesystems ")\n" dtmd_response_argument_supported_filesystems_lists "(", strlen(dtmd_command_list_supported_filesystems)) < 0)
 	{
 		return result_client_error;
 	}
@@ -1392,7 +1394,7 @@ int invoke_list_supported_filesystems(struct client *client_ptr)
 				}
 			}
 
-			if (dprintf(client_ptr->clientfd, "\"%s\"", fsopts->fstype) < 0)
+			if (dprintf(client_ptr->clientfd, "%zu %s", strlen(fsopts->fstype), fsopts->fstype) < 0)
 			{
 				return result_client_error;
 			}
@@ -1406,7 +1408,7 @@ int invoke_list_supported_filesystems(struct client *client_ptr)
 		++fsopts;
 	}
 
-	if (dprintf(client_ptr->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystems "\")\n") < 0)
+	if (dprintf(client_ptr->clientfd, ")\n" dtmd_response_finished "(%zu " dtmd_command_list_supported_filesystems ")\n", strlen(dtmd_command_list_supported_filesystems)) < 0)
 	{
 		return result_client_error;
 	}
@@ -1428,7 +1430,10 @@ int invoke_list_supported_filesystem_options(struct client *client_ptr, const ch
 	if (fsopts == NULL)
 #endif /* (defined OS_Linux) && (defined DISABLE_EXT_MOUNT) */
 	{
-		if (dprintf(client_ptr->clientfd, dtmd_response_failed "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\", \"%s\")\n", filesystem, dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype)) < 0)
+		if (dprintf(client_ptr->clientfd, dtmd_response_failed "(%zu " dtmd_command_list_supported_filesystem_options ", %zu %s, %d%s%s)\n",
+			strlen(dtmd_command_list_supported_filesystem_options),
+			strlen(filesystem), filesystem,
+			dt_helper_print_with_all_checks(dtmd_error_code_to_string(dtmd_error_code_unsupported_fstype))) < 0)
 		{
 			return result_client_error;
 		}
@@ -1436,7 +1441,9 @@ int invoke_list_supported_filesystem_options(struct client *client_ptr, const ch
 		return result_fail;
 	}
 
-	if (dprintf(client_ptr->clientfd, dtmd_response_started "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n" dtmd_response_argument_supported_filesystem_options_lists "(", filesystem) < 0)
+	if (dprintf(client_ptr->clientfd, dtmd_response_started "(%zu " dtmd_command_list_supported_filesystem_options ", %zu %s)\n" dtmd_response_argument_supported_filesystem_options_lists "(",
+		strlen(dtmd_command_list_supported_filesystem_options),
+		strlen(filesystem), filesystem) < 0)
 	{
 		return result_client_error;
 	}
@@ -1457,14 +1464,16 @@ int invoke_list_supported_filesystem_options(struct client *client_ptr, const ch
 				}
 			}
 
-			if (dprintf(client_ptr->clientfd, "\"%s\"", option_list->option) < 0)
+			if (dprintf(client_ptr->clientfd, "%zu %s", strlen(option_list->option), option_list->option) < 0)
 			{
 				return result_client_error;
 			}
 		}
 	}
 
-	if (dprintf(client_ptr->clientfd, ")\n" dtmd_response_finished "(\"" dtmd_command_list_supported_filesystem_options "\", \"%s\")\n", filesystem) < 0)
+	if (dprintf(client_ptr->clientfd, ")\n" dtmd_response_finished "(%zu " dtmd_command_list_supported_filesystem_options ", %zu %s)\n",
+		strlen(dtmd_command_list_supported_filesystem_options),
+		strlen(filesystem), filesystem) < 0)
 	{
 		return result_client_error;
 	}
