@@ -21,16 +21,16 @@
 #ifndef QT_CONTROL_HPP
 #define QT_CONTROL_HPP
 
-#include <QObject>
-#include <QSystemTrayIcon>
-#include <QScopedPointer>
-#include <QMenu>
-#include <QMutex>
+#include <QtCore/QObject>
+#include <QtCore/QMutex>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QSystemTrayIcon>
 
-#include <vector>
-#include <map>
 #include <list>
+#include <map>
+#include <memory>
 #include <tuple>
+#include <vector>
 
 #include <dtmd-library++.hpp>
 
@@ -81,14 +81,14 @@ private:
 	static const int defaultTimeout;
 
 	QSystemTrayIcon m_tray;
-	QScopedPointer<dtmd::library> m_lib;
+	std::unique_ptr<dtmd::library> m_lib;
 	dtmd::removable_media_container m_devices;
 	std::list<dtmd::command> m_saved_commands;
 	volatile bool m_devices_initialized;
 	QMutex m_devices_mutex;
 
 	std::map<app_state, QIcon> m_icons_map;
-	QScopedPointer<QMenu> m_menu;
+	std::unique_ptr<QMenu> m_menu;
 
 	std::list<app_state> m_state_queue;
 	QMutex m_state_queue_mutex;

@@ -20,16 +20,17 @@
 
 #include "client/qt/control.hpp"
 
-#include <QApplication>
-#include <QMutexLocker>
-#include <QMessageBox>
-#include <QTimer>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QAction>
+#include <QtCore/QMutexLocker>
+#include <QtCore/QTimer>
+#include <QtCore/QUrl>
+#include <QtGui/QAction>
+#include <QtGui/QDesktopServices>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QMessageBox>
 
-#include <stdexcept>
 #include <sstream>
+#include <stdexcept>
+#include <utility>
 
 #include <stddef.h>
 
@@ -358,7 +359,7 @@ void Control::buildMenuRecursive(QMenu &root_menu, const std::shared_ptr<dtmd::r
 
 void Control::BuildMenu()
 {
-	QScopedPointer<QMenu> new_menu(new QMenu());
+	std::unique_ptr<QMenu> new_menu(new QMenu());
 
 	{ // lock
 		QMutexLocker devices_locker(&m_devices_mutex);
@@ -379,8 +380,8 @@ void Control::BuildMenu()
 
 	new_menu->addAction(QObject::tr("Exit"), this, &Control::exit);
 
-	m_tray.setContextMenu(new_menu.data());
-	m_menu.reset(new_menu.take());
+	m_tray.setContextMenu(new_menu.get());
+	m_menu = std::move(new_menu);
 }
 
 QIcon Control::iconFromSubtype(dtmd_removable_media_subtype_t type, bool is_mounted)

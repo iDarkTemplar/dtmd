@@ -1,7 +1,7 @@
-cmake_minimum_required( VERSION 3.12.0 )
+cmake_minimum_required( VERSION 3.20.0 )
 
 project(Dark-Templar-Mount-Daemon
-	VERSION 2.5.0
+	VERSION 2.6.0
 	LANGUAGES C CXX)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
@@ -14,16 +14,13 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
 	add_definitions(-DOS_FreeBSD)
 endif (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
 
-# installation directory configuration
-set(CONFIG_DIR "/etc" CACHE PATH "Config files directory")
+include(GNUInstallDirs)
 
-set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)")
-set(EXEC_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX} CACHE PATH "Installation prefix for executables and object code libraries" FORCE)
-set(BIN_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/bin CACHE PATH "Installation prefix for user executables" FORCE)
-set(SBIN_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/sbin CACHE PATH "Installation prefix for user executables" FORCE)
-set(LIB_INSTALL_DIR ${EXEC_INSTALL_PREFIX}/lib${LIB_SUFFIX} CACHE PATH  "Installation prefix for object code libraries" FORCE)
-set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/include CACHE PATH "Installation prefix for C header files" FORCE)
-set(DATA_PREFIX "${CMAKE_INSTALL_PREFIX}/share" CACHE PATH "Prefix prepended to data install directories" FORCE)
+# installation directory configuration
+set(CONFIG_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}" CACHE PATH "Config files directory")
+set(DATA_PREFIX "${CMAKE_INSTALL_DATADIR}" CACHE PATH "Prefix prepended to data install directories")
+set(PIDFILE_PATH "/run/dtmd.pid" CACHE PATH "Path of pidfile")
+set(SOCKET_PATH "/run/dtmd.socket" CACHE PATH "Path of socket")
 
 option(ENABLE_SYSLOG "enable installation of desktop entry files" ON)
 option(ENABLE_LIBVERSION "enable libraries versioning" ON)
@@ -34,9 +31,6 @@ option(ENABLE_QT_CLIENT "enable qt-based client" ON)
 if (OS_LINUX)
 	option(DISABLE_EXT_MOUNT "disable external mount")
 endif (OS_LINUX)
-
-set(PIDFILE_PATH "/var/run/dtmd.pid" CACHE PATH "Path of pidfile")
-set(SOCKET_PATH "/var/run/dtmd.socket" CACHE PATH "Path of socket")
 
 add_definitions(-DDATA_PREFIX=\"${DATA_PREFIX}\")
 add_definitions(-DCONFIG_DIR=\"${CONFIG_DIR}\")
@@ -66,28 +60,11 @@ endif (OS_LINUX)
 message(STATUS "To change pid file path use -DPIDFILE_PATH=path")
 message(STATUS "To change socket path use -DSOCKET_PATH=path")
 
-# don't USE -O3 with GCC, it causes less precise calculations
-if (CMAKE_COMPILER_IS_GNUCC)
-	set (CMAKE_C_FLAGS_RELEASE "-O2 -pipe -march=native -Wall -Wextra -Wno-unused-result -DNDEBUG")
-	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+	add_definitions(-DNDEBUG)
+endif (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
 
-	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe -march=native -Wall -Wextra -Wno-unused-result -g -ggdb")
-	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
-endif (CMAKE_COMPILER_IS_GNUCC)
-
-# clang compiler options
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-	set (CLANG_WARNINGS "-Weverything -Wno-missing-prototypes -Wno-padded -Wno-sign-conversion -Wno-conversion -Wno-disabled-macro-expansion -Wno-cast-align")
-	set (CLANG_WARNINGS "${CLANG_WARNINGS} -Wno-c++98-compat -Wno-covered-switch-default -Wno-switch-enum -Wno-switch")
-
-	set (CMAKE_C_FLAGS_RELEASE "-O3 -pipe ${CLANG_WARNINGS} -DNDEBUG")
-	set (CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
-
-	set (CMAKE_C_FLAGS_DEBUG "-O0 -pipe ${CLANG_WARNINGS} -g -ggdb")
-	set (CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
-endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (ENABLE_QT_CLIENT)
@@ -109,7 +86,7 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/library )
 include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
 
 if (ENABLE_QT_CLIENT)
-	find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
+	find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
 endif (ENABLE_QT_CLIENT)
 
 CONFIGURE_FILE( ${CMAKE_CURRENT_SOURCE_DIR}/dtmd.h.in ${CMAKE_CURRENT_BINARY_DIR}/dtmd.h @ONLY )
@@ -252,13 +229,13 @@ if (ENABLE_CXX)
 endif (ENABLE_CXX)
 
 if (ENABLE_QT_CLIENT)
-	QT5_WRAP_CPP(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
-	QT5_WRAP_UI(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
-	QT5_ADD_RESOURCES(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
+	qt_wrap_cpp(QT_CLIENT_MOC_SOURCES ${QT_CLIENT_QT_HEADERS})
+	qt_wrap_ui(QT_CLIENT_UI_SOURCES ${QT_CLIENT_UI})
+	qt_add_resources(QT_CLIENT_RESOURCES ${QT_CLIENT_RES})
 
 	add_executable (dtmd-qt ${QT_CLIENT_SOURCES} ${QT_CLIENT_QT_HEADERS} ${QT_CLIENT_HEADERS} ${QT_CLIENT_MOC_SOURCES} ${QT_CLIENT_UI_SOURCES} ${QT_CLIENT_RESOURCES})
-	target_include_directories(dtmd-qt PRIVATE ${Qt5Core_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS})
-	target_link_libraries (dtmd-qt dtmd-library++ ${QT_CLIENT_LIBS} ${Qt5Core_LIBRARIES} ${Qt5Gui_LIBRARIES} ${Qt5Widgets_LIBRARIES} )
+	target_include_directories(dtmd-qt PRIVATE ${Qt6Core_INCLUDE_DIRS} ${Qt6Gui_INCLUDE_DIRS} ${Qt6Widgets_INCLUDE_DIRS})
+	target_link_libraries (dtmd-qt dtmd-library++ ${QT_CLIENT_LIBS} ${Qt6Core_LIBRARIES} ${Qt6Gui_LIBRARIES} ${Qt6Widgets_LIBRARIES} )
 endif (ENABLE_QT_CLIENT)
 
 ENABLE_TESTING()
@@ -287,29 +264,29 @@ foreach (CURRENT_TEST ${ALL_TESTS})
 endforeach (CURRENT_TEST)
 
 # installation config
-install(TARGETS dtmd-misc    LIBRARY DESTINATION ${LIB_INSTALL_DIR} )
-install(TARGETS dtmd-library LIBRARY DESTINATION ${LIB_INSTALL_DIR} )
-install(TARGETS dtmd-daemon  RUNTIME DESTINATION ${SBIN_INSTALL_DIR} )
-install(TARGETS dtmd-config  RUNTIME DESTINATION ${BIN_INSTALL_DIR} )
+install(TARGETS dtmd-misc    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} )
+install(TARGETS dtmd-library LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} )
+install(TARGETS dtmd-daemon  RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR} )
+install(TARGETS dtmd-config  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} )
 
 if (ENABLE_CONSOLE_CLIENT)
-	install(TARGETS dtmd         RUNTIME DESTINATION ${BIN_INSTALL_DIR})
+	install(TARGETS dtmd         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif (ENABLE_CONSOLE_CLIENT)
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtmd.h" DESTINATION "${INCLUDE_INSTALL_DIR}")
-install(FILES "library/dtmd-misc.h"                DESTINATION "${INCLUDE_INSTALL_DIR}")
-install(FILES "library/dtmd-library.h"             DESTINATION "${INCLUDE_INSTALL_DIR}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtmd.h" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(FILES "library/dtmd-misc.h"                DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(FILES "library/dtmd-library.h"             DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(FILES "daemon/dtmd.conf"                   DESTINATION "${CONFIG_DIR}")
 install(FILES "cmake/FindDtmdMisc.cmake"           DESTINATION "${CMAKE_ROOT}/Modules" )
 install(FILES "cmake/FindDtmdLibrary.cmake"        DESTINATION "${CMAKE_ROOT}/Modules" )
 
 if (ENABLE_CXX)
-	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${LIB_INSTALL_DIR} )
-	install(FILES "library/dtmd-library++.hpp" DESTINATION "${INCLUDE_INSTALL_DIR}")
+	install(TARGETS dtmd-library++ LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} )
+	install(FILES "library/dtmd-library++.hpp" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 	install(FILES "cmake/FindDtmdLibrary++.cmake" DESTINATION "${CMAKE_ROOT}/Modules" )
 endif (ENABLE_CXX)
 
 if (ENABLE_QT_CLIENT)
-	install(TARGETS dtmd-qt      RUNTIME DESTINATION ${BIN_INSTALL_DIR})
+	install(TARGETS dtmd-qt      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 	install(FILES ${QT_IMAGES} DESTINATION "${DATA_PREFIX}/dtmd" )
 endif (ENABLE_QT_CLIENT)

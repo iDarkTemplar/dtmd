@@ -18,11 +18,10 @@
  *
  */
 
-#include <QApplication>
-#include <QTextCodec>
-#include <QMessageBox>
-#include <QScopedPointer>
-#include <QLocale>
+#include <QtCore/QLocale>
+#include <QtCore/QScopedPointer>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QMessageBox>
 
 #include <signal.h>
 
@@ -69,10 +68,6 @@ int main(int argc, char **argv)
 {
 	QApplication app(argc, argv);
 	QScopedPointer<Control> control;
-
-	QTextCodec::setCodecForLocale(
-		QTextCodec::codecForName("UTF-8")
-	);
 
 	QLocale::setDefault(QLocale::system());
 
