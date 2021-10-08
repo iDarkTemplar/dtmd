@@ -1,7 +1,7 @@
 cmake_minimum_required( VERSION 3.20.0 )
 
 project(Dark-Templar-Mount-Daemon
-	VERSION 2.6.0
+	VERSION 2.6.1
 	LANGUAGES C CXX)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
@@ -18,7 +18,7 @@ include(GNUInstallDirs)
 
 # installation directory configuration
 set(CONFIG_DIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}" CACHE PATH "Config files directory")
-set(DATA_PREFIX "${CMAKE_INSTALL_DATADIR}" CACHE PATH "Prefix prepended to data install directories")
+set(DATA_PREFIX "${CMAKE_INSTALL_FULL_DATADIR}" CACHE PATH "Prefix prepended to data install directories")
 set(PIDFILE_PATH "/run/dtmd.pid" CACHE PATH "Path of pidfile")
 set(SOCKET_PATH "/run/dtmd.socket" CACHE PATH "Path of socket")
 
