@@ -459,6 +459,7 @@ int read_config(void)
 	{
 		++line_num;
 
+		inside_quotes = 0;
 		key_start   = key_end   = -1;
 		equal_start = -1;
 		value_start = value_end = -1;
