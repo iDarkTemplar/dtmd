@@ -156,6 +156,22 @@ static const struct dtmd_mount_option_list vfat_allow_list[] =
 	{ NULL                   }
 };
 
+static const struct dtmd_mount_option exfat_allow[] =
+{
+	{ "umask=", 1, &validate_is_access_mode },
+	{ "dmask=", 1, &validate_is_access_mode },
+	{ "fmask=", 1, &validate_is_access_mode },
+	{ NULL,     0, NULL }
+};
+
+static const struct dtmd_mount_option_list exfat_allow_list[] =
+{
+	{ any_fs_allowed_list    },
+	{ common_fs_allowed_list },
+	{ exfat_allow            },
+	{ NULL                   }
+};
+
 static const struct dtmd_mount_option ntfs3g_allow[] =
 {
 	{ "umask=",        1, &validate_is_access_mode },
@@ -222,6 +238,15 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		"uid=",
 		"gid=",
 		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush",
+		"nodev,nosuid"
+	},
+	{
+		NULL, /* NOT EXTERNAL MOUNT */
+		"exfat",
+		exfat_allow_list,
+		"uid=",
+		"gid=",
+		"rw,nodev,nosuid,umask=0077",
 		"nodev,nosuid"
 	},
 	{
