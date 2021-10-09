@@ -1,7 +1,7 @@
 cmake_minimum_required( VERSION 3.20.0 )
 
 project(Dark-Templar-Mount-Daemon
-	VERSION 2.6.1
+	VERSION 2.6.2
 	LANGUAGES C CXX)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")

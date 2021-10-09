@@ -237,7 +237,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		vfat_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,shortname=mixed,dmask=0077,utf8=1,flush",
+		"rw,nodev,nosuid,shortname=mixed,umask=0077,utf8=1,flush",
 		"nodev,nosuid"
 	},
 	{
@@ -255,7 +255,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077",
+		"rw,nodev,nosuid,norecover,allow_other,windows_names,umask=0077",
 		"nodev,nosuid,norecover"
 	},
 	{
@@ -264,7 +264,7 @@ static const struct dtmd_filesystem_options filesystem_mount_options[] =
 		ntfs3g_allow_list,
 		"uid=",
 		"gid=",
-		"rw,nodev,nosuid,allow_other,windows_names,dmask=0077",
+		"rw,nodev,nosuid,norecover,allow_other,windows_names,umask=0077",
 		"nodev,nosuid,norecover"
 	},
 	{
