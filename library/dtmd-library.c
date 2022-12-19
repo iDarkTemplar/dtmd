@@ -1268,6 +1268,9 @@ static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dt_command_t *cmd)
 				|| (dtmd_helper_is_helper_list_removable_device_failed(cmd))
 				|| (dtmd_helper_is_helper_mount_failed(cmd))
 				|| (dtmd_helper_is_helper_unmount_failed(cmd))
+#if (defined OS_Linux)
+				|| (dtmd_helper_is_helper_poweroff_failed(cmd))
+#endif /* (defined OS_Linux) */
 				|| (dtmd_helper_is_helper_list_supported_filesystems_failed(cmd))
 				|| (dtmd_helper_is_helper_list_supported_filesystem_options_failed(cmd))))
 		{
@@ -1276,7 +1279,11 @@ static dtmd_result_t dtmd_helper_handle_cmd(dtmd_t *handle, dt_command_t *cmd)
 
 		if ((strcmp(cmd->cmd, dtmd_response_succeeded) == 0)
 			&& ((dtmd_helper_is_helper_mount_generic(cmd))
-				|| (dtmd_helper_is_helper_unmount_generic(cmd))))
+				|| (dtmd_helper_is_helper_unmount_generic(cmd))
+#if (defined OS_Linux)
+				|| (dtmd_helper_is_helper_poweroff_generic(cmd))
+#endif /* (defined OS_Linux) */
+				))
 		{
 			return dtmd_ok;
 		}
