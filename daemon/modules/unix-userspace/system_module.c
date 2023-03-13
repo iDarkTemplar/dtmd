@@ -50,7 +50,7 @@
 #if (defined OS_Linux)
 #include <linux/netlink.h>
 
-#define block_devices_dir "/sys/block"
+#define block_devices_dir "/sys/class/block"
 #define block_mmc_devices_dir "/sys/bus/mmc/devices"
 #define block_usb_devices_dir "/sys/bus/usb/devices"
 
@@ -199,7 +199,6 @@ static int read_int_from_file(const char *filename)
 	file = fopen(filename, "r");
 	if (file == NULL)
 	{
-		WRITE_LOG_ARGS(LOG_ERR, "Failed opening file '%s' for reading", filename);
 		goto read_int_from_file_error_1;
 	}
 
